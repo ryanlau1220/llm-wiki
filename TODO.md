@@ -34,6 +34,8 @@
 - [x] Implement vault watcher for human/ only, ignore ai-generated/.
 - [x] Implement markdown parser + link extraction + YAML extraction + chunking.
 - [ ] Implement embedding pipeline (provider abstraction, Gemini first).
+	- [x] Provider abstraction + Gemini adapter implemented in packages/ai.
+	- [ ] Pipeline integration pending (ingestion -> embed -> persist chunks).
 - [ ] Implement hybrid retrieval (vector + FTS + link expansion).
 - [ ] Implement Ask Knowledge flow with preview-before-save.
 - [ ] Implement write-back engine that always creates new files in ai-generated/.
@@ -69,4 +71,5 @@
 - [x] Start Priority 1: DB schema expansion + ingestion idempotency design.
 - [x] Start Priority 2 implementation: watcher module + markdown parser + link extraction.
 - [ ] Implement API routes for Ask preview and write-back approval flow.
-- [ ] Implement embedding provider interface and first Gemini adapter.
+- [x] Implement embedding provider interface and first Gemini adapter.
+- [ ] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.

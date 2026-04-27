@@ -83,3 +83,64 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- keep parser pure and side-effect free for testability
 	- keep watcher as infrastructure adapter with callback contract
 	- reserve ingestion orchestration and DB writes for next layer (core package)
+
+### 2026-04-27 - External Platform Naming Update (User FYI)
+- Source update captured from user:
+	- As of 2026-04-23, Vertex AI is part of Gemini Enterprise Agent Platform.
+	- Announcement context: Google Cloud Next (2026-04-22) communicated transition of Vertex AI Platform into Gemini Enterprise suite.
+	- User-provided references:
+		- https://cloud.google.com/blog/products/ai-machine-learning/introducing-gemini-enterprise-agent-platform
+		- https://docs.cloud.google.com/gemini-enterprise-agent-platform
+- Data Analytics product naming updates captured:
+	- Dataplex Universal Catalog -> Knowledge Catalog
+	- BigLake -> Lakehouse
+	- Dataproc -> Managed Service for Apache Spark
+	- Composer -> Managed Service for Apache Airflow
+	- Looker Studio -> Data Studio
+- Impact notes for this repo:
+	- avoid introducing new references to legacy Vertex AI naming in new docs/code comments unless required for compatibility notes
+	- when implementation reaches cloud model adapters, use current Gemini Enterprise Agent Platform terminology in user-facing docs
+	- if external SDK/API artifacts still use legacy names, preserve technical identifiers in code but document the product rename in docs for clarity
+- Stability note from user context:
+	- projects/configuration/pricing are expected to remain unchanged during naming transition; console/docs/SKU display text may update over time
+
+### 2026-04-27 - Embedding Provider Abstraction + Gemini Adapter
+- Implemented AI package scaffolding:
+	- packages/ai/package.json
+	- packages/ai/tsconfig.json
+	- packages/ai/src/index.ts
+- Implemented abstraction layer:
+	- packages/ai/src/embedding/types.ts
+	- packages/ai/src/embedding/factory.ts
+- Implemented first provider adapter:
+	- packages/ai/src/embedding/providers/gemini.ts
+	- provider class: GeminiEmbeddingProvider
+	- supports config via env and constructor overrides (api key, model, timeout, base url)
+	- validates response shape with zod before returning vectors
+- Dependency and compatibility decision:
+	- intentionally avoided legacy Vertex-specific SDK naming in new code paths
+	- used direct Gemini embedding API call pattern to keep adapter decoupled from SDK rename churn
+	- user-facing provider naming aligns with Gemini Enterprise Agent Platform terminology
+- Validation outcome:
+	- workspace dependency install completed and diagnostics report no current editor errors
+- Remaining work to complete full embedding pipeline:
+	- wire provider into ingestion orchestration
+	- persist vectors + model/version metadata into chunks table
+	- add integration tests for embed path and failure handling
+
+### 2026-04-27 - Documentation Policy Correction
+- User rule (must follow): during development, only NOTES.md and TODO.md may be used for documentation notes/plans unless explicit approval is given.
+- Action taken immediately:
+	- removed all additional README.md and docs/*.md files created earlier.
+	- retained only PLAN.md, TODO.md, and NOTES.md as markdown files in repo.
+- Prevention:
+	- future design/decision/progress writeups must be appended to NOTES.md and/or TODO.md only.
+
+### 2026-04-27 - Embedding Auth Clarification
+- Current implementation status:
+	- Gemini embedding adapter currently uses `GEMINI_API_KEY` and direct Gemini API endpoint.
+- User question answer captured:
+	- yes, if switching to Gemini models through Vertex AI / Gemini Enterprise Agent Platform on GCP, service account auth (ADC / IAM) is the standard approach instead of API key.
+- Practical direction:
+	- keep current API-key adapter for fast local bring-up.
+	- add a second adapter path for service-account based GCP auth when integrating production pipeline.
