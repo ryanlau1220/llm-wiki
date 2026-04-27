@@ -1,0 +1,9 @@
+node_modules
+.turbo
+.env
+.env.*
+.DS_Store
+coverage
+dist
+bun.lockb
+logs

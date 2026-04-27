@@ -1,0 +1,21 @@
+{
+  "name": "llm-wiki",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "bun@1.2.15",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "check": "turbo check"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.1",
+    "typescript": "^5.7.2"
+  }
+}
