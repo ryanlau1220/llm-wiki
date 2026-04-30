@@ -74,8 +74,7 @@
 - [x] Start Priority 2 implementation: watcher module + markdown parser + link extraction.
 - [ ] Implement API routes for Ask preview and write-back approval flow.
 - [x] Implement embedding provider interface and first Gemini adapter.
-- [ ] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Wire ingestion pipeline to API entrypoint (watcher start).
 - [x] Add delete handling for unlink events.
-- [ ] Wire ingestion pipeline to API or worker entrypoint.
+- [x] Add manual reindex endpoint for a single file path.

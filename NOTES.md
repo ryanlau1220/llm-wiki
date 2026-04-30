@@ -229,3 +229,13 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Delete behavior:
 	- removes chunks and links then deletes the document record
 	- no-op if document is missing
+
+### 2026-04-30 - Manual Reindex Endpoint
+- Added single-file reindex helper:
+	- apps/api/src/reindex.ts
+- Added API endpoint:
+	- POST /reindex (body: { path })
+	- reindexes a single file under vault root
+- Safety notes:
+	- validates path resolves within vault root
+	- returns ingestion status (created/updated/skipped/failed)
