@@ -185,3 +185,25 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Remaining integration work:
 	- wire provider selection/config through runtime bootstrap
 	- connect ingestion pipeline to call provider and persist vectors
+
+### 2026-04-30 - Ingestion Pipeline Integration (Core)
+- Added DB client entrypoint:
+	- packages/db/src/client.ts
+	- packages/db/src/index.ts
+- Implemented ingestion orchestration:
+	- packages/core/src/ingestion/ingest.ts
+	- packages/core/src/ingestion/types.ts
+	- packages/core/src/ingestion/utils.ts
+- Ingestion behavior highlights:
+	- normalize content, hash, and idempotent upsert
+	- embed chunks using configured provider
+	- persist chunk vectors + model/version metadata
+	- record ingestion_runs status and duration
+- Updated parser to provide offsets:
+	- added chunkMarkdownWithOffsets in packages/obsidian/src/parser.ts
+- Runtime config wiring:
+	- apps/api/src/config.ts + logging in apps/api/src/index.ts
+	- reads EMBEDDING_PROVIDER, GOOGLE_CLOUD_PROJECT, GEMINI_GCP_LOCATION, DATABASE_URL
+- Remaining wiring:
+	- connect watcher events to ingestion function
+	- add API/worker entrypoint to invoke ingestion

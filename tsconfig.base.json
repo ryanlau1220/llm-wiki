@@ -1,8 +1,17 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@llm-wiki/ai": ["packages/ai/src"],
+      "@llm-wiki/db": ["packages/db/src"],
+      "@llm-wiki/obsidian": ["packages/obsidian/src"],
+      "@llm-wiki/types": ["packages/types/src"],
+      "@llm-wiki/core": ["packages/core/src"]
+    },
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

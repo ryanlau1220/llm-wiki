@@ -32,6 +32,20 @@
         "typescript": "^5.7.2",
       },
     },
+    "packages/core": {
+      "name": "@llm-wiki/core",
+      "version": "0.1.0",
+      "dependencies": {
+        "@llm-wiki/ai": "*",
+        "@llm-wiki/db": "*",
+        "@llm-wiki/obsidian": "*",
+        "drizzle-orm": "^0.35.3",
+      },
+      "devDependencies": {
+        "@types/node": "^22.10.1",
+        "typescript": "^5.7.2",
+      },
+    },
     "packages/db": {
       "name": "@llm-wiki/db",
       "version": "0.1.0",
@@ -77,6 +91,8 @@
     "@llm-wiki/ai": ["@llm-wiki/ai@workspace:packages/ai"],
 
     "@llm-wiki/api": ["@llm-wiki/api@workspace:apps/api"],
+
+    "@llm-wiki/core": ["@llm-wiki/core@workspace:packages/core"],
 
     "@llm-wiki/db": ["@llm-wiki/db@workspace:packages/db"],
 
