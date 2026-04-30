@@ -218,5 +218,14 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- EMBEDDING_VERSION (default v1)
 - Behavior notes:
 	- add/change events read file content and ingest to DB
-	- unlink events are logged and skipped (delete handling pending)
+	- unlink events delete documents, chunks, and links for removed files
 	- vault path recorded as human/<relative-path> for DB consistency
+
+### 2026-04-30 - Delete Handling for Unlink Events
+- Added delete path in core ingestion:
+	- deleteDocumentByPath in packages/core/src/ingestion/ingest.ts
+- Watcher now calls delete handler on unlink events:
+	- apps/api/src/watcher.ts
+- Delete behavior:
+	- removes chunks and links then deletes the document record
+	- no-op if document is missing

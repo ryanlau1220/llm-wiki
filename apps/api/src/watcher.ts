@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { createEmbeddingProvider } from "@llm-wiki/ai";
-import { ingestMarkdown } from "@llm-wiki/core";
+import { deleteDocumentByPath, ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 import { startVaultWatcher, type WatchEvent } from "@llm-wiki/obsidian";
 
@@ -32,18 +32,28 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
     rootPath,
     debounceMs: config.watcherDebounceMs,
     onEvent: async (event: WatchEvent) => {
-      if (event.event === "unlink") {
-        console.warn("Skipping unlink event; delete handling not implemented", event.path);
-        return;
-      }
-
-      const rawContent = await fs.readFile(event.path, "utf8");
       const relative = path.relative(rootPath, event.path);
       if (relative.startsWith("..")) {
         throw new Error(`Watcher event outside vault root: ${event.path}`);
       }
 
       const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+
+      if (event.event === "unlink") {
+        await deleteDocumentByPath(
+          {
+            db,
+            options: {
+              embeddingProvider,
+              embeddingVersion: config.embeddingVersion
+            }
+          },
+          vaultPath
+        );
+        return;
+      }
+
+      const rawContent = await fs.readFile(event.path, "utf8");
       await ingestMarkdown(
         {
           db,

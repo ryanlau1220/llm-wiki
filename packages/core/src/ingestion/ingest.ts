@@ -15,6 +15,29 @@ import { byteLength, hashContent, inferTitleFromPath, normalizeMarkdownContent }
 
 const DEFAULT_DOCUMENT_TYPE = "note";
 
+export async function deleteDocumentByPath(
+  deps: IngestionDependencies,
+  vaultPath: string
+): Promise<{ deleted: boolean }> {
+  const existing = await deps.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(eq(documents.path, vaultPath))
+    .limit(1);
+
+  if (!existing.length) {
+    return { deleted: false };
+  }
+
+  await deps.db.transaction(async (tx: DbClient) => {
+    await tx.delete(links).where(eq(links.source_document_id, existing[0].id));
+    await tx.delete(chunks).where(eq(chunks.document_id, existing[0].id));
+    await tx.delete(documents).where(eq(documents.id, existing[0].id));
+  });
+
+  return { deleted: true };
+}
+
 export async function ingestMarkdown(
   deps: IngestionDependencies,
   input: IngestionInput

@@ -77,5 +77,5 @@
 - [ ] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Wire ingestion pipeline to API entrypoint (watcher start).
-- [ ] Add delete handling for unlink events.
+- [x] Add delete handling for unlink events.
 - [ ] Wire ingestion pipeline to API or worker entrypoint.
