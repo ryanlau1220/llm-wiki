@@ -207,3 +207,16 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Remaining wiring:
 	- connect watcher events to ingestion function
 	- add API/worker entrypoint to invoke ingestion
+
+### 2026-04-30 - Watcher -> Ingestion Wiring (API)
+- API bootstrap now starts ingestion watcher:
+	- apps/api/src/watcher.ts
+	- apps/api/src/index.ts
+- Config additions:
+	- VAULT_PATH (default ./vault/human)
+	- WATCHER_DEBOUNCE_MS (default 5000)
+	- EMBEDDING_VERSION (default v1)
+- Behavior notes:
+	- add/change events read file content and ingest to DB
+	- unlink events are logged and skipped (delete handling pending)
+	- vault path recorded as human/<relative-path> for DB consistency

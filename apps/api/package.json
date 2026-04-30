@@ -9,6 +9,10 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@llm-wiki/ai": "*",
+    "@llm-wiki/core": "*",
+    "@llm-wiki/db": "*",
+    "@llm-wiki/obsidian": "*",
     "elysia": "^1.1.20"
   },
   "devDependencies": {

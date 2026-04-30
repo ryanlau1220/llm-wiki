@@ -13,6 +13,10 @@
       "name": "@llm-wiki/api",
       "version": "0.1.0",
       "dependencies": {
+        "@llm-wiki/ai": "*",
+        "@llm-wiki/core": "*",
+        "@llm-wiki/db": "*",
+        "@llm-wiki/obsidian": "*",
         "elysia": "^1.1.20",
       },
       "devDependencies": {

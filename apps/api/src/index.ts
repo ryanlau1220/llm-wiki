@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 
 import { loadConfig } from "./config";
+import { startIngestionWatcher } from "./watcher";
 
 const config = loadConfig();
 
@@ -20,3 +21,11 @@ if (config.embeddingProvider === "gemini-geap") {
   console.log("GCP project:", config.gcpProjectId ?? "(missing)");
   console.log("GCP location:", config.gcpLocation ?? "(default)");
 }
+
+const watcher = startIngestionWatcher(config);
+console.log("Vault watcher active on:", config.vaultPath);
+
+process.on("SIGINT", async () => {
+  await watcher.stop();
+  process.exit(0);
+});

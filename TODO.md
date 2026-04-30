@@ -37,7 +37,7 @@
 	- [x] Provider abstraction + Gemini adapter implemented in packages/ai.
 	- [x] Gemini Enterprise Agent Platform (GCP ADC/service account) adapter implemented.
 	- [x] Pipeline integration implemented (ingestion -> embed -> persist chunks).
-	- [ ] Wire watcher events to ingestion pipeline.
+	- [x] Wire watcher events to ingestion pipeline.
 - [ ] Implement hybrid retrieval (vector + FTS + link expansion).
 - [ ] Implement Ask Knowledge flow with preview-before-save.
 - [ ] Implement write-back engine that always creates new files in ai-generated/.
@@ -76,5 +76,6 @@
 - [x] Implement embedding provider interface and first Gemini adapter.
 - [ ] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
-- [x] Add runtime config wiring for GOOGLE_CLOUD_PROJECT and GEMINI_GCP_LOCATION in app bootstrap.
+- [x] Wire ingestion pipeline to API entrypoint (watcher start).
+- [ ] Add delete handling for unlink events.
 - [ ] Wire ingestion pipeline to API or worker entrypoint.
