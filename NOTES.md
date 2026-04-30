@@ -144,3 +144,44 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Practical direction:
 	- keep current API-key adapter for fast local bring-up.
 	- add a second adapter path for service-account based GCP auth when integrating production pipeline.
+
+### 2026-04-27 - GCP Gemini Enterprise Migration Setup
+- User requested migration path:
+	- move to Gemini Enterprise Agent Platform on GCP
+	- provision new project + service account + required services via CLI
+- Billing account used:
+	- My Billing Account (0191DB-348064-FA18F1)
+	- includes user-indicated Google Developer Program premium monthly credit context
+- Resources provisioned:
+	- project_id: llm-wiki-geap-20260427-e3ed
+	- service_account: llm-wiki-embedder@llm-wiki-geap-20260427-e3ed.iam.gserviceaccount.com
+- Services enabled on project:
+	- aiplatform.googleapis.com
+	- iam.googleapis.com
+	- iamcredentials.googleapis.com
+	- serviceusage.googleapis.com
+	- cloudresourcemanager.googleapis.com
+- Service account IAM roles granted:
+	- roles/aiplatform.user
+	- roles/serviceusage.serviceUsageConsumer
+	- roles/logging.logWriter
+- ADC/Quota setup:
+	- application-default credentials quota project set to llm-wiki-geap-20260427-e3ed
+
+### 2026-04-27 - Code Migration for Gemini Enterprise (GCP ADC)
+- Added new provider:
+	- packages/ai/src/embedding/providers/gemini-geap.ts
+	- auth via GoogleAuth (ADC/service account), no API key required for this path
+	- uses Vertex/GEAP predict endpoint for publisher model embeddings
+- Factory migration:
+	- packages/ai/src/embedding/factory.ts now supports:
+		- gemini-geap (default)
+		- gemini (API key fallback)
+- Naming correction:
+	- API-key provider name changed to gemini-api-key to avoid ambiguity
+	- Gemini Enterprise naming reserved for ADC/GCP provider path
+- Dependency update:
+	- added google-auth-library to packages/ai/package.json
+- Remaining integration work:
+	- wire provider selection/config through runtime bootstrap
+	- connect ingestion pipeline to call provider and persist vectors

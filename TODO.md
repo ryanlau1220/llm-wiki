@@ -35,6 +35,7 @@
 - [x] Implement markdown parser + link extraction + YAML extraction + chunking.
 - [ ] Implement embedding pipeline (provider abstraction, Gemini first).
 	- [x] Provider abstraction + Gemini adapter implemented in packages/ai.
+	- [x] Gemini Enterprise Agent Platform (GCP ADC/service account) adapter implemented.
 	- [ ] Pipeline integration pending (ingestion -> embed -> persist chunks).
 - [ ] Implement hybrid retrieval (vector + FTS + link expansion).
 - [ ] Implement Ask Knowledge flow with preview-before-save.
@@ -73,3 +74,4 @@
 - [ ] Implement API routes for Ask preview and write-back approval flow.
 - [x] Implement embedding provider interface and first Gemini adapter.
 - [ ] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
+- [ ] Add runtime config wiring for GOOGLE_CLOUD_PROJECT and GEMINI_GCP_LOCATION in app bootstrap.

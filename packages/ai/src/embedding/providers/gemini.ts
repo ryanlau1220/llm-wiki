@@ -25,7 +25,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 export class GeminiEmbeddingProvider implements EmbeddingProvider {
-  readonly name = "gemini-enterprise-agent-platform";
+  readonly name = "gemini-api-key";
   readonly model: string;
 
   private readonly apiKey: string;
