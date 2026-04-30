@@ -2,9 +2,10 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
-import { actionAuditEvents, createDbClient } from "@llm-wiki/db";
+import { createEmbeddingProvider } from "@llm-wiki/ai";
+import { actionAuditEvents, chunks, createDbClient, documents } from "@llm-wiki/db";
 import { aiActionEnvelopeSchema } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
@@ -21,6 +22,9 @@ export type AskConfirmResult = {
   path?: string;
   error?: string;
 };
+
+const DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD = 0.92;
+const DEFAULT_SEMANTIC_CANDIDATE_LIMIT = 200;
 
 export async function confirmAskSave(
   config: AppConfig,
@@ -50,6 +54,23 @@ export async function confirmAskSave(
   if (!parsed.success) {
     await recordAudit(db, requestId, "create_note", "rejected", parsed.error.message);
     return { status: "rejected", error: parsed.error.message };
+  }
+
+  const exactDuplicate = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(eq(documents.content_hash, hashContent(note.content ?? "")))
+    .limit(1);
+
+  if (exactDuplicate.length) {
+    await recordAudit(db, requestId, "create_note", "rejected", "duplicate_content");
+    return { status: "rejected", error: "duplicate_content" };
+  }
+
+  const semanticDuplicate = await hasSemanticDuplicate(config, db, note.content ?? "");
+  if (semanticDuplicate) {
+    await recordAudit(db, requestId, "create_note", "rejected", "duplicate_semantic");
+    return { status: "rejected", error: "duplicate_semantic" };
   }
   const vaultRoot = path.resolve(config.vaultPath, "..", "ai-generated");
   const safeSlug = slugify(note.title ?? "note");
@@ -136,4 +157,97 @@ async function recordAudit(
     metadata,
     created_at: new Date()
   });
+}
+
+async function hasSemanticDuplicate(
+  config: AppConfig,
+  db: ReturnType<typeof createDbClient>["db"],
+  content: string
+): Promise<boolean> {
+  if (!content.trim()) {
+    return false;
+  }
+
+  const embeddingProvider = createEmbeddingProvider({
+    provider: config.embeddingProvider,
+    geminiGeap: {
+      projectId: config.gcpProjectId,
+      location: config.gcpLocation
+    }
+  });
+
+  const embeddingResult = await embeddingProvider.embed({ texts: [content] });
+  const queryVector = embeddingResult.vectors[0];
+  if (!queryVector?.length) {
+    return false;
+  }
+
+  const candidates = await db
+    .select({ embedding: chunks.embedding })
+    .from(chunks)
+    .orderBy(desc(chunks.updated_at))
+    .limit(resolveCandidateLimit(config));
+
+  for (const candidate of candidates) {
+    const vector = parseEmbedding(candidate.embedding);
+    if (vector.length !== queryVector.length) {
+      continue;
+    }
+
+    const similarity = cosineSimilarity(queryVector, vector);
+    if (similarity >= resolveThreshold(config)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function parseEmbedding(value: string): number[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => Number(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a.length || a.length !== b.length) {
+    return 0;
+  }
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i += 1) {
+    const av = a[i];
+    const bv = b[i];
+    dot += av * bv;
+    normA += av * av;
+    normB += bv * bv;
+  }
+
+  if (!normA || !normB) {
+    return 0;
+  }
+
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+function resolveThreshold(config: AppConfig): number {
+  if (Number.isFinite(config.semanticDuplicateThreshold)) {
+    return config.semanticDuplicateThreshold;
+  }
+
+  return DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD;
+}
+
+function resolveCandidateLimit(config: AppConfig): number {
+  if (Number.isFinite(config.semanticDuplicateCandidates)) {
+    return config.semanticDuplicateCandidates;
+  }
+
+  return DEFAULT_SEMANTIC_CANDIDATE_LIMIT;
 }

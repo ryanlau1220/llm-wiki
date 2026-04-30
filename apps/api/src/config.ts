@@ -6,6 +6,8 @@ export type AppConfig = {
   vaultPath: string;
   watcherDebounceMs: number;
   embeddingVersion: string;
+  semanticDuplicateThreshold: number;
+  semanticDuplicateCandidates: number;
 };
 
 export function loadConfig(): AppConfig {
@@ -16,6 +18,8 @@ export function loadConfig(): AppConfig {
     databaseUrl: process.env.DATABASE_URL,
     vaultPath: process.env.VAULT_PATH ?? "./vault/human",
     watcherDebounceMs: Number(process.env.WATCHER_DEBOUNCE_MS ?? 5000),
-    embeddingVersion: process.env.EMBEDDING_VERSION ?? "v1"
+    embeddingVersion: process.env.EMBEDDING_VERSION ?? "v1",
+    semanticDuplicateThreshold: Number(process.env.SEMANTIC_DUPLICATE_THRESHOLD ?? 0.92),
+    semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? 200)
   };
 }

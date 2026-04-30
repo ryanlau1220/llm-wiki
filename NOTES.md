@@ -21,8 +21,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Immediate execution policy:
 	- harden metrics + evaluation + action contracts first
 	- then build Phase 1 and 2 MVP with tests and logging from start
-
-### 2026-04-27 - Priority 0 Completed
 - Completed artifacts:
 	- docs/metrics/mvp-success-metrics.md
 	- docs/evaluation/eval-workflow.md
@@ -39,8 +37,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Next implementation direction:
 	- bootstrap project skeleton and baseline tooling
 	- expand DB schema with provenance/versioning/audit fields
-
-### 2026-04-27 - Scaffold + Priority 1 Foundations
 - Monorepo bootstrap completed:
 	- root configs: package.json, turbo.json, tsconfig.base.json, .gitignore
 	- apps/api skeleton using Elysia with health endpoint
@@ -63,8 +59,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- ingestion updates are transactional and replace derived artifacts atomically
 	- retries are bounded with dead-letter handling for poison events
 	- reindex is required after chunking/embedding/link logic changes
-
-### 2026-04-27 - Priority 2 (Watcher + Parser)
 - Implemented package: packages/obsidian
 	- src/watcher.ts
 	- src/parser.ts
@@ -83,8 +77,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- keep parser pure and side-effect free for testability
 	- keep watcher as infrastructure adapter with callback contract
 	- reserve ingestion orchestration and DB writes for next layer (core package)
-
-### 2026-04-27 - External Platform Naming Update (User FYI)
 - Source update captured from user:
 	- As of 2026-04-23, Vertex AI is part of Gemini Enterprise Agent Platform.
 	- Announcement context: Google Cloud Next (2026-04-22) communicated transition of Vertex AI Platform into Gemini Enterprise suite.
@@ -103,8 +95,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- if external SDK/API artifacts still use legacy names, preserve technical identifiers in code but document the product rename in docs for clarity
 - Stability note from user context:
 	- projects/configuration/pricing are expected to remain unchanged during naming transition; console/docs/SKU display text may update over time
-
-### 2026-04-27 - Embedding Provider Abstraction + Gemini Adapter
 - Implemented AI package scaffolding:
 	- packages/ai/package.json
 	- packages/ai/tsconfig.json
@@ -127,16 +117,12 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- wire provider into ingestion orchestration
 	- persist vectors + model/version metadata into chunks table
 	- add integration tests for embed path and failure handling
-
-### 2026-04-27 - Documentation Policy Correction
 - User rule (must follow): during development, only NOTES.md and TODO.md may be used for documentation notes/plans unless explicit approval is given.
 - Action taken immediately:
 	- removed all additional README.md and docs/*.md files created earlier.
 	- retained only PLAN.md, TODO.md, and NOTES.md as markdown files in repo.
 - Prevention:
 	- future design/decision/progress writeups must be appended to NOTES.md and/or TODO.md only.
-
-### 2026-04-27 - Embedding Auth Clarification
 - Current implementation status:
 	- Gemini embedding adapter currently uses `GEMINI_API_KEY` and direct Gemini API endpoint.
 - User question answer captured:
@@ -144,8 +130,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Practical direction:
 	- keep current API-key adapter for fast local bring-up.
 	- add a second adapter path for service-account based GCP auth when integrating production pipeline.
-
-### 2026-04-27 - GCP Gemini Enterprise Migration Setup
 - User requested migration path:
 	- move to Gemini Enterprise Agent Platform on GCP
 	- provision new project + service account + required services via CLI
@@ -167,8 +151,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- roles/logging.logWriter
 - ADC/Quota setup:
 	- application-default credentials quota project set to llm-wiki-geap-20260427-e3ed
-
-### 2026-04-27 - Code Migration for Gemini Enterprise (GCP ADC)
 - Added new provider:
 	- packages/ai/src/embedding/providers/gemini-geap.ts
 	- auth via GoogleAuth (ADC/service account), no API key required for this path
@@ -185,8 +167,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Remaining integration work:
 	- wire provider selection/config through runtime bootstrap
 	- connect ingestion pipeline to call provider and persist vectors
-
-### 2026-04-30 - Ingestion Pipeline Integration (Core)
 - Added DB client entrypoint:
 	- packages/db/src/client.ts
 	- packages/db/src/index.ts
@@ -207,8 +187,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Remaining wiring:
 	- connect watcher events to ingestion function
 	- add API/worker entrypoint to invoke ingestion
-
-### 2026-04-30 - Watcher -> Ingestion Wiring (API)
 - API bootstrap now starts ingestion watcher:
 	- apps/api/src/watcher.ts
 	- apps/api/src/index.ts
@@ -221,7 +199,7 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- unlink events delete documents, chunks, and links for removed files
 	- vault path recorded as human/<relative-path> for DB consistency
 
-### 2026-04-30 - Delete Handling for Unlink Events
+### 2026-04-30
 - Added delete path in core ingestion:
 	- deleteDocumentByPath in packages/core/src/ingestion/ingest.ts
 - Watcher now calls delete handler on unlink events:
@@ -229,8 +207,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Delete behavior:
 	- removes chunks and links then deletes the document record
 	- no-op if document is missing
-
-### 2026-04-30 - Manual Reindex Endpoint
 - Added single-file reindex helper:
 	- apps/api/src/reindex.ts
 - Added API endpoint:
@@ -239,8 +215,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Safety notes:
 	- validates path resolves within vault root
 	- returns ingestion status (created/updated/skipped/failed)
-
-### 2026-04-30 - Hybrid Retrieval Scaffolding
 - Added retrieval module in core:
 	- packages/core/src/retrieval/hybrid.ts
 	- packages/core/src/retrieval/types.ts
@@ -252,8 +226,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Notes:
 	- vector candidate selection is currently time-ordered and capped
 	- future improvement: dedicated pgvector index + native FTS index for better recall
-
-### 2026-04-30 - Ask Preview API
 - Added Ask preview helper:
 	- apps/api/src/ask.ts
 - Added endpoint:
@@ -262,8 +234,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Notes:
 	- uses same embedding provider config as ingestion
 	- requires DATABASE_URL for DB access
-
-### 2026-04-30 - Ask Confirm Save
 - Added confirm handler:
 	- apps/api/src/ask-confirm.ts
 - Added endpoint:
@@ -272,8 +242,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- validates intent via aiActionEnvelopeSchema
 	- writes markdown note to vault/ai-generated
 	- builds YAML frontmatter with type/source/timestamp
-
-### 2026-04-30 - Write-back Dedupe + Audit Logging
 - Added collision-safe slugging for AI-generated notes:
 	- resolveUniquePath in apps/api/src/ask-confirm.ts
 - Added audit logging for confirm actions:
@@ -282,10 +250,15 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Result:
 	- write-back no longer overwrites existing files
 	- audit trail exists for confirm decisions
-
-### 2026-04-30 - Exact Duplicate Detection
 - Added exact-content hash check before write-back:
 	- compares sha256(note.content) against documents.content_hash
 	- rejects with error "duplicate_content" and logs audit
 - Scope:
 	- exact match only (semantic dedupe remains future work)
+- Added semantic duplicate guard:
+	- embeds note content and compares against recent chunk embeddings
+	- rejects when cosine similarity >= 0.92
+	- logs audit with error "duplicate_semantic"
+- Limitations:
+	- compares against recent chunks only (limit 200)
+	- relies on JSON-encoded embeddings; pgvector index not yet used
