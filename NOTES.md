@@ -252,3 +252,13 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Notes:
 	- vector candidate selection is currently time-ordered and capped
 	- future improvement: dedicated pgvector index + native FTS index for better recall
+
+### 2026-04-30 - Ask Preview API
+- Added Ask preview helper:
+	- apps/api/src/ask.ts
+- Added endpoint:
+	- POST /ask/preview (body: { query, topK? })
+	- returns hybrid retrieval chunks + links
+- Notes:
+	- uses same embedding provider config as ingestion
+	- requires DATABASE_URL for DB access

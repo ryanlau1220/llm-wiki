@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 
+import { askPreview } from "./ask";
 import { loadConfig } from "./config";
 import { reindexFile } from "./reindex";
 import { startIngestionWatcher } from "./watcher";
@@ -14,6 +15,16 @@ const app = new Elysia()
   .get("/", () => ({
     message: "LLM Wiki API is running"
   }))
+  .post("/ask/preview", async ({ body }) => {
+    const payload = body as { query?: string; topK?: number };
+    if (!payload?.query) {
+      return {
+        error: "query is required"
+      };
+    }
+
+    return askPreview(config, payload.query, payload.topK);
+  })
   .post("/reindex", async ({ body }) => {
     const payload = body as { path?: string };
     if (!payload?.path) {

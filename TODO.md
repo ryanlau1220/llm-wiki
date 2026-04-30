@@ -74,6 +74,7 @@
 - [x] Start Priority 1: DB schema expansion + ingestion idempotency design.
 - [x] Start Priority 2 implementation: watcher module + markdown parser + link extraction.
 - [ ] Implement API routes for Ask preview and write-back approval flow.
+	- [x] Ask preview route (/ask/preview)
 - [x] Implement embedding provider interface and first Gemini adapter.
 - [x] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
 - [x] Wire ingestion pipeline to API entrypoint (watcher start).
