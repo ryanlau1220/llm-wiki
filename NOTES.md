@@ -272,3 +272,20 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- validates intent via aiActionEnvelopeSchema
 	- writes markdown note to vault/ai-generated
 	- builds YAML frontmatter with type/source/timestamp
+
+### 2026-04-30 - Write-back Dedupe + Audit Logging
+- Added collision-safe slugging for AI-generated notes:
+	- resolveUniquePath in apps/api/src/ask-confirm.ts
+- Added audit logging for confirm actions:
+	- writes to action_audit_events with accepted/rejected status
+	- captures rejection reasons and metadata (path)
+- Result:
+	- write-back no longer overwrites existing files
+	- audit trail exists for confirm decisions
+
+### 2026-04-30 - Exact Duplicate Detection
+- Added exact-content hash check before write-back:
+	- compares sha256(note.content) against documents.content_hash
+	- rejects with error "duplicate_content" and logs audit
+- Scope:
+	- exact match only (semantic dedupe remains future work)

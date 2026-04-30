@@ -62,8 +62,8 @@
 
 ## Open Decisions
 - [ ] Local-only embedding option for strict local-first users.
-- [ ] Slug collision policy for generated files.
-- [ ] Duplicate note detection method (exact, semantic, hybrid).
+- [x] Slug collision policy for generated files.
+- [x] Duplicate note detection method (exact, semantic, hybrid).
 - [ ] Knowledge quality scoring rubric.
 
 ## Current Focus
