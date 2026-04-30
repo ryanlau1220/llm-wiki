@@ -262,3 +262,13 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Notes:
 	- uses same embedding provider config as ingestion
 	- requires DATABASE_URL for DB access
+
+### 2026-04-30 - Ask Confirm Save
+- Added confirm handler:
+	- apps/api/src/ask-confirm.ts
+- Added endpoint:
+	- POST /ask/confirm (body: { requestId, note })
+- Behavior:
+	- validates intent via aiActionEnvelopeSchema
+	- writes markdown note to vault/ai-generated
+	- builds YAML frontmatter with type/source/timestamp

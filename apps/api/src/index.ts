@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 
-import { askPreview } from "./ask";
+import { askPreview, confirmAskSave } from "./ask";
 import { loadConfig } from "./config";
 import { reindexFile } from "./reindex";
 import { startIngestionWatcher } from "./watcher";
@@ -24,6 +24,16 @@ const app = new Elysia()
     }
 
     return askPreview(config, payload.query, payload.topK);
+  })
+  .post("/ask/confirm", async ({ body }) => {
+    const payload = body as { requestId?: string; note?: { title?: string; content?: string; links?: string[]; tags?: string[] } };
+    if (!payload?.requestId || !payload?.note?.title || !payload?.note?.content) {
+      return {
+        error: "requestId and note.title/content are required"
+      };
+    }
+
+    return confirmAskSave(config, payload.requestId, payload.note);
   })
   .post("/reindex", async ({ body }) => {
     const payload = body as { path?: string };
