@@ -40,6 +40,42 @@ export function chunkMarkdown(content: string, chunkSize = 1000, overlap = 200):
   return chunks;
 }
 
+export type ChunkWithOffsets = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+export function chunkMarkdownWithOffsets(
+  content: string,
+  chunkSize = 1000,
+  overlap = 200
+): ChunkWithOffsets[] {
+  if (chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) {
+    throw new Error("Invalid chunk configuration");
+  }
+
+  const chunks: ChunkWithOffsets[] = [];
+  let start = 0;
+
+  while (start < content.length) {
+    const end = Math.min(start + chunkSize, content.length);
+    chunks.push({
+      text: content.slice(start, end),
+      start,
+      end
+    });
+
+    if (end === content.length) {
+      break;
+    }
+
+    start = end - overlap;
+  }
+
+  return chunks;
+}
+
 export function parseMarkdownDocument(markdown: string): ParsedMarkdownDocument {
   const parsed = matter(markdown);
   const content = parsed.content;
