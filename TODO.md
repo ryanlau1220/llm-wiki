@@ -39,6 +39,7 @@
 	- [x] Pipeline integration implemented (ingestion -> embed -> persist chunks).
 	- [x] Wire watcher events to ingestion pipeline.
 - [ ] Implement hybrid retrieval (vector + FTS + link expansion).
+- [x] Implement hybrid retrieval (vector + FTS + link expansion).
 - [ ] Implement Ask Knowledge flow with preview-before-save.
 - [ ] Implement write-back engine that always creates new files in ai-generated/.
 

@@ -239,3 +239,16 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Safety notes:
 	- validates path resolves within vault root
 	- returns ingestion status (created/updated/skipped/failed)
+
+### 2026-04-30 - Hybrid Retrieval Scaffolding
+- Added retrieval module in core:
+	- packages/core/src/retrieval/hybrid.ts
+	- packages/core/src/retrieval/types.ts
+	- packages/core/src/retrieval/utils.ts
+- Retrieval behavior:
+	- embeds query and scores vector candidates with cosine similarity
+	- adds FTS-style matches via ILIKE on chunk text
+	- merges vector + FTS scores and expands links for top documents
+- Notes:
+	- vector candidate selection is currently time-ordered and capped
+	- future improvement: dedicated pgvector index + native FTS index for better recall
