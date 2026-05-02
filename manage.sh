@@ -4,6 +4,13 @@
 
 set -e
 
+# Load environment variables if .env exists
+if [ -f .env ]; then
+    # Use grep to skip comments and empty lines, then export
+    export $(grep -v '^#' .env | xargs)
+fi
+
+
 # Help message
 function show_help {
     echo "LLM Wiki Platform Management CLI"
