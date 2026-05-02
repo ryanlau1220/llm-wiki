@@ -24,7 +24,9 @@ export const appContract = oc.router({
   listNotes: oc.input(z.void().optional()).output(z.array(z.object({
     id: z.string(),
     path: z.string(),
-    title: z.string().optional()
+    title: z.string().optional(),
+    qualityScore: z.number().nullable().optional(),
+    qualityMetrics: z.any().optional(),
   }))),
 });
 

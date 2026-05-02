@@ -59,7 +59,13 @@ export const router = os.router({
   listNotes: os.listNotes.handler(async () => {
     const { createDbClient, documents } = await import("@llm-wiki/db");
     const { db } = createDbClient(config.databaseUrl!);
-    const results = await db.select({ id: documents.id, path: documents.path, title: documents.title }).from(documents);
+    const results = await db.select({ 
+      id: documents.id, 
+      path: documents.path, 
+      title: documents.title,
+      qualityScore: documents.quality_score,
+      qualityMetrics: documents.quality_metrics
+    }).from(documents);
     return results;
   })
 });
