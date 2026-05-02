@@ -449,3 +449,12 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- `GEMINI_GCP_EMBEDDING_MODEL` (publisher model id)
 - Test environment note:
 	- `scripts/tests/test-refactor.ts` and `scripts/tests/test-linking.ts` intentionally skip (exit 0) when external dependencies are unavailable (no network/ADC token endpoint, or Postgres not reachable).
+
+### 2026-05-03 (Plan vs Repo Drift)
+- PLAN.md states DB infra is Docker Compose local-first (Postgres + pgvector), with an `infra/` directory.
+- Current repo does not include `infra/` or a checked-in `docker-compose.yml`; DB is currently configured purely via `DATABASE_URL` (see `env.example` and `packages/db/drizzle.config.ts`).
+- Retrieval currently uses JSON-encoded embeddings stored in `chunks.embedding` (text) and computes cosine similarity in application code; pgvector extension/indexing is planned but not implemented yet.
+
+### 2026-05-03 (Metadata Parity)
+- PLAN.md expects distinct YAML metadata for different AI note sources (`ai_generated` vs `ai_refactored`, etc.).
+- Updated refactor confirm save path to write `type: ai_refactored` and `source: refactor` frontmatter (previously it reused the Ask note metadata).

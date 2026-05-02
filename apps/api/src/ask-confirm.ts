@@ -17,6 +17,11 @@ export type AskNoteInput = {
   tags?: string[];
 };
 
+export type NoteFrontmatter = {
+  type: "ai_generated" | "ai_refactored" | "ai_synthesized";
+  source: "ask" | "refactor" | "synthesis";
+};
+
 export type AskConfirmResult = {
   status: "saved" | "rejected";
   path?: string;
@@ -29,7 +34,8 @@ const DEFAULT_SEMANTIC_CANDIDATE_LIMIT = 200;
 export async function confirmAskSave(
   config: AppConfig,
   requestId: string,
-  note: AskNoteInput
+  note: AskNoteInput,
+  frontmatter: NoteFrontmatter = { type: "ai_generated", source: "ask" }
 ): Promise<AskConfirmResult> {
   if (!config.databaseUrl) {
     return { status: "rejected", error: "DATABASE_URL is required" };
@@ -44,7 +50,7 @@ export async function confirmAskSave(
       content: note.content ?? "",
       links: note.links,
       tags: note.tags,
-      source: "ask"
+      source: frontmatter.source
     },
     reason: "user_confirmed"
   };
@@ -77,7 +83,7 @@ export async function confirmAskSave(
   await fs.mkdir(vaultRoot, { recursive: true });
   const filePath = await resolveUniquePath(vaultRoot, safeSlug);
 
-  await fs.writeFile(filePath, buildNoteFile(note), "utf8");
+  await fs.writeFile(filePath, buildNoteFile(note, frontmatter), "utf8");
 
   await recordAudit(db, requestId, "create_note", "accepted", undefined, {
     path: filePath
@@ -98,11 +104,11 @@ function slugify(value: string): string {
     .slice(0, 80) || "note";
 }
 
-function buildNoteFile(note: AskNoteInput): string {
+function buildNoteFile(note: AskNoteInput, frontmatter: NoteFrontmatter): string {
   const lines: string[] = [];
   lines.push("---");
-  lines.push("type: ai_generated");
-  lines.push("source: ask");
+  lines.push(`type: ${frontmatter.type}`);
+  lines.push(`source: ${frontmatter.source}`);
   lines.push(`created_at: ${new Date().toISOString()}`);
   if (note.tags?.length) {
     lines.push(`tags: [${note.tags.map((tag) => `"${tag}"`).join(", ")}]`);

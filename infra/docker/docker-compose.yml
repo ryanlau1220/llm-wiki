@@ -1,0 +1,16 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: llm-wiki-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: llm_wiki
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - llm_wiki_pgdata:/var/lib/postgresql/data
+
+volumes:
+  llm_wiki_pgdata:

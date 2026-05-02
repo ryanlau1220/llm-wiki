@@ -70,11 +70,11 @@
 - [x] Build Dashboard for ingestion stats and system health.
 
 ## Open Decisions
-- [ ] Local-only embedding option for strict local-first users.
+- [x] Local-only embedding option for strict local-first users.
 - [x] Slug collision policy for generated files.
 - [x] Duplicate note detection method (exact + semantic implemented).
 - [x] Semantic duplicate threshold/candidate limit configurable.
-- [ ] Knowledge quality scoring rubric.
+- [/] Knowledge quality scoring rubric (coherence implemented; rubric/weights pending).
 
 ## Current Focus
 - [x] Finalize Priority 0 items before implementing full MVP features.
@@ -89,6 +89,12 @@
 - [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
 - [x] Add Local-only embedding option (Ollama + Llama 4 upgrade complete).
 - [/] Add User Authentication / Session management.
+
+## Plan Drift Fixes (From PLAN.md)
+- [x] Add `infra/docker/docker-compose.yml` for local Postgres (+ pgvector) to match PLAN.md local-first infra.
+- [ ] Migrate embeddings storage to pgvector (schema + migrations) and switch retrieval to SQL vector search (remove JSON-encoded embeddings).
+- [ ] Implement Multi-note Synthesis tool (API + UI) per PLAN.md Phase 5.
+- [ ] Expand Knowledge Maintenance system (weak-note detection + improvement suggestions) per PLAN.md Phase 6.
 
 ## Priority 7 - Stability & Hardening
 - [x] Run Project Check Suite

@@ -94,10 +94,13 @@ export async function confirmRefactorSave(
   _sourcePath: string,
   note: { title: string; content: string; links?: string[]; tags?: string[] }
 ) {
-  // We can reuse the confirmAskSave logic but with different metadata
-  // Actually, we should customize it for refactoring
-  return confirmAskSave(config, requestId, {
-    ...note,
-    tags: [...(note.tags || []), "refactored"],
-  });
+  return confirmAskSave(
+    config,
+    requestId,
+    {
+      ...note,
+      tags: [...(note.tags || []), "refactored"]
+    },
+    { type: "ai_refactored", source: "refactor" }
+  );
 }
