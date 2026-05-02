@@ -486,3 +486,16 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- All Phase 1-6 features from `PLAN.md` are now implemented and verified.
 	- System is hardened for both local-first (Ollama) and enterprise-ready (Gemini GEAP) deployments.
 	- Monorepo is stable, linted, and type-checked.
+
+### Technical Hardening (Post-Phase 6)
+- **AI Response Resilience**:
+	- Implemented regex-based JSON extraction in `Refactor` and `Synthesis` engines.
+	- Strengthened LLM system prompts to prevent unescaped double quotes in generated content.
+- **oRPC & TanStack Stability**:
+	- Standardized oRPC hook usage: Switched from `.useMutation()` proxy calls (which were missing in oRPC v1 client generation) to the robust `useMutation(orpc.method.mutationOptions())` pattern.
+	- Resolved TanStack Router "Not Found" loops by properly decoding and normalizing redirect parameters during the login flow.
+- **Hybrid Authentication System**:
+	- Implemented a "Belt and Braces" auth strategy to handle cross-port development on `localhost`.
+	- API now returns signed JWT in both `Set-Cookie` header and response body.
+	- Web Client uses a hybrid fetch link: reads from `localStorage` (Bearer token) if cookies are restricted by browser port-security.
+	- Added comprehensive auth telemetry to the API for real-time session debugging.

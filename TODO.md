@@ -103,3 +103,7 @@
 - [x] Fix and pass unit tests (mock LLM dependencies)
 - [x] Resolve Drizzle integration tests (Docker Compose config)
 - [x] Implement UI Logout and Synthesis feedback.
+- [x] Harden AI Refactor & Synthesis JSON parsing with regex fallbacks.
+- [x] Fix oRPC Hook Mismatch (TanStack Query usage pattern).
+- [x] Implement Hybrid Authentication Fallback (Cookies + Bearer Token).
+- [x] Fix Router Redirection and 404 handling after login.
