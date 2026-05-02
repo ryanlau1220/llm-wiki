@@ -43,6 +43,36 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     ],
   }),
   shellComponent: RootDocument,
+  notFoundComponent: () => (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--foam)] p-8">
+      <div className="island-shell p-12 rounded-[3rem] text-center max-w-md shadow-2xl">
+        <h1 className="display-title text-6xl font-bold text-[var(--sea-ink)] mb-4">404</h1>
+        <p className="text-[var(--sea-ink-soft)] text-lg mb-8">This branch of knowledge doesn't exist yet.</p>
+        <button 
+          onClick={() => window.location.href = '/'}
+          className="px-8 py-3 bg-[var(--lagoon)] text-white font-bold rounded-2xl hover:bg-[var(--lagoon-deep)] transition-all"
+        >
+          Return Home
+        </button>
+      </div>
+    </div>
+  ),
+  errorComponent: ({ error }: any) => (
+    <div className="min-h-screen flex items-center justify-center bg-red-50 p-8">
+      <div className="bg-white p-12 rounded-[3rem] text-center max-w-xl shadow-2xl border-2 border-red-100">
+        <h1 className="text-4xl font-bold text-red-600 mb-4">System Error</h1>
+        <p className="text-red-500 mb-8 font-mono text-sm bg-red-50 p-4 rounded-xl text-left">
+          {error?.message || 'An unexpected error occurred.'}
+        </p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-8 py-3 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all"
+        >
+          Retry Connection
+        </button>
+      </div>
+    </div>
+  ),
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
