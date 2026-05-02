@@ -62,6 +62,25 @@ export const router = os.router({
     const { confirmRefactorSave } = await import("./refactor");
     return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
   }),
+  synthesisPreview: os.synthesisPreview.use(authMiddleware).handler(async ({ input }: any) => {
+    const { synthesisPreview } = await import("./synthesis");
+    return synthesisPreview(config, input.topic, input.topK);
+  }),
+  confirmSynthesisSave: os.confirmSynthesisSave.use(authMiddleware).handler(async ({ input }: any) => {
+    const { confirmAskSave } = await import("./ask-confirm");
+    return confirmAskSave(
+      config,
+      input.requestId,
+      input.note,
+      { type: "ai_synthesized", source: "synthesis" }
+    );
+  }),
+  getWeakNotes: os.getWeakNotes.use(authMiddleware).handler(async ({ input }: any) => {
+    const { createDbClient } = await import("@llm-wiki/db");
+    const { getWeakNotes } = await import("@llm-wiki/core");
+    const { db } = createDbClient(config.databaseUrl!);
+    return getWeakNotes(db, input ?? {});
+  }),
   reindex: os.reindex.use(authMiddleware).handler(async ({ input }: any) => {
     return reindexFile(config, input.path);
   }),

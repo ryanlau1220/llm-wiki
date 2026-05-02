@@ -6,7 +6,10 @@ import {
   confirmAskSavePayloadSchema,
   refactorPreviewPayloadSchema,
   confirmRefactorSavePayloadSchema,
-  reindexPayloadSchema
+  reindexPayloadSchema,
+  synthesisPreviewPayloadSchema,
+  confirmSynthesisSavePayloadSchema,
+  weakNotesPayloadSchema
 } from "./schemas";
 
 export const appContract = oc.router({
@@ -14,6 +17,15 @@ export const appContract = oc.router({
   confirmAskSave: oc.input(confirmAskSavePayloadSchema).output(z.any()),
   refactorPreview: oc.input(refactorPreviewPayloadSchema).output(z.any()),
   confirmRefactorSave: oc.input(confirmRefactorSavePayloadSchema).output(z.any()),
+  synthesisPreview: oc.input(synthesisPreviewPayloadSchema).output(z.any()),
+  confirmSynthesisSave: oc.input(confirmSynthesisSavePayloadSchema).output(z.any()),
+  getWeakNotes: oc.input(weakNotesPayloadSchema.optional()).output(z.array(z.object({
+    id: z.string(),
+    path: z.string(),
+    title: z.string(),
+    qualityScore: z.number().nullable().optional(),
+    reasons: z.array(z.string()),
+  }))),
   reindex: oc.input(reindexPayloadSchema).output(z.any()),
   getLinkHealth: oc.input(z.void().optional()).output(z.array(z.object({
     label: z.string(),

@@ -9,15 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SynthesisRouteImport } from './routes/synthesis'
 import { Route as RefactorRouteImport } from './routes/refactor'
+import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LinksRouteImport } from './routes/links'
 import { Route as AskRouteImport } from './routes/ask'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SynthesisRoute = SynthesisRouteImport.update({
+  id: '/synthesis',
+  path: '/synthesis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RefactorRoute = RefactorRouteImport.update({
   id: '/refactor',
   path: '/refactor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaintenanceRoute = MaintenanceRouteImport.update({
+  id: '/maintenance',
+  path: '/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -46,14 +58,18 @@ export interface FileRoutesByFullPath {
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
   '/login': typeof LoginRoute
+  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
+  '/synthesis': typeof SynthesisRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
   '/login': typeof LoginRoute
+  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
+  '/synthesis': typeof SynthesisRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,14 +77,38 @@ export interface FileRoutesById {
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
   '/login': typeof LoginRoute
+  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
+  '/synthesis': typeof SynthesisRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ask' | '/links' | '/login' | '/refactor'
+  fullPaths:
+    | '/'
+    | '/ask'
+    | '/links'
+    | '/login'
+    | '/maintenance'
+    | '/refactor'
+    | '/synthesis'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ask' | '/links' | '/login' | '/refactor'
-  id: '__root__' | '/' | '/ask' | '/links' | '/login' | '/refactor'
+  to:
+    | '/'
+    | '/ask'
+    | '/links'
+    | '/login'
+    | '/maintenance'
+    | '/refactor'
+    | '/synthesis'
+  id:
+    | '__root__'
+    | '/'
+    | '/ask'
+    | '/links'
+    | '/login'
+    | '/maintenance'
+    | '/refactor'
+    | '/synthesis'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,16 +116,32 @@ export interface RootRouteChildren {
   AskRoute: typeof AskRoute
   LinksRoute: typeof LinksRoute
   LoginRoute: typeof LoginRoute
+  MaintenanceRoute: typeof MaintenanceRoute
   RefactorRoute: typeof RefactorRoute
+  SynthesisRoute: typeof SynthesisRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/synthesis': {
+      id: '/synthesis'
+      path: '/synthesis'
+      fullPath: '/synthesis'
+      preLoaderRoute: typeof SynthesisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/refactor': {
       id: '/refactor'
       path: '/refactor'
       fullPath: '/refactor'
       preLoaderRoute: typeof RefactorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/maintenance': {
+      id: '/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof MaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -124,13 +180,16 @@ const rootRouteChildren: RootRouteChildren = {
   AskRoute: AskRoute,
   LinksRoute: LinksRoute,
   LoginRoute: LoginRoute,
+  MaintenanceRoute: MaintenanceRoute,
   RefactorRoute: RefactorRoute,
+  SynthesisRoute: SynthesisRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true

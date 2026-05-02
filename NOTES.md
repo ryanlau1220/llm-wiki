@@ -461,3 +461,12 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 ### 2026-05-03 (Metadata Parity)
 - PLAN.md expects distinct YAML metadata for different AI note sources (`ai_generated` vs `ai_refactored`, etc.).
 - Updated refactor confirm save path to write `type: ai_refactored` and `source: refactor` frontmatter (previously it reused the Ask note metadata).
+
+### 2026-05-03 (Phase 5/6 Implementation)
+- Implemented Phase 5 “Multi-note Synthesis” (minimal vertical slice):
+	- New oRPC endpoints: `synthesisPreview`, `confirmSynthesisSave`.
+	- Uses hybrid retrieval as sources + LLM to produce a wiki note JSON (`apps/api/src/synthesis.ts`).
+	- Confirm save writes `type: ai_synthesized` and `source: synthesis`.
+- Implemented Phase 6 “Maintenance System” (initial):
+	- New oRPC endpoint: `getWeakNotes` returning low-quality notes with heuristic reasons.
+	- Heuristics use stored `quality_metrics` + optional coherence score.

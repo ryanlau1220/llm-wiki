@@ -7,7 +7,9 @@ import {
   BookOpen, 
   ChevronLeft,
   ChevronRight,
-  PlusCircle
+  PlusCircle,
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -18,7 +20,9 @@ export function Sidebar() {
     { label: 'Dashboard', icon: Activity, to: '/' },
     { label: 'Ask Knowledge', icon: Search, to: '/ask' },
     { label: 'Refactor Note', icon: RotateCcw, to: '/refactor' },
+    { label: 'Synthesis', icon: Sparkles, to: '/synthesis' },
     { label: 'Link Health', icon: Link2, to: '/links' },
+    { label: 'Maintenance', icon: ShieldAlert, to: '/maintenance' },
     { label: 'Wiki Pages', icon: BookOpen, to: '/vault' },
   ]
 
