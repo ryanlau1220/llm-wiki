@@ -59,6 +59,14 @@
 - [x] Integration tests for ingest -> embed -> retrieve flow.
 - [x] End-to-end tests for Ask & Save preview/confirm/save behavior (Mocks).
 - [x] Golden dataset for quality/regression checks.
+ 
+## Priority 6 - Frontend Development (TanStack Start)
+- [ ] Implement oRPC bridge for type-safe API access.
+- [ ] Build global layout with navigation sidebar.
+- [ ] Build "Ask Knowledge" tool with preview/save flow.
+- [ ] Build "Note Refactor" tool with diff preview.
+- [ ] Build "Link Health" dashboard for broken link management.
+- [ ] Build Dashboard for ingestion stats and system health.
 
 ## Open Decisions
 - [ ] Local-only embedding option for strict local-first users.
