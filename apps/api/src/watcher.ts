@@ -27,15 +27,23 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     geminiGeap: {
       projectId: config.gcpProjectId,
       location: config.gcpLocation
+    },
+    ollama: {
+      baseUrl: config.ollamaBaseUrl,
+      model: config.ollamaEmbeddingModel
     }
   });
 
   const { createLLMProvider } = await import("@llm-wiki/ai");
   const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider as any, // Use same provider as embeddings for now
+    provider: config.embeddingProvider as any,
     geminiGeap: {
       projectId: config.gcpProjectId,
       location: config.gcpLocation
+    },
+    ollama: {
+      baseUrl: config.ollamaBaseUrl,
+      model: config.ollamaLlmModel
     }
   });
 

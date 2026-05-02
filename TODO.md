@@ -82,5 +82,5 @@
 
 ## Next Focus
 - [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
-- [ ] Add Local-only embedding option (e.g. Transformers.js or Ollama).
+- [x] Add Local-only embedding option (Ollama implementation complete).
 - [ ] Add User Authentication / Session management.

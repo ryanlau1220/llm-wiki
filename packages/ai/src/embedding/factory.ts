@@ -4,13 +4,15 @@ import {
   GeminiGeapEmbeddingProvider,
   type GeminiGeapEmbeddingConfig
 } from "./providers/gemini-geap";
+import { OllamaEmbeddingProvider, type OllamaEmbeddingConfig } from "./providers/ollama";
 
-export type EmbeddingProviderKind = "gemini-geap" | "gemini";
+export type EmbeddingProviderKind = "gemini-geap" | "gemini" | "ollama";
 
 export type EmbeddingProviderFactoryConfig = {
   provider?: EmbeddingProviderKind;
   geminiGeap?: GeminiGeapEmbeddingConfig;
   gemini?: GeminiEmbeddingConfig;
+  ollama?: OllamaEmbeddingConfig;
 };
 
 export function createEmbeddingProvider(
@@ -27,6 +29,8 @@ export function createEmbeddingProvider(
       }
       return new GeminiEmbeddingProvider(config.gemini);
     }
+    case "ollama":
+      return new OllamaEmbeddingProvider(config.ollama);
     default:
       throw new Error(`Unsupported embedding provider: ${provider}`);
   }

@@ -1,7 +1,10 @@
 export type AppConfig = {
-  embeddingProvider: "gemini-geap" | "gemini";
+  embeddingProvider: "gemini-geap" | "gemini" | "ollama";
   gcpProjectId?: string;
   gcpLocation?: string;
+  ollamaBaseUrl?: string;
+  ollamaEmbeddingModel?: string;
+  ollamaLlmModel?: string;
   databaseUrl?: string;
   vaultPath: string;
   watcherDebounceMs: number;
@@ -20,6 +23,9 @@ export function loadConfig(): AppConfig {
     embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? (gcpProjectId ? "gemini-geap" : "gemini"),
     gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
+    ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
+    ollamaEmbeddingModel: process.env.OLLAMA_EMBEDDING_MODEL,
+    ollamaLlmModel: process.env.OLLAMA_LLM_MODEL,
     databaseUrl: process.env.DATABASE_URL,
     vaultPath: process.env.VAULT_PATH ?? "./vault/human",
     watcherDebounceMs: Number(process.env.WATCHER_DEBOUNCE_MS ?? 5000),

@@ -379,6 +379,11 @@ This file is to record all the notes, thoughts, and ideas that come up during th
   - Coherence (30%): AI-evaluated flow and logical structure (Pending AI implementation).
 - **Storage**: Persisted in `documents.quality_score` and `documents.quality_metrics` (JSONB).
 
+### Local-First AI (Ollama)
+- **Supported Provider**: Added `ollama` support for both embeddings and LLM reasoning.
+- **Default Models**: `nomic-embed-text` (Embeddings) and `llama3` (LLM).
+- **Configuration**: Uses `OLLAMA_BASE_URL` (default: `http://localhost:11434`).
+
 ### Observability
 - API logs in structured JSON format.
 - Use `jq 'select(.level == "error")'` for local log analysis.

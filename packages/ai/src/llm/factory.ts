@@ -1,8 +1,9 @@
 import { GeminiLLMProvider } from "./providers/gemini";
 import { GeminiGeapLLMProvider } from "./providers/gemini-geap";
+import { OllamaLLMProvider, type OllamaLLMConfig } from "./providers/ollama";
 import type { LLMProvider } from "./types";
 
-export type LLMProviderType = "gemini" | "gemini-geap";
+export type LLMProviderType = "gemini" | "gemini-geap" | "ollama";
 
 export interface LLMProviderConfig {
   provider: LLMProviderType;
@@ -12,6 +13,7 @@ export interface LLMProviderConfig {
     location?: string;
     model?: string;
   };
+  ollama?: OllamaLLMConfig;
   model?: string;
 }
 
@@ -43,6 +45,9 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
         apiKey,
         model: config.model
       });
+    }
+    case "ollama": {
+      return new OllamaLLMProvider(config.ollama);
     }
     default:
       throw new Error(`Unsupported LLM provider: ${provider}`);
