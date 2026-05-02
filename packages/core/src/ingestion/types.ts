@@ -1,4 +1,4 @@
-import type { EmbeddingProvider } from "@llm-wiki/ai";
+import type { EmbeddingProvider, LLMProvider } from "@llm-wiki/ai";
 import type { DbClient } from "@llm-wiki/db";
 
 export type IngestionInput = {
@@ -10,6 +10,7 @@ export type IngestionInput = {
 
 export type IngestionOptions = {
   embeddingProvider: EmbeddingProvider;
+  llmProvider: LLMProvider;
   embeddingVersion: string;
   now?: () => Date;
 };

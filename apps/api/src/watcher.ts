@@ -14,7 +14,7 @@ export type WatcherHandle = {
 
 import { createLogger } from "@llm-wiki/core";
 
-export function startIngestionWatcher(config: AppConfig): WatcherHandle {
+export async function startIngestionWatcher(config: AppConfig): Promise<WatcherHandle> {
   const logger = createLogger("watcher");
 
   if (!config.databaseUrl) {
@@ -24,6 +24,15 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
   const { db } = createDbClient(config.databaseUrl);
   const embeddingProvider = createEmbeddingProvider({
     provider: config.embeddingProvider,
+    geminiGeap: {
+      projectId: config.gcpProjectId,
+      location: config.gcpLocation
+    }
+  });
+
+  const { createLLMProvider } = await import("@llm-wiki/ai");
+  const llmProvider = createLLMProvider({
+    provider: config.embeddingProvider as any, // Use same provider as embeddings for now
     geminiGeap: {
       projectId: config.gcpProjectId,
       location: config.gcpLocation
@@ -54,6 +63,7 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
               db,
               options: {
                 embeddingProvider,
+                llmProvider,
                 embeddingVersion: config.embeddingVersion
               }
             },
@@ -69,6 +79,7 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
             db,
             options: {
               embeddingProvider,
+              llmProvider,
               embeddingVersion: config.embeddingVersion
             }
           },

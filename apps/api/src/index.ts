@@ -47,7 +47,7 @@ if (config.embeddingProvider === "gemini-geap") {
   console.log("GCP location:", config.gcpLocation ?? "(default)");
 }
 
-const watcher = startIngestionWatcher(config);
+const watcher = await startIngestionWatcher(config);
 console.log("Vault watcher active on:", config.vaultPath);
 
 process.on("SIGINT", async () => {

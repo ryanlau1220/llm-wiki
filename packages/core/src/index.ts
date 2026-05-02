@@ -7,3 +7,4 @@ export * from "./logging";
 export * from "./linking/validator";
 export * from "./linking/placeholders";
 export * from "./discovery/provider";
+export * from "./intelligence/coherence";

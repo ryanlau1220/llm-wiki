@@ -18,6 +18,7 @@ import {
   inferTitleFromPath, 
   normalizeMarkdownContent 
 } from "./utils";
+import { calculateCoherence } from "../intelligence/coherence";
 
 const DEFAULT_DOCUMENT_TYPE = "note";
 
@@ -83,6 +84,12 @@ export async function ingestMarkdown(
       const parsed = parseMarkdownDocument(normalized);
       const title = inferTitleFromPath(input.vaultPath);
       
+      // Calculate AI-based coherence score
+      const coherence = await calculateCoherence(deps.options.llmProvider, parsed.content);
+      if (parsed.qualityMetrics) {
+        parsed.qualityMetrics.coherence = coherence;
+      }
+
       const qualityScore = parsed.qualityMetrics 
         ? calculateAggregateScore(parsed.qualityMetrics)
         : null;
