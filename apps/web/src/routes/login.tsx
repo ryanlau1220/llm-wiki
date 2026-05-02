@@ -41,7 +41,7 @@ function LoginComponent() {
               } else {
                 navigate({ to: '/' });
               }
-            } catch (e) {
+            } catch (_e) {
               navigate({ to: '/' });
             }
           } else {

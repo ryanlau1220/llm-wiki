@@ -49,6 +49,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         <h1 className="display-title text-6xl font-bold text-[var(--sea-ink)] mb-4">404</h1>
         <p className="text-[var(--sea-ink-soft)] text-lg mb-8">This branch of knowledge doesn't exist yet.</p>
         <button 
+          type="button"
           onClick={() => window.location.href = '/'}
           className="px-8 py-3 bg-[var(--lagoon)] text-white font-bold rounded-2xl hover:bg-[var(--lagoon-deep)] transition-all"
         >
@@ -65,6 +66,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
           {error?.message || 'An unexpected error occurred.'}
         </p>
         <button 
+          type="button"
           onClick={() => window.location.reload()}
           className="px-8 py-3 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all"
         >
