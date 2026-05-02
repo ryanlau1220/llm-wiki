@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@llm-wiki/ai": ["packages/ai/src/index.ts"],
+      "@llm-wiki/core": ["packages/core/src/index.ts"],
+      "@llm-wiki/db": ["packages/db/src/index.ts"],
+      "@llm-wiki/types": ["packages/types/src/index.ts"],
+      "@llm-wiki/obsidian": ["packages/obsidian/src/index.ts"]
+    },
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "skipLibCheck": true,
+    "strict": true
+  }
+}

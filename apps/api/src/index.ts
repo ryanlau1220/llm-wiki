@@ -7,11 +7,40 @@ import { startIngestionWatcher } from "./watcher";
 
 const config = loadConfig();
 
+import { promises as fs } from "node:fs";
+import { createDbClient } from "@llm-wiki/db";
+
 const app = new Elysia()
-  .get("/health", () => ({
-    status: "ok",
-    service: "llm-wiki-api"
-  }))
+  .get("/health", async () => {
+    const health: any = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      services: {
+        api: "ok"
+      }
+    };
+
+    // Check DB
+    try {
+      const { db } = createDbClient(config.databaseUrl!);
+      await db.execute("SELECT 1");
+      health.services.database = "ok";
+    } catch (e) {
+      health.status = "error";
+      health.services.database = "error";
+    }
+
+    // Check Vault
+    try {
+      await fs.access(config.vaultPath);
+      health.services.vault = "ok";
+    } catch (e) {
+      health.status = "error";
+      health.services.vault = "error";
+    }
+
+    return health;
+  })
   .get("/", () => ({
     message: "LLM Wiki API is running"
   }))

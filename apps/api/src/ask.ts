@@ -1,5 +1,5 @@
 import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
-import { hybridRetrieve } from "@llm-wiki/core";
+import { createLogger, hybridRetrieve } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
@@ -9,6 +9,9 @@ export async function askPreview(
   query: string,
   topK?: number
 ) {
+  const logger = createLogger("ask");
+  logger.info("New knowledge request", { query, topK });
+
   if (!config.databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
@@ -34,8 +37,13 @@ export async function askPreview(
     }
   );
 
+  logger.debug("Retrieval completed", { 
+    chunks: retrievalResults.chunks.length, 
+    links: retrievalResults.links.length 
+  });
+
   const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider, // Reusing same setting for LLM for now
+    provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
       location: config.gcpLocation
@@ -78,16 +86,25 @@ ${contextText || "No relevant notes found in vault."}
 Provide your answer and suggested note in JSON format.
 `.trim();
 
+  logger.debug("Generating LLM answer...");
+  const startTime = Date.now();
   const llmResponse = await llmProvider.generate({
     prompt,
     systemInstruction,
     responseMimeType: "application/json",
     temperature: 0.2
   });
+  const duration = Date.now() - startTime;
 
   try {
     const parsed = JSON.parse(llmResponse.text);
     const requestId = crypto.randomUUID();
+
+    logger.info("Knowledge answer generated", { 
+      requestId, 
+      durationMs: duration,
+      title: parsed.suggested_note?.title 
+    });
 
     return {
       requestId,
@@ -98,7 +115,7 @@ Provide your answer and suggested note in JSON format.
       }
     };
   } catch (error) {
-    console.error("Failed to parse LLM response as JSON:", llmResponse.text);
+    logger.error("Failed to parse LLM response", error, { raw: llmResponse.text });
     return {
       error: "Failed to generate structured response",
       rawResponse: llmResponse.text

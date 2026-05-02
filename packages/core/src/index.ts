@@ -3,3 +3,7 @@ export * from "./ingestion/types";
 export * from "./ingestion/utils";
 export * from "./retrieval/hybrid";
 export * from "./retrieval/types";
+export * from "./logging";
+export * from "./linking/validator";
+export * from "./linking/placeholders";
+export * from "./discovery/provider";

@@ -12,7 +12,11 @@ export type WatcherHandle = {
   stop: () => Promise<void>;
 };
 
+import { createLogger } from "@llm-wiki/core";
+
 export function startIngestionWatcher(config: AppConfig): WatcherHandle {
+  const logger = createLogger("watcher");
+
   if (!config.databaseUrl) {
     throw new Error("DATABASE_URL is required to start ingestion watcher");
   }
@@ -28,19 +32,39 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
 
   const rootPath = path.resolve(config.vaultPath);
 
+  logger.info("Starting ingestion watcher", { rootPath, debounceMs: config.watcherDebounceMs });
+
   const stop = startVaultWatcher({
     rootPath,
     debounceMs: config.watcherDebounceMs,
     onEvent: async (event: WatchEvent) => {
-      const relative = path.relative(rootPath, event.path);
-      if (relative.startsWith("..")) {
-        throw new Error(`Watcher event outside vault root: ${event.path}`);
-      }
+      try {
+        const relative = path.relative(rootPath, event.path);
+        if (relative.startsWith("..")) {
+          throw new Error(`Watcher event outside vault root: ${event.path}`);
+        }
 
-      const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+        const vaultPath = path.join("human", relative).replace(/\\/g, "/");
 
-      if (event.event === "unlink") {
-        await deleteDocumentByPath(
+        logger.debug("Watcher event received", { event: event.event, path: vaultPath });
+
+        if (event.event === "unlink") {
+          await deleteDocumentByPath(
+            {
+              db,
+              options: {
+                embeddingProvider,
+                embeddingVersion: config.embeddingVersion
+              }
+            },
+            vaultPath
+          );
+          logger.info("Document deleted", { path: vaultPath });
+          return;
+        }
+
+        const rawContent = await fs.readFile(event.path, "utf8");
+        await ingestMarkdown(
           {
             db,
             options: {
@@ -48,27 +72,17 @@ export function startIngestionWatcher(config: AppConfig): WatcherHandle {
               embeddingVersion: config.embeddingVersion
             }
           },
-          vaultPath
-        );
-        return;
-      }
-
-      const rawContent = await fs.readFile(event.path, "utf8");
-      await ingestMarkdown(
-        {
-          db,
-          options: {
-            embeddingProvider,
-            embeddingVersion: config.embeddingVersion
+          {
+            vaultPath,
+            rawContent,
+            sourceKind: "human",
+            isAiGenerated: false
           }
-        },
-        {
-          vaultPath,
-          rawContent,
-          sourceKind: "human",
-          isAiGenerated: false
-        }
-      );
+        );
+        logger.info("Document ingested", { path: vaultPath });
+      } catch (error) {
+        logger.error("Watcher event processing failed", error, { event: event.event, path: event.path });
+      }
     }
   });
 

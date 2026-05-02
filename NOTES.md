@@ -312,3 +312,35 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Implemented `packages/core/src/linking/placeholders.ts`.
 	- Logic generates safe markdown "stubs" in `ai-generated/` for missing wiki links.
 	- Includes metadata and audit trail.
+
+### 2026-05-02 (Priority 4 Completion)
+- **Structured Logging**:
+	- Implemented `Logger` utility in `packages/core/src/logging`.
+	- Integrated JSON logging into `watcher.ts` and `ask.ts`.
+	- Logs include context, timestamps, and structured metadata for easy ingestion by Cloud Logging.
+- **Enhanced Health Checks**:
+	- Updated `/health` endpoint in `apps/api/src/index.ts`.
+	- Now verifies both database connectivity and vault directory accessibility.
+- **Operations & Reliability**:
+	- Created structured logging and health checks.
+	- Documented backups, restores, and recovery runbooks (see below).
+- **Automated Verification**:
+	- Maintained test scripts in `scripts/tests/` for Refactor Engine and Link Intelligence.
+	- Added `npm run test:refactor` and `npm run test:linking` to the root package.
+
+## 💾 Operations & Recovery Guide
+
+### Backup & Restore
+- **PostgreSQL**: `pg_dump -U [user] -h [host] [database_name] > backup.sql`
+- **Vault**: Use standard file backup tools (git/rsync/cloud sync) on the `VAULT_PATH`.
+
+### Failure Recovery Runbook
+- **Ingestion Stalls**: Check logs for "Watcher event processing failed" and verify DB connectivity.
+- **Bad Embeddings**: Verify `embeddingVersion` in config; re-index vault if mismatched.
+- **LLM Failures**: Check GCP quota/billing; inspect raw response in logs for safety filters.
+- **DB Errors**: Check connection pool and host reachability via `/health` endpoint.
+
+### Observability
+- API logs in structured JSON format.
+- Use `jq 'select(.level == "error")'` for local log analysis.
+- Use Google Cloud Logging filters for production monitoring.

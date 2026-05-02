@@ -49,10 +49,10 @@
 - [x] Implement Discovery Engine (Vertex AI Search) provider for managed RAG.
 
 ## Priority 4 - Ops and Reliability
-- [ ] Add structured logging across watcher, ingestion, retrieval, and write-back.
-- [ ] Add health checks and basic observability dashboard/log queries.
-- [ ] Add backup/restore guidance for local DB and vault.
-- [ ] Add failure recovery runbook (stuck queue, bad embeddings, parse failures).
+- [x] Add structured logging across watcher, ingestion, retrieval, and write-back.
+- [x] Add health checks and basic observability dashboard/log queries.
+- [x] Add backup/restore guidance for local DB and vault.
+- [x] Add failure recovery runbook (stuck queue, bad embeddings, parse failures).
 
 ## Priority 5 - Test Strategy
 - [ ] Unit tests for parser, chunker, link extractor, intent validator.
