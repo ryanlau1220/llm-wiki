@@ -1,0 +1,21 @@
+{
+  "refactored_note": {
+    "title": "Core Concepts in Artificial Intelligence",
+    "content": "# Core Concepts in Artificial Intelligence\n\n## Summary\nThis document provides a foundational overview of Artificial Intelligence (AI) and its key sub-fields: Machine Learning, Neural Networks, and Deep Learning. It highlights their interrelationships and fundamental characteristics.\n\n## Key Concepts\n*   **Artificial Intelligence (AI):** A broad field focused on creating intelligent machines.\n*   **Machine Learning (ML):** A subset of AI that enables systems to learn from data without explicit programming.\n*   **Neural Networks (NN):** A type of machine learning algorithm inspired by the structure and function of the human brain.\n*   **Deep Learning (DL):** A specialized form of neural networks characterized by multiple layers, allowing for the learning of complex patterns.\n\n## Detailed Breakdown\nArtificial Intelligence (AI) represents a vast and evolving domain dedicated to developing machines capable of performing tasks that typically require human intelligence. It encompasses various approaches and methodologies.\n\nOne of the most prominent sub-fields of AI is **Machine Learning (ML)**. Machine Learning focuses on the development of algorithms that allow computer systems to learn from data, identify patterns, and make decisions or predictions with minimal human intervention.\n\nA significant component within Machine Learning is the use of **Neural Networks (NNs)**. These computational models are conceptually inspired by the biological neural networks found in animal brains. They consist of interconnected nodes (neurons) organized in layers, processing information in a way that mimics biological learning.\n\n**Deep Learning (DL)** is an advanced and powerful branch of Machine Learning that utilizes Neural Networks with many layers (hence \"deep\"). This multi-layered architecture enables deep learning models to automatically learn hierarchical representations of data, leading to breakthroughs in areas such as image recognition, natural language processing, and speech recognition.\n\n## Related Concepts\n*   [[Artificial Intelligence]]\n*   [[Machine Learning]]\n*   [[Neural Networks]]\n*   [[Deep Learning]]\n*   [[Computational Neuroscience]]\n*   [[Data Science]]",
+    "tags": [
+      "AI",
+      "Machine Learning",
+      "Deep Learning",
+      "Neural Networks",
+      "Technology"
+    ],
+    "links": [
+      "Artificial Intelligence",
+      "Machine Learning",
+      "Neural Networks",
+      "Deep Learning",
+      "Computational Neuroscience",
+      "Data Science"
+    ]
+  }
+}

@@ -71,7 +71,7 @@ Provide the refactored version in JSON format.
     temperature: 0.1
   });
 
-  let rawText = llmResponse.text;
+  const rawText = llmResponse.text;
 
   try {
     // Attempt direct parse first

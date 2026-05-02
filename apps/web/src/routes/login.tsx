@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { orpc } from '../lib/orpc'
 import { useState } from 'react'
 import { Shield, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
 
 export const Route = createFileRoute('/login')({
   component: LoginComponent,
@@ -14,20 +15,22 @@ function LoginComponent() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  const loginMutation = orpc.login.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        navigate({ to: '/' })
-      } else {
-        setError('Invalid credentials. Please try again.')
+  const loginMutation = useMutation(
+    orpc.login.mutationOptions({
+      onSuccess: (data) => {
+        if (data.success) {
+          navigate({ to: '/' })
+        } else {
+          setError('Invalid credentials. Please try again.')
+        }
+        setIsLoading(false)
+      },
+      onError: (err) => {
+        setError(err.message || 'An error occurred during login.')
+        setIsLoading(false)
       }
-      setIsLoading(false)
-    },
-    onError: (err) => {
-      setError(err.message || 'An error occurred during login.')
-      setIsLoading(false)
-    }
-  })
+    })
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
