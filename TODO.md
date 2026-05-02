@@ -74,27 +74,27 @@
 - [x] Slug collision policy for generated files.
 - [x] Duplicate note detection method (exact + semantic implemented).
 - [x] Semantic duplicate threshold/candidate limit configurable.
-- [/] Knowledge quality scoring rubric (coherence implemented; rubric/weights pending).
+- [x] Knowledge quality scoring rubric (coherence implemented; weights finalized).
 
 ## Current Focus
 - [x] Finalize Priority 0 items before implementing full MVP features.
 - [x] Complete Frontend Knowledge Dashboard with TanStack Start.
 - [x] Harden Monorepo Environment Strategy (Unified .env + Symlinks + CORS).
-- [/] GCP-first hardening:
+- [x] GCP-first hardening:
 	- [x] GEAP (ADC) providers exist for embeddings + LLM.
 	- [x] Configurable GEAP model ids via env (`GEMINI_GCP_LLM_MODEL`, `GEMINI_GCP_EMBEDDING_MODEL`).
-	- [ ] Add a small “verify GCP setup” CLI step (ADC, project, region, model sanity check) to reduce 404/credential confusion.
+	- [x] Add a small “verify GCP setup” CLI step (ADC, project, region, model sanity check).
 
 ## Next Focus
-- [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
+- [x] Implement Knowledge quality scoring rubric (AI scoring integrated into ingestion).
 - [x] Add Local-only embedding option (Ollama + Llama 4 upgrade complete).
-- [/] Add User Authentication / Session management.
+- [x] Add User Authentication / Session management.
 
 ## Plan Drift Fixes (From PLAN.md)
 - [x] Add `infra/docker/docker-compose.yml` for local Postgres (+ pgvector) to match PLAN.md local-first infra.
 - [x] Migrate embeddings storage to pgvector (schema + retrieval now uses SQL cosine distance).
-- [ ] Implement Multi-note Synthesis tool (API + UI) per PLAN.md Phase 5.
-- [ ] Expand Knowledge Maintenance system (weak-note detection + improvement suggestions) per PLAN.md Phase 6.
+- [x] Implement Multi-note Synthesis tool (API + UI) per PLAN.md Phase 5.
+- [x] Expand Knowledge Maintenance system (weak-note detection + AI improvement suggestions) per PLAN.md Phase 6.
 
 ## Priority 7 - Stability & Hardening
 - [x] Run Project Check Suite
@@ -102,3 +102,4 @@
 - [x] Stabilize monorepo linting via Biome
 - [x] Fix and pass unit tests (mock LLM dependencies)
 - [x] Resolve Drizzle integration tests (Docker Compose config)
+- [x] Implement UI Logout and Synthesis feedback.

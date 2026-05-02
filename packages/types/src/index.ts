@@ -26,6 +26,12 @@ export const appContract = oc.router({
     qualityScore: z.number().nullable().optional(),
     reasons: z.array(z.string()),
   }))),
+  getImprovementSuggestions: oc.input(z.object({ documentId: z.string() })).output(z.array(z.object({
+    id: z.string(),
+    type: z.enum(["structure", "linking", "content", "metadata"]),
+    description: z.string(),
+    actionLabel: z.string()
+  }))),
   reindex: oc.input(reindexPayloadSchema).output(z.any()),
   getLinkHealth: oc.input(z.void().optional()).output(z.array(z.object({
     label: z.string(),

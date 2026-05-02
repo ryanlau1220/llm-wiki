@@ -9,3 +9,4 @@ export * from "./linking/placeholders";
 export * from "./discovery/provider";
 export * from "./intelligence/coherence";
 export * from "./maintenance/weak-notes";
+export * from "./maintenance/improvements";

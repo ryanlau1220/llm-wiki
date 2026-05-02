@@ -81,6 +81,28 @@ export const router = os.router({
     const { db } = createDbClient(config.databaseUrl!);
     return getWeakNotes(db, input ?? {});
   }),
+  getImprovementSuggestions: os.getImprovementSuggestions.use(authMiddleware).handler(async ({ input }: any) => {
+    const { createDbClient, documents } = await import("@llm-wiki/db");
+    const { suggestImprovements } = await import("@llm-wiki/core");
+    const { createLLMProvider } = await import("@llm-wiki/ai");
+    const { eq } = await import("drizzle-orm");
+
+    const { db } = createDbClient(config.databaseUrl!);
+    const doc = await db.select().from(documents).where(eq(documents.id, input.documentId)).limit(1);
+    
+    if (!doc.length) throw new Error("Document not found");
+
+    const llmProvider = createLLMProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpLlmModel
+      }
+    });
+
+    return suggestImprovements(llmProvider, doc[0].content);
+  }),
   reindex: os.reindex.use(authMiddleware).handler(async ({ input }: any) => {
     return reindexFile(config, input.path);
   }),

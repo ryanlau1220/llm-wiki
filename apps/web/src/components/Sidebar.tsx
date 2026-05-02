@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { 
   Search, 
   RotateCcw, 
@@ -9,12 +9,26 @@ import {
   ChevronRight,
   PlusCircle,
   Sparkles,
-  ShieldAlert
+  ShieldAlert,
+  LogOut
 } from 'lucide-react'
 import { useState } from 'react'
+import { orpc } from '../lib/orpc'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const logoutMutation = useMutation(
+    orpc.logout.mutationOptions({
+      onSuccess: () => {
+        queryClient.setQueryData(orpc.me.queryKey(), null)
+        navigate({ to: '/login' })
+      }
+    })
+  )
 
   const navItems = [
     { label: 'Dashboard', icon: Activity, to: '/' },
@@ -63,12 +77,22 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-[var(--line)]">
+      <div className="p-4 border-t border-[var(--line)] space-y-3">
         <button type="button" className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-white hover:bg-[var(--lagoon-deep)] transition-colors ${
           isCollapsed ? 'justify-center' : ''
         }`}>
           <PlusCircle size={20} />
           {!isCollapsed && <span>New Note</span>}
+        </button>
+        
+        <button 
+          type="button" 
+          onClick={() => logoutMutation.mutate(undefined)}
+          className={`w-full flex items-center gap-3 p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors border border-red-200 ${
+          isCollapsed ? 'justify-center' : ''
+        }`}>
+          <LogOut size={20} />
+          {!isCollapsed && <span className="font-medium">Logout</span>}
         </button>
       </div>
     </aside>

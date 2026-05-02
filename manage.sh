@@ -23,6 +23,7 @@ function show_help {
     echo "  docker     Run local Postgres via Docker Compose (foreground logs)"
     echo "  dev        Start local development environment via Turbo"
     echo "  db-push    Synchronize Drizzle schema to the database"
+    echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -42,6 +43,10 @@ case $CMD in
         bun run check
         bun run build
         echo "✅ Quality checks passed."
+        ;;
+    "verify-gcp")
+        echo "☁️ Verifying GCP / Gemini Enterprise Agent Platform configuration..."
+        bun run scripts/verify-gcp.ts
         ;;
     "test")
         echo "🧪 Running full test suite..."

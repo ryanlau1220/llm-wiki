@@ -11,10 +11,14 @@ export const Route = createFileRoute('/synthesis')({
 function SynthesisComponent() {
   const [topic, setTopic] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
+  const [saved, setSaved] = useState(false)
 
   const previewMutation = useMutation(
     orpc.synthesisPreview.mutationOptions({
-      onSuccess: (data) => setPreviewData(data),
+      onSuccess: (data) => {
+        setPreviewData(data)
+        setSaved(false)
+      },
     })
   )
 
@@ -23,6 +27,7 @@ function SynthesisComponent() {
       onSuccess: () => {
         setPreviewData(null)
         setTopic('')
+        setSaved(true)
       },
     })
   )
@@ -66,6 +71,13 @@ function SynthesisComponent() {
         <div className="p-4 mb-8 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600">
           <AlertCircle size={20} />
           <span>Error generating synthesis. Please try again.</span>
+        </div>
+      )}
+
+      {saved && (
+        <div className="p-4 mb-8 bg-[var(--foam)] border border-[var(--lagoon)] rounded-xl flex items-center gap-3 text-[var(--lagoon-deep)] shadow-sm rise-in">
+          <Sparkles size={20} />
+          <span className="font-medium">Knowledge successfully synthesized and saved to your vault!</span>
         </div>
       )}
 
