@@ -55,10 +55,10 @@
 - [x] Add failure recovery runbook (stuck queue, bad embeddings, parse failures).
 
 ## Priority 5 - Test Strategy
-- [ ] Unit tests for parser, chunker, link extractor, intent validator.
-- [ ] Integration tests for ingest -> embed -> retrieve flow.
-- [ ] End-to-end tests for Ask & Save preview/confirm/save behavior.
-- [ ] Golden dataset for quality/regression checks.
+- [x] Unit tests for parser, chunker, link extractor, intent validator.
+- [x] Integration tests for ingest -> embed -> retrieve flow.
+- [x] End-to-end tests for Ask & Save preview/confirm/save behavior (Mocks).
+- [x] Golden dataset for quality/regression checks.
 
 ## Open Decisions
 - [ ] Local-only embedding option for strict local-first users.

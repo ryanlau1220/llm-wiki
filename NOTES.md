@@ -326,7 +326,15 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Documented backups, restores, and recovery runbooks (see below).
 - **Automated Verification**:
 	- Maintained test scripts in `scripts/tests/` for Refactor Engine and Link Intelligence.
-	- Added `npm run test:refactor` and `npm run test:linking` to the root package.
+	- Added `bun run test:refactor` and `bun run test:linking` to the root package.
+
+### 2026-05-02 (Priority 5 Completion)
+- **Unit & Integration Tests**:
+	- Implemented comprehensive tests for `parser.ts`, `utils.ts`, and `ingest.ts` using `bun test`.
+	- Added `test:unit` script to run all source tests.
+- **Golden Dataset**:
+	- Established a baseline QA dataset in `tests/golden/dataset.json`.
+	- Used for regression checking of retrieval quality and LLM answer grounding.
 
 ## 💾 Operations & Recovery Guide
 

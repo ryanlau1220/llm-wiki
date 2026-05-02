@@ -1,0 +1,14 @@
+[
+  {
+    "id": "qa-1",
+    "query": "What are the core architectural principles of LLM Wiki?",
+    "expected_concepts": ["local-first", "safety-first", "human-in-the-loop", "write-back audit"],
+    "context_hints": ["PLAN.md", "architecture_overview.md"]
+  },
+  {
+    "id": "qa-2",
+    "query": "How does the ingestion pipeline handle link resolution?",
+    "expected_concepts": ["links table", "source_document_id", "target_label", "validator"],
+    "context_hints": ["ingestion_pipeline.md", "validator.ts"]
+  }
+]

@@ -11,6 +11,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
+    "test:unit": "bun test packages/**/*.test.ts apps/**/*.test.ts",
     "test:refactor": "bun run scripts/tests/test-refactor.ts",
     "test:linking": "bun run scripts/tests/test-linking.ts",
     "lint": "turbo lint",
