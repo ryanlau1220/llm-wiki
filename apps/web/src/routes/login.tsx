@@ -33,7 +33,17 @@ function LoginComponent() {
           
           // If there's a redirect param, go there, otherwise go to root
           if (redirect) {
-            window.location.href = redirect
+            try {
+              const url = new URL(redirect, window.location.origin);
+              if (url.origin === window.location.origin) {
+                // Internal redirect - use the pathname
+                navigate({ to: url.pathname as any });
+              } else {
+                navigate({ to: '/' });
+              }
+            } catch (e) {
+              navigate({ to: '/' });
+            }
           } else {
             navigate({ to: '/' })
           }

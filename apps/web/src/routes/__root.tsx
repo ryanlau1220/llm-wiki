@@ -25,7 +25,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       throw redirect({
         to: '/login',
         search: {
-          redirect: location.href,
+          redirect: location.pathname,
         },
       })
     }
