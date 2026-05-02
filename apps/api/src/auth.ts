@@ -16,13 +16,32 @@ export function authPlugin(config: AppConfig) {
       })
     )
     .use(cookie())
-    .derive(async ({ jwt, cookie: { session } }) => {
+    .derive(async ({ jwt, cookie: { session }, request }) => {
+      console.log("[Auth] Derive triggered for request");
       const getUser = async () => {
-        const sessionValue = session.value;
-        if (!sessionValue || typeof sessionValue !== "string") return null;
+        // Try Authorization header first (Bearer token)
+        const authHeader = request.headers.get("Authorization");
+        let token = "";
         
-        const payload = await jwt.verify(sessionValue);
-        if (!payload) return null;
+        if (authHeader?.startsWith("Bearer ")) {
+          token = authHeader.substring(7);
+          console.log("[Auth] Found Bearer token in header");
+        } else {
+          // Fallback to cookie
+          token = session.value as string;
+          if (token) console.log("[Auth] Found session cookie");
+        }
+
+        if (!token) {
+          console.log("[Auth] No authentication token found (cookie or header)");
+          return null;
+        }
+        
+        const payload = await jwt.verify(token);
+        if (!payload) {
+          console.log("[Auth] Session cookie found but verification failed");
+          return null;
+        }
 
         return {
           id: payload.id as string,

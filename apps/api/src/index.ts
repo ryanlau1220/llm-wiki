@@ -13,7 +13,11 @@ await seedDefaultUser(config);
 const rpcHandler = new RPCHandler(router);
 
 const app = new Elysia()
-  .use(cors())
+  .use(cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+  }))
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
@@ -27,9 +31,30 @@ const app = new Elysia()
   })
   .use(authPlugin(config))
   .all("/rpc/*", async ({ request, user, jwt, cookie }: any) => {
+    // Explicitly derive user if not already present
+    let finalUser = user;
+    if (!finalUser && cookie.session?.value) {
+      console.log("[API] Manually deriving user from session cookie...");
+      try {
+        const payload = await jwt.verify(cookie.session.value);
+        if (payload) {
+          finalUser = {
+            id: payload.id as string,
+            email: payload.email as string,
+            role: payload.role as string
+          };
+          console.log("[API] Manual derivation successful:", finalUser.email);
+        } else {
+          console.log("[API] Manual derivation failed: invalid JWT");
+        }
+      } catch (e) {
+        console.error("[API] Manual derivation error:", e);
+      }
+    }
+
     const { response } = await rpcHandler.handle(request, {
       prefix: "/rpc",
-      context: { user, jwt, cookie }
+      context: { user: finalUser, jwt, cookie }
     });
     return response;
   }, {

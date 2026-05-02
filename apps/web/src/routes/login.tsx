@@ -2,14 +2,20 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { orpc } from '../lib/orpc'
 import { useState } from 'react'
 import { Shield, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { z } from 'zod'
 
 export const Route = createFileRoute('/login')({
+  validateSearch: z.object({
+    redirect: z.string().optional(),
+  }),
   component: LoginComponent,
 })
 
 function LoginComponent() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { redirect } = Route.useSearch()
   const [email, setEmail] = useState('admin@llmwiki.local')
   const [password, setPassword] = useState('admin123')
   const [error, setError] = useState<string | null>(null)
@@ -17,9 +23,20 @@ function LoginComponent() {
 
   const loginMutation = useMutation(
     orpc.login.mutationOptions({
-      onSuccess: (data) => {
-        if (data.success) {
-          navigate({ to: '/' })
+      onSuccess: async (data) => {
+        if (data.success && data.token) {
+          // Store token for manual Bearer auth fallback
+          localStorage.setItem('llm_wiki_token', data.token);
+          
+          // Invalidate 'me' query to update global state
+          await queryClient.invalidateQueries({ queryKey: orpc.me.queryKey() })
+          
+          // If there's a redirect param, go there, otherwise go to root
+          if (redirect) {
+            window.location.href = redirect
+          } else {
+            navigate({ to: '/' })
+          }
         } else {
           setError('Invalid credentials. Please try again.')
         }

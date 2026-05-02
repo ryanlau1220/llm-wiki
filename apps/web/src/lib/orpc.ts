@@ -5,6 +5,19 @@ import type { AppRouter, ContractRouterClient } from "@llm-wiki/types";
 
 const rpcLink = new RPCLink({
   url: "http://localhost:3001/rpc",
+  fetch: (url, init: any) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('llm_wiki_token') : null;
+    const headers = new Headers(init?.headers);
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    
+    return fetch(url, { 
+      ...init, 
+      headers,
+      credentials: "include" 
+    });
+  }
 });
 
 // We use ContractRouterClient to transform the contract definition into a client-compatible type

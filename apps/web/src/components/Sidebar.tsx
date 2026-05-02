@@ -24,8 +24,9 @@ export function Sidebar() {
   const logoutMutation = useMutation(
     orpc.logout.mutationOptions({
       onSuccess: () => {
-        queryClient.setQueryData(orpc.me.queryKey(), null)
-        navigate({ to: '/login' })
+        localStorage.removeItem('llm_wiki_token');
+        queryClient.setQueryData(orpc.me.queryKey(), null);
+        navigate({ to: '/login' });
       }
     })
   )

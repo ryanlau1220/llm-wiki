@@ -20,11 +20,13 @@ const authMiddleware = os.middleware(async ({ context, next }: any) => {
 
 export const router = os.router({
   me: os.me.handler(async ({ context }: any) => {
+    console.log("[API] Me handler called. User context:", context.user);
     return context.user || null;
   }),
   login: os.login.handler(async ({ input, context }: any) => {
     const { verifyUser } = await import("./auth");
     const user = await verifyUser(config, input.email, input.password);
+    console.log("[API] Login attempt for:", input.email, "Result:", !!user);
     if (!user) return { success: false };
 
     const { jwt, cookie } = context as any;
@@ -34,16 +36,20 @@ export const router = os.router({
       role: user.role
     });
 
+    console.log("[API] Setting session cookie...");
     cookie.session.set({
       value: token,
       httpOnly: true,
       maxAge: 7 * 86400,
-      path: "/"
+      path: "/",
+      sameSite: "lax",
+      secure: false
     });
 
-    return { success: true, user: { email: user.email, role: user.role } };
+    return { success: true, token, user: { email: user.email, role: user.role } };
   }),
   logout: os.logout.handler(async ({ context }: any) => {
+    console.log("[API] Logout handler called");
     const { cookie } = context as any;
     cookie.session.remove();
     return { success: true };

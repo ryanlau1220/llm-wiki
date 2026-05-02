@@ -49,6 +49,7 @@ export const appContract = oc.router({
     password: z.string().min(1)
   })).output(z.object({
     success: z.boolean(),
+    token: z.string().optional(),
     user: z.object({
       email: z.string(),
       role: z.string()
