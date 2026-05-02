@@ -55,12 +55,13 @@ function LoginComponent() {
           <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
             <div className="space-y-4">
               <div className="group">
-                <label className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] mb-2 ml-1">
+                <label htmlFor="login-email" className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] mb-2 ml-1">
                   Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--sea-ink-soft)] transition-colors group-focus-within:text-[var(--lagoon-deep)]" size={18} />
                   <input
+                    id="login-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -72,12 +73,13 @@ function LoginComponent() {
               </div>
 
               <div className="group">
-                <label className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] mb-2 ml-1">
+                <label htmlFor="login-password" className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] mb-2 ml-1">
                   Password
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--sea-ink-soft)] transition-colors group-focus-within:text-[var(--lagoon-deep)]" size={18} />
                   <input
+                    id="login-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

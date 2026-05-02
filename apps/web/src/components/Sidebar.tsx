@@ -5,7 +5,6 @@ import {
   Link2, 
   Activity, 
   BookOpen, 
-  Settings,
   ChevronLeft,
   ChevronRight,
   PlusCircle
@@ -32,6 +31,7 @@ export function Sidebar() {
       <div className="p-4 flex items-center justify-between border-b border-[var(--line)]">
         {!isCollapsed && <span className="font-bold text-lg text-[var(--sea-ink)]">LLM Wiki</span>}
         <button 
+          type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="p-1 rounded hover:bg-[var(--line)] text-[var(--sea-ink-soft)]"
         >
@@ -60,7 +60,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-[var(--line)]">
-        <button className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-white hover:bg-[var(--lagoon-deep)] transition-colors ${
+        <button type="button" className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-white hover:bg-[var(--lagoon-deep)] transition-colors ${
           isCollapsed ? 'justify-center' : ''
         }`}>
           <PlusCircle size={20} />

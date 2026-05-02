@@ -38,7 +38,7 @@ export async function calculateCoherence(
     });
 
     const score = parseFloat(response.text.trim());
-    if (isNaN(score)) return 0.5; // Default fallback
+    if (Number.isNaN(score)) return 0.5; // Default fallback
     
     return Math.max(0, Math.min(1, score));
   } catch (error) {

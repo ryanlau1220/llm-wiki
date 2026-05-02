@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { createDbClient, documents, links } from "@llm-wiki/db";
+import { type createDbClient, documents, links } from "@llm-wiki/db";
 
 export type LinkValidationResult = {
   label: string;

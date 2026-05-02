@@ -17,16 +17,16 @@ const app = new Elysia()
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
-  .onError(({ code, error }) => {
+  .onError(({ code, error }: any) => {
     console.error(`[API Error] ${code}:`, error);
     return {
       status: 500,
       code,
-      message: error.message
+      message: error?.message || "Internal Server Error"
     };
   })
   .use(authPlugin(config))
-  .all("/rpc/*", async ({ request, user, jwt, cookie }) => {
+  .all("/rpc/*", async ({ request, user, jwt, cookie }: any) => {
     const { response } = await rpcHandler.handle(request, {
       prefix: "/rpc",
       context: { user, jwt, cookie }

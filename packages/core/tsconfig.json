@@ -4,7 +4,7 @@
     "outDir": "dist",
     "declaration": true,
     "emitDeclarationOnly": false,
-    "rootDir": ".."
+    "types": ["bun-types"]
   },
   "include": [
     "src"

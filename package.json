@@ -11,13 +11,14 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "test:unit": "bun test packages/**/*.test.ts apps/**/*.test.ts",
+    "test:unit": "bun test",
     "test:refactor": "bun run scripts/tests/test-refactor.ts",
     "test:linking": "bun run scripts/tests/test-linking.ts",
-    "lint": "turbo lint",
+    "lint": "biome lint . --write",
     "check": "turbo check"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.14",
     "turbo": "^2.1.1",
     "typescript": "^5.7.2"
   },

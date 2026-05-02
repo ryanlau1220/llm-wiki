@@ -105,7 +105,7 @@ function buildNoteFile(note: AskNoteInput): string {
   lines.push("source: ask");
   lines.push(`created_at: ${new Date().toISOString()}`);
   if (note.tags?.length) {
-    lines.push(`tags: [${note.tags.map((tag) => `\"${tag}\"`).join(", ")}]`);
+    lines.push(`tags: [${note.tags.map((tag) => `"${tag}"`).join(", ")}]`);
   }
   lines.push("---");
   lines.push("");

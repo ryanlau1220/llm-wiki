@@ -66,6 +66,7 @@
 - [x] Build "Ask Knowledge" tool with preview/save flow.
 - [x] Build "Note Refactor" tool with diff preview.
 - [x] Build "Link Health" dashboard for broken link management.
+- [x] Create project management CLI (manage.sh implementation complete).
 - [x] Build Dashboard for ingestion stats and system health.
 
 ## Open Decisions
@@ -84,3 +85,10 @@
 - [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
 - [x] Add Local-only embedding option (Ollama + Llama 4 upgrade complete).
 - [/] Add User Authentication / Session management.
+
+## Priority 7 - Stability & Hardening
+- [x] Run Project Check Suite
+- [x] Type check api and all packages
+- [x] Stabilize monorepo linting via Biome
+- [x] Fix and pass unit tests (mock LLM dependencies)
+- [x] Resolve Drizzle integration tests (Docker Compose config)

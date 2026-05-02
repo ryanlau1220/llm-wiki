@@ -3,7 +3,6 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { createLLMProvider } from "@llm-wiki/ai";
-import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
 import { confirmAskSave } from "./ask-confirm";
@@ -79,7 +78,7 @@ Provide the refactored version in JSON format.
       sourcePath: filePath,
       ...parsed
     };
-  } catch (error) {
+  } catch (_error) {
     console.error("Failed to parse LLM refactor response:", llmResponse.text);
     return {
       error: "Failed to generate structured refactor",
@@ -91,7 +90,7 @@ Provide the refactored version in JSON format.
 export async function confirmRefactorSave(
   config: AppConfig,
   requestId: string,
-  sourcePath: string,
+  _sourcePath: string,
   note: { title: string; content: string; links?: string[]; tags?: string[] }
 ) {
   // We can reuse the confirmAskSave logic but with different metadata

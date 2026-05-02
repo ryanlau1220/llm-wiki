@@ -109,12 +109,12 @@ function AskComponent() {
 
               <div className="space-y-6">
                 <div>
-                  <label className="text-xs uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Title</label>
+                  <span className="text-xs uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Title</span>
                   <div className="text-2xl font-bold text-[var(--sea-ink)]">{previewData.note.title}</div>
                 </div>
 
                 <div>
-                  <label className="text-xs uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content</label>
+                  <span className="text-xs uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content</span>
                   <div className="text-sm text-[var(--sea-ink-soft)] line-clamp-[10] bg-white/30 p-3 rounded-lg border border-[var(--line)]">
                     {previewData.note.content}
                   </div>
@@ -136,6 +136,7 @@ function AskComponent() {
             </div>
 
             <button
+              type="button"
               onClick={handleSave}
               disabled={saveMutation.isPending}
               className="w-full flex items-center justify-center gap-3 py-4 bg-[var(--lagoon)] text-white rounded-[1.5rem] font-bold text-lg hover:bg-[var(--lagoon-deep)] shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50"

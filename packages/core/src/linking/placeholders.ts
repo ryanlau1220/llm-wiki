@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { createDbClient, actionAuditEvents } from "@llm-wiki/db";
+import { type createDbClient, actionAuditEvents } from "@llm-wiki/db";
 
 export type PlaceholderConfig = {
   vaultPath: string;

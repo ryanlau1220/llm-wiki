@@ -19,10 +19,15 @@ describe("Ingestion Flow", () => {
       }))
     };
 
+    const mockLlmProvider = {
+      generate: mock(async () => ({ text: "10" }))
+    };
+
     const deps = {
       db: mockDb as any,
       options: {
         embeddingProvider: mockEmbeddingProvider as any,
+        llmProvider: mockLlmProvider as any,
         embeddingVersion: "v1",
         now: () => new Date("2026-05-01T00:00:00Z")
       }

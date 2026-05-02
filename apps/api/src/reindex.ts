@@ -40,12 +40,22 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
       location: config.gcpLocation
     }
   });
+  
+  const { createLLMProvider } = await import("@llm-wiki/ai");
+  const llmProvider = createLLMProvider({
+    provider: config.embeddingProvider,
+    geminiGeap: {
+      projectId: config.gcpProjectId,
+      location: config.gcpLocation
+    }
+  });
 
   const result = await ingestMarkdown(
     {
       db,
       options: {
         embeddingProvider,
+        llmProvider,
         embeddingVersion: config.embeddingVersion
       }
     },

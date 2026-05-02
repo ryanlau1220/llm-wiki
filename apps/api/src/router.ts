@@ -6,29 +6,23 @@ import { loadConfig } from "./config";
 import { promises as fs } from "node:fs";
 
 const config = loadConfig();
-const base = implement(appContract);
+const os = implement(appContract);
 
-const os = base.middleware(async ({ context, next }) => {
-  const { user } = context as any;
+const authMiddleware = os.middleware(async ({ context, next }: any) => {
+  const { user } = context;
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
   return next({
-    context: {
-      user
-    }
+    context: { user }
   });
 });
 
-const protectedProcedure = os.middleware(async ({ context, next }) => {
-  if (!context.user) {
-    throw new Error("Unauthorized");
-  }
-  return next();
-});
-
-export const router = base.router({
-  me: base.me.handler(async ({ context }) => {
-    return (context as any).user || null;
+export const router = os.router({
+  me: os.me.handler(async ({ context }: any) => {
+    return context.user || null;
   }),
-  login: base.login.handler(async ({ input, context }) => {
+  login: os.login.handler(async ({ input, context }: any) => {
     const { verifyUser } = await import("./auth");
     const user = await verifyUser(config, input.email, input.password);
     if (!user) return { success: false };
@@ -49,35 +43,35 @@ export const router = base.router({
 
     return { success: true, user: { email: user.email, role: user.role } };
   }),
-  logout: base.logout.handler(async ({ context }) => {
+  logout: os.logout.handler(async ({ context }: any) => {
     const { cookie } = context as any;
     cookie.session.remove();
     return { success: true };
   }),
-  askPreview: protectedProcedure.askPreview.handler(async ({ input }) => {
+  askPreview: os.askPreview.use(authMiddleware).handler(async ({ input }: any) => {
     return askPreview(config, input.query, input.topK);
   }),
-  confirmAskSave: protectedProcedure.confirmAskSave.handler(async ({ input }) => {
+  confirmAskSave: os.confirmAskSave.use(authMiddleware).handler(async ({ input }: any) => {
     return confirmAskSave(config, input.requestId, input.note);
   }),
-  refactorPreview: protectedProcedure.refactorPreview.handler(async ({ input }) => {
+  refactorPreview: os.refactorPreview.use(authMiddleware).handler(async ({ input }: any) => {
     const { refactorNotePreview } = await import("./refactor");
     return refactorNotePreview(config, input.path);
   }),
-  confirmRefactorSave: protectedProcedure.confirmRefactorSave.handler(async ({ input }) => {
+  confirmRefactorSave: os.confirmRefactorSave.use(authMiddleware).handler(async ({ input }: any) => {
     const { confirmRefactorSave } = await import("./refactor");
     return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
   }),
-  reindex: protectedProcedure.reindex.handler(async ({ input }) => {
+  reindex: os.reindex.use(authMiddleware).handler(async ({ input }: any) => {
     return reindexFile(config, input.path);
   }),
-  getLinkHealth: base.getLinkHealth.handler(async () => {
+  getLinkHealth: os.getLinkHealth.handler(async () => {
     const { createDbClient } = await import("@llm-wiki/db");
     const { getGlobalLinkHealth } = await import("@llm-wiki/core");
     const { db } = createDbClient(config.databaseUrl!);
     return getGlobalLinkHealth(db);
   }),
-  health: base.health.handler(async () => {
+  health: os.health.handler(async () => {
     const health: any = {
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -88,20 +82,20 @@ export const router = base.router({
       const { db } = createDbClient(config.databaseUrl!);
       await db.execute("SELECT 1");
       health.services.database = "ok";
-    } catch (e) {
+    } catch (_e) {
       health.status = "error";
       health.services.database = "error";
     }
     try {
       await fs.access(config.vaultPath);
       health.services.vault = "ok";
-    } catch (e) {
+    } catch (_e) {
       health.status = "error";
       health.services.vault = "error";
     }
     return health;
   }),
-  listNotes: base.listNotes.handler(async () => {
+  listNotes: os.listNotes.handler(async () => {
     const { createDbClient, documents } = await import("@llm-wiki/db");
     const { db } = createDbClient(config.databaseUrl!);
     const results = await db.select({ 

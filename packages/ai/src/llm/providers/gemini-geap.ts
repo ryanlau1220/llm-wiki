@@ -9,7 +9,7 @@ export interface GeminiGeapLLMConfig {
   apiBaseUrl?: string;
 }
 
-const DEFAULT_MODEL = "gemini-3.1-flash-001";
+const DEFAULT_MODEL = "gemini-3.1-flash";
 const DEFAULT_LOCATION = "us-central1";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";

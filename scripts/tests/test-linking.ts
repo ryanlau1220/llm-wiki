@@ -20,7 +20,7 @@ async function test() {
       title: "Intelligence Test",
       type: "human",
       content: "Exploring [[Gemini]] and [[MissingKnowledge]].",
-      content_hash: "test-hash-" + Date.now(),
+      content_hash: `test-hash-${Date.now()}`,
       source_kind: "manual",
       is_ai_generated: false,
     }).returning();
@@ -47,7 +47,7 @@ async function test() {
       title: "Gemini",
       type: "human",
       content: "Information about Gemini 3.1.",
-      content_hash: "gemini-hash-" + Date.now(),
+      content_hash: `gemini-hash-${Date.now()}`,
       source_kind: "manual",
       is_ai_generated: false,
     }).returning();
@@ -61,7 +61,7 @@ async function test() {
     
     console.log("✅ Validation Results:");
     results.forEach(r => {
-      console.log(`  - [[${r.label}]]: ${r.exists ? "FOUND (" + r.targetPath + ")" : "MISSING"}`);
+      console.log(`  - [[${r.label}]]: ${r.exists ? `FOUND (${r.targetPath})` : "MISSING"}`);
     });
 
     // Cleanup
@@ -71,7 +71,9 @@ async function test() {
     
   } catch (error) {
     console.error("💥 Critical Error during test:", error);
+    process.exit(1);
   }
+  process.exit(0);
 }
 
 test();

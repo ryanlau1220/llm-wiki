@@ -73,10 +73,10 @@ function LinksHealthComponent() {
               </p>
 
               <div className="grid grid-cols-2 gap-3">
-                <button className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--foam)] text-[var(--sea-ink)] rounded-xl border border-[var(--line)] text-sm font-bold hover:bg-[var(--line)] transition-colors">
+                <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--foam)] text-[var(--sea-ink)] rounded-xl border border-[var(--line)] text-sm font-bold hover:bg-[var(--line)] transition-colors">
                   <ExternalLink size={16} /> View
                 </button>
-                <button className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--lagoon)] text-white rounded-xl text-sm font-bold hover:bg-[var(--lagoon-deep)] transition-colors shadow-sm">
+                <button type="button" className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--lagoon)] text-white rounded-xl text-sm font-bold hover:bg-[var(--lagoon-deep)] transition-colors shadow-sm">
                   <PlusCircle size={16} /> Create
                 </button>
               </div>

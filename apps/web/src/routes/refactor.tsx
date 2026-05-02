@@ -81,6 +81,7 @@ function RefactorComponent() {
             <div className="max-h-[500px] overflow-y-auto pr-2 space-y-2">
               {filteredNotes?.map((note) => (
                 <button
+                  type="button"
                   key={note.id}
                   onClick={() => handleRefactor(note.path)}
                   className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group"
@@ -104,6 +105,7 @@ function RefactorComponent() {
         <section className="rise-in">
           <div className="flex items-center gap-4 mb-8">
             <button 
+              type="button"
               onClick={() => { setSelectedPath(null); setPreviewData(null); }}
               className="p-2 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors"
             >
@@ -148,6 +150,7 @@ function RefactorComponent() {
                 </article>
 
                 <button
+                  type="button"
                   onClick={() => confirmMutation.mutate({
                     requestId: previewData.requestId,
                     sourcePath: selectedPath,
@@ -168,6 +171,7 @@ function RefactorComponent() {
               <h3 className="text-xl font-bold text-red-700">Refactor Failed</h3>
               <p className="text-red-600 mb-6">Something went wrong while refactoring the note.</p>
               <button 
+                type="button"
                 onClick={() => handleRefactor(selectedPath)}
                 className="px-6 py-2 bg-[var(--sea-ink)] text-white rounded-xl font-bold"
               >

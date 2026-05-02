@@ -1,4 +1,4 @@
-import { desc, eq, inArray, like } from "drizzle-orm";
+import { desc, inArray, like } from "drizzle-orm";
 
 import type { RetrievalDependencies, RetrievalRequest, RetrievalResponse } from "./types";
 import { cosineSimilarity, parseEmbedding } from "./utils";
