@@ -42,6 +42,8 @@ console.log("Embedding provider:", config.embeddingProvider);
 if (config.embeddingProvider === "gemini-geap") {
   console.log("GCP project:", config.gcpProjectId ?? "(missing)");
   console.log("GCP location:", config.gcpLocation ?? "(default)");
+  console.log("GCP LLM model:", config.gcpLlmModel ?? "(default)");
+  console.log("GCP embedding model:", config.gcpEmbeddingModel ?? "(default)");
 }
 
 const watcher = await startIngestionWatcher(config);

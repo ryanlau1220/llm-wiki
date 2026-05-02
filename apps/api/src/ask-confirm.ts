@@ -172,7 +172,8 @@ async function hasSemanticDuplicate(
     provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpEmbeddingModel
     }
   });
 

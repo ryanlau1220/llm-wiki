@@ -26,8 +26,8 @@ export type GeminiGeapEmbeddingConfig = {
   apiBaseUrl?: string;
 };
 
-const DEFAULT_MODEL = "gemini-embedding-2";
-const DEFAULT_LOCATION = "us-central1";
+const DEFAULT_MODEL = "gemini-embedding-001";
+const DEFAULT_LOCATION = "global";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_API_BASE_URL = "https://aiplatform.googleapis.com/v1";
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
@@ -52,7 +52,7 @@ export class GeminiGeapEmbeddingProvider implements EmbeddingProvider {
     }
 
     this.location = config.location ?? process.env.GEMINI_GCP_LOCATION ?? DEFAULT_LOCATION;
-    this.model = config.model ?? DEFAULT_MODEL;
+    this.model = config.model ?? process.env.GEMINI_GCP_EMBEDDING_MODEL ?? DEFAULT_MODEL;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.apiBaseUrl = config.apiBaseUrl ?? DEFAULT_API_BASE_URL;
     this.auth = new GoogleAuth({ scopes: [CLOUD_PLATFORM_SCOPE] });
@@ -107,6 +107,18 @@ export class GeminiGeapEmbeddingProvider implements EmbeddingProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 404) {
+          throw new Error(
+            [
+              `Gemini GEAP embedding error (404): model was not found.`,
+              `Model: ${this.model}`,
+              `Project: ${this.projectId}`,
+              `Location: ${this.location}`,
+              `Request: POST ${url}`,
+              `Fix: set GEMINI_GCP_EMBEDDING_MODEL to a model available in this location (or pass config.model).`
+            ].join("\n")
+          );
+        }
         throw new Error(`Gemini GEAP embed request failed with ${response.status}: ${errorText}`);
       }
 

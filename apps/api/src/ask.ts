@@ -22,7 +22,8 @@ export async function askPreview(
     provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpEmbeddingModel
     }
   });
 
@@ -46,7 +47,8 @@ export async function askPreview(
     provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpLlmModel
     }
   });
 

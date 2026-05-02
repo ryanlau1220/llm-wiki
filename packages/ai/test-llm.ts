@@ -3,7 +3,7 @@ import { createLLMProvider } from "./src/llm/factory";
 async function test() {
   const provider = createLLMProvider({
     provider: "gemini", // Assuming GEMINI_API_KEY is in env
-    model: "gemini-2.0-flash"
+    model: "gemini-3-flash-preview"
   });
 
   try {

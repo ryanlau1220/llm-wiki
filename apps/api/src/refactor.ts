@@ -24,7 +24,8 @@ export async function refactorNotePreview(
     provider: config.embeddingProvider, // Defaulting to the same provider
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpLlmModel
     }
   });
 

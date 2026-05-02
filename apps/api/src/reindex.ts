@@ -37,7 +37,8 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpEmbeddingModel
     }
   });
   
@@ -46,7 +47,8 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     provider: config.embeddingProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
-      location: config.gcpLocation
+      location: config.gcpLocation,
+      model: config.gcpLlmModel
     }
   });
 

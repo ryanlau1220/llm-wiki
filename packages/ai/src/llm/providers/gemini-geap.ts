@@ -9,8 +9,10 @@ export interface GeminiGeapLLMConfig {
   apiBaseUrl?: string;
 }
 
-const DEFAULT_MODEL = "gemini-3.1-flash";
-const DEFAULT_LOCATION = "us-central1";
+// Prefer stable model IDs by default; override via GEMINI_GCP_LLM_MODEL.
+const DEFAULT_MODEL = "gemini-2.5-flash";
+// Default to the global endpoint for broader availability unless you need a specific region.
+const DEFAULT_LOCATION = "global";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
@@ -32,15 +34,19 @@ export class GeminiGeapLLMProvider implements LLMProvider {
     }
 
     this.location = config.location ?? process.env.GEMINI_GCP_LOCATION ?? DEFAULT_LOCATION;
-    this.model = config.model ?? DEFAULT_MODEL;
+    this.model = config.model ?? process.env.GEMINI_GCP_LLM_MODEL ?? DEFAULT_MODEL;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.apiBaseUrl = config.apiBaseUrl ?? `https://${this.location}-aiplatform.googleapis.com/v1`;
+    this.apiBaseUrl =
+      config.apiBaseUrl ??
+      (this.location === "global"
+        ? "https://aiplatform.googleapis.com/v1"
+        : `https://${this.location}-aiplatform.googleapis.com/v1`);
     this.auth = new GoogleAuth({ scopes: [CLOUD_PLATFORM_SCOPE] });
   }
 
   async generate(request: LLMRequest): Promise<LLMResponse> {
     const token = await this.getAccessToken();
-    const url = `${this.apiBaseUrl}/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${this.model}:generateContent`;
+    const url = `${this.apiBaseUrl}/projects/${encodeURIComponent(this.projectId)}/locations/${encodeURIComponent(this.location)}/publishers/google/models/${encodeURIComponent(this.model)}:generateContent`;
 
     const contents = [
       {
@@ -80,6 +86,18 @@ export class GeminiGeapLLMProvider implements LLMProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 404) {
+          throw new Error(
+            [
+              `Gemini GEAP LLM error (404): model was not found.`,
+              `Model: ${this.model}`,
+              `Project: ${this.projectId}`,
+              `Location: ${this.location}`,
+              `Request: POST ${url}`,
+              `Fix: set GEMINI_GCP_LLM_MODEL to a model available in this location (or pass config.model).`
+            ].join("\n")
+          );
+        }
         throw new Error(`Gemini GEAP LLM error (${response.status}): ${errorText}`);
       }
 

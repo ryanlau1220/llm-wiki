@@ -286,14 +286,14 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 
 ### 2026-05-02 (Model Knowledge Update)
 - Verified current Gemini model landscape (May 2026):
-	- **Flagship LLM**: Gemini 3.1 Pro (Released Feb 2026).
-	- **Fast Production LLM**: Gemini 3.1 Flash / Flash-Lite (Released March/April 2026).
-	- **Previous Generation**: Gemini 2.5 series (still available).
-	- **Embedding**: `gemini-embedding-2` is the current SOTA multimodal embedding model (GA April 2026).
-- Action taken:
-	- Updated default LLM model to `gemini-3.1-flash` in both Gemini and GEAP providers.
-	- Updated default embedding model to `gemini-embedding-2` in GEAP provider.
-	- Gemini 2.0 series is officially considered outdated and was removed from default configurations.
+	- (Update 2026-05-03) Re-checked official model listings:
+		- Vertex AI “Model versions and lifecycle” lists stable aliases like `gemini-2.5-flash` and the embedding model `gemini-embedding-001`.
+		- Gemini 3 Flash appears as a preview model id `gemini-3-flash-preview` (availability can be region-specific; `locations/global` is commonly used).
+- Action taken (2026-05-03):
+	- Standardized defaults to stable model ids for reliability:
+		- Default LLM model: `gemini-2.5-flash`
+		- Default embedding model: `gemini-embedding-001`
+	- Kept preview models as opt-in via env overrides (`GEMINI_GCP_LLM_MODEL`, `GEMINI_GCP_EMBEDDING_MODEL`) or constructor config.
 
 ### 2026-05-02 (Priority 3 Completion)
 - **Note Refactor Engine**:
@@ -428,4 +428,24 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Changed presentational `<label>` elements to `<span>` in `ask.tsx` where there's no associated form input.
 	- Added `biome-ignore` for intentional `dangerouslySetInnerHTML` in `__root.tsx` (theme init script, standard SSR pattern).
 - **Model Configuration**:
-	- Default GEAP LLM model set to `gemini-3.1-flash` (current production model per NOTES.md model knowledge section).
+	- Defaults moved to stable ids (`gemini-2.5-flash`, `gemini-embedding-001`); preview models are opt-in.
+
+### 2026-05-03 (GCP/GEAP Status Clarification)
+- Repo does handle Gemini Enterprise Agent Platform (Vertex AI / aiplatform.googleapis.com) for both embeddings and LLM:
+	- Embeddings: `packages/ai/src/embedding/providers/gemini-geap.ts`
+	- LLM: `packages/ai/src/llm/providers/gemini-geap.ts`
+	- Auth: ADC via `google-auth-library` (service account / `gcloud auth application-default login`)
+- Repo also supports direct Gemini API key mode (non-GCP / Generative Language API):
+	- Embeddings: `packages/ai/src/embedding/providers/gemini.ts`
+	- LLM: `packages/ai/src/llm/providers/gemini.ts`
+- Current defaults in code (not all regions/projects necessarily support these without overrides):
+	- Direct (API key) LLM default: `gemini-2.5-flash`
+	- Direct (API key) embedding default: `gemini-embedding-001`
+	- GEAP (ADC) LLM default: `gemini-2.5-flash`
+	- GEAP (ADC) embedding default: `gemini-embedding-001`
+- GEAP model selection is now explicitly configurable:
+	- `GEMINI_GCP_LOCATION` (region)
+	- `GEMINI_GCP_LLM_MODEL` (publisher model id)
+	- `GEMINI_GCP_EMBEDDING_MODEL` (publisher model id)
+- Test environment note:
+	- `scripts/tests/test-refactor.ts` and `scripts/tests/test-linking.ts` intentionally skip (exit 0) when external dependencies are unavailable (no network/ADC token endpoint, or Postgres not reachable).

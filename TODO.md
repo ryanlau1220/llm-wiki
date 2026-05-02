@@ -80,6 +80,10 @@
 - [x] Finalize Priority 0 items before implementing full MVP features.
 - [x] Complete Frontend Knowledge Dashboard with TanStack Start.
 - [x] Harden Monorepo Environment Strategy (Unified .env + Symlinks + CORS).
+- [/] GCP-first hardening:
+	- [x] GEAP (ADC) providers exist for embeddings + LLM.
+	- [x] Configurable GEAP model ids via env (`GEMINI_GCP_LLM_MODEL`, `GEMINI_GCP_EMBEDDING_MODEL`).
+	- [ ] Add a small “verify GCP setup” CLI step (ADC, project, region, model sanity check) to reduce 404/credential confusion.
 
 ## Next Focus
 - [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
