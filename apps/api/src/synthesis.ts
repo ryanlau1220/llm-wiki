@@ -52,6 +52,7 @@ RULES:
 2. Produce a clean, structured markdown note.
 3. Suggest related wikilinks (labels only, no brackets).
 4. Output valid JSON matching the schema below.
+5. IMPORTANT: NEVER use unescaped double quotes inside the "content" or "title" string values. If you need to emphasize something or use a quote within the text, use single quotes (') or markdown bolding (**text**) instead. Unescaped double quotes will break the JSON parsing and fail the task.
 
 JSON SCHEMA:
 {
@@ -81,8 +82,10 @@ Synthesize a concise wiki note.
     temperature: 0.2
   });
 
+  const rawText = llmResponse.text;
+
   try {
-    const parsed = JSON.parse(llmResponse.text);
+    const parsed = JSON.parse(rawText);
     const requestId = crypto.randomUUID();
     return {
       requestId,
@@ -93,9 +96,28 @@ Synthesize a concise wiki note.
       }
     };
   } catch (_error) {
+    // Fallback: try to find the JSON block if it's wrapped or has stray characters
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        const requestId = crypto.randomUUID();
+        return {
+          requestId,
+          note: parsed.note,
+          retrieval: {
+            chunkCount: retrievalResults.chunks.length,
+            linkCount: retrievalResults.links.length
+          }
+        };
+      }
+    } catch (_fallbackError) {
+      // Ignore fallback error
+    }
+
     return {
       error: "Failed to generate structured synthesis",
-      rawResponse: llmResponse.text
+      rawResponse: rawText
     };
   }
 }

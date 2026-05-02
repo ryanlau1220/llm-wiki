@@ -42,6 +42,7 @@ REFACTORING RULES:
    - ## Related Concepts (Suggested wikilinks)
 3. Use clear, professional language.
 4. Output your response as a JSON object matching the schema below.
+5. IMPORTANT: NEVER use unescaped double quotes inside the "content" or "title" string values. If you need to emphasize something or use a quote within the text, use single quotes (') or markdown bolding (**text**) instead. Unescaped double quotes will break the JSON parsing and fail the task.
 
 JSON SCHEMA:
 {
@@ -70,8 +71,11 @@ Provide the refactored version in JSON format.
     temperature: 0.1
   });
 
+  let rawText = llmResponse.text;
+
   try {
-    const parsed = JSON.parse(llmResponse.text);
+    // Attempt direct parse first
+    const parsed = JSON.parse(rawText);
     const requestId = crypto.randomUUID();
 
     return {
@@ -80,10 +84,26 @@ Provide the refactored version in JSON format.
       ...parsed
     };
   } catch (_error) {
-    console.error("Failed to parse LLM refactor response:", llmResponse.text);
+    // Fallback: try to find the JSON block if it's wrapped or has stray characters
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        const requestId = crypto.randomUUID();
+        return {
+          requestId,
+          sourcePath: filePath,
+          ...parsed
+        };
+      }
+    } catch (_fallbackError) {
+      // Ignore fallback error and report original failure
+    }
+
+    console.error("Failed to parse LLM refactor response:", rawText);
     return {
       error: "Failed to generate structured refactor",
-      rawResponse: llmResponse.text
+      rawResponse: rawText
     };
   }
 }
