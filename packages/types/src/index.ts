@@ -21,6 +21,22 @@ export const appContract = oc.router({
     sourcePaths: z.array(z.string())
   }))),
   health: oc.input(z.void().optional()).output(z.any()),
+  me: oc.input(z.void().optional()).output(z.object({
+    id: z.string(),
+    email: z.string(),
+    role: z.string()
+  }).nullable()),
+  login: oc.input(z.object({
+    email: z.string().email(),
+    password: z.string().min(1)
+  })).output(z.object({
+    success: z.boolean(),
+    user: z.object({
+      email: z.string(),
+      role: z.string()
+    }).optional()
+  })),
+  logout: oc.input(z.void().optional()).output(z.object({ success: z.boolean() })),
   listNotes: oc.input(z.void().optional()).output(z.array(z.object({
     id: z.string(),
     path: z.string(),

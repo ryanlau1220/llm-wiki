@@ -4,42 +4,87 @@ import { askPreview, confirmAskSave } from "./ask";
 import { reindexFile } from "./reindex";
 import { loadConfig } from "./config";
 import { promises as fs } from "node:fs";
-import { createDbClient } from "@llm-wiki/db";
 
 const config = loadConfig();
-const os = implement(appContract);
+const base = implement(appContract);
 
-export const router = os.router({
-  askPreview: os.askPreview.handler(async ({ input }) => {
+const os = base.middleware(async ({ context, next }) => {
+  const { user } = context as any;
+  return next({
+    context: {
+      user
+    }
+  });
+});
+
+const protectedProcedure = os.middleware(async ({ context, next }) => {
+  if (!context.user) {
+    throw new Error("Unauthorized");
+  }
+  return next();
+});
+
+export const router = base.router({
+  me: base.me.handler(async ({ context }) => {
+    return (context as any).user || null;
+  }),
+  login: base.login.handler(async ({ input, context }) => {
+    const { verifyUser } = await import("./auth");
+    const user = await verifyUser(config, input.email, input.password);
+    if (!user) return { success: false };
+
+    const { jwt, cookie } = context as any;
+    const token = await jwt.sign({
+      id: user.id,
+      email: user.email,
+      role: user.role
+    });
+
+    cookie.session.set({
+      value: token,
+      httpOnly: true,
+      maxAge: 7 * 86400,
+      path: "/"
+    });
+
+    return { success: true, user: { email: user.email, role: user.role } };
+  }),
+  logout: base.logout.handler(async ({ context }) => {
+    const { cookie } = context as any;
+    cookie.session.remove();
+    return { success: true };
+  }),
+  askPreview: protectedProcedure.askPreview.handler(async ({ input }) => {
     return askPreview(config, input.query, input.topK);
   }),
-  confirmAskSave: os.confirmAskSave.handler(async ({ input }) => {
+  confirmAskSave: protectedProcedure.confirmAskSave.handler(async ({ input }) => {
     return confirmAskSave(config, input.requestId, input.note);
   }),
-  refactorPreview: os.refactorPreview.handler(async ({ input }) => {
+  refactorPreview: protectedProcedure.refactorPreview.handler(async ({ input }) => {
     const { refactorNotePreview } = await import("./refactor");
     return refactorNotePreview(config, input.path);
   }),
-  confirmRefactorSave: os.confirmRefactorSave.handler(async ({ input }) => {
+  confirmRefactorSave: protectedProcedure.confirmRefactorSave.handler(async ({ input }) => {
     const { confirmRefactorSave } = await import("./refactor");
     return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
   }),
-  reindex: os.reindex.handler(async ({ input }) => {
+  reindex: protectedProcedure.reindex.handler(async ({ input }) => {
     return reindexFile(config, input.path);
   }),
-  getLinkHealth: os.getLinkHealth.handler(async () => {
+  getLinkHealth: base.getLinkHealth.handler(async () => {
     const { createDbClient } = await import("@llm-wiki/db");
     const { getGlobalLinkHealth } = await import("@llm-wiki/core");
     const { db } = createDbClient(config.databaseUrl!);
     return getGlobalLinkHealth(db);
   }),
-  health: os.health.handler(async () => {
+  health: base.health.handler(async () => {
     const health: any = {
       status: "ok",
       timestamp: new Date().toISOString(),
       services: { api: "ok" }
     };
     try {
+      const { createDbClient } = await import("@llm-wiki/db");
       const { db } = createDbClient(config.databaseUrl!);
       await db.execute("SELECT 1");
       health.services.database = "ok";
@@ -56,7 +101,7 @@ export const router = os.router({
     }
     return health;
   }),
-  listNotes: os.listNotes.handler(async () => {
+  listNotes: base.listNotes.handler(async () => {
     const { createDbClient, documents } = await import("@llm-wiki/db");
     const { db } = createDbClient(config.databaseUrl!);
     const results = await db.select({ 

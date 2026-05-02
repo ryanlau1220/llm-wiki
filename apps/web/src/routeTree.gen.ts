@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RefactorRouteImport } from './routes/refactor'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as LinksRouteImport } from './routes/links'
 import { Route as AskRouteImport } from './routes/ask'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const RefactorRoute = RefactorRouteImport.update({
   id: '/refactor',
   path: '/refactor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LinksRoute = LinksRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
+  '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
+  '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/links': typeof LinksRoute
+  '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ask' | '/links' | '/refactor'
+  fullPaths: '/' | '/ask' | '/links' | '/login' | '/refactor'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ask' | '/links' | '/refactor'
-  id: '__root__' | '/' | '/ask' | '/links' | '/refactor'
+  to: '/' | '/ask' | '/links' | '/login' | '/refactor'
+  id: '__root__' | '/' | '/ask' | '/links' | '/login' | '/refactor'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AskRoute: typeof AskRoute
   LinksRoute: typeof LinksRoute
+  LoginRoute: typeof LoginRoute
   RefactorRoute: typeof RefactorRoute
 }
 
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/refactor'
       fullPath: '/refactor'
       preLoaderRoute: typeof RefactorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/links': {
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AskRoute: AskRoute,
   LinksRoute: LinksRoute,
+  LoginRoute: LoginRoute,
   RefactorRoute: RefactorRoute,
 }
 export const routeTree = rootRouteImport

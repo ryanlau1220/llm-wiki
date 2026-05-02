@@ -18,6 +18,7 @@ export function createRouter() {
     defaultPreloadStaleTime: 0,
     context: {
       queryClient,
+      user: null,
     },
   })
 

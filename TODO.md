@@ -82,5 +82,5 @@
 
 ## Next Focus
 - [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
-- [x] Add Local-only embedding option (Ollama implementation complete).
-- [ ] Add User Authentication / Session management.
+- [x] Add Local-only embedding option (Ollama + Llama 4 upgrade complete).
+- [/] Add User Authentication / Session management.

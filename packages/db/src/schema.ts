@@ -13,6 +13,15 @@ import {
   doublePrecision
 } from "drizzle-orm/pg-core";
 
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  password_hash: text("password_hash").notNull(),
+  role: varchar("role", { length: 20 }).notNull().default("user"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
 export const documents = pgTable(
   "documents",
   {

@@ -381,8 +381,13 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 
 ### Local-First AI (Ollama)
 - **Supported Provider**: Added `ollama` support for both embeddings and LLM reasoning.
-- **Default Models**: `nomic-embed-text` (Embeddings) and `llama3` (LLM).
+- **Default Models**: `nomic-embed-text` (Embeddings) and `llama4` (LLM - Updated May 2026).
 - **Configuration**: Uses `OLLAMA_BASE_URL` (default: `http://localhost:11434`).
+
+### Authentication & Sessions
+- **Approach**: JWT-based authentication using Elysia's `@elysiajs/jwt`.
+- **Security**: HTTP-only cookies for session storage to prevent XSS.
+- **UI**: Protected routes in TanStack Router.
 
 ### Observability
 - API logs in structured JSON format.

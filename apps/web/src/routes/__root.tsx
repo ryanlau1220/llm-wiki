@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRouteWithContext } from '@tanstack/react-router'
+import { HeadContent, Scripts, createRootRouteWithContext, useLocation } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -9,9 +9,29 @@ const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getIte
 
 interface MyRouterContext {
   queryClient: QueryClient
+  user: { email: string; role: string } | null
 }
 
+import { orpc } from '../lib/orpc'
+import { redirect } from '@tanstack/react-router'
+
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+  beforeLoad: async ({ context, location }) => {
+    const user = await context.queryClient.ensureQueryData(
+      orpc.me.queryOptions()
+    )
+    
+    if (!user && location.pathname !== '/login') {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+
+    return { user }
+  },
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -27,6 +47,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { queryClient } = Route.useRouteContext()
+  const { pathname } = useLocation()
+  const isLoginPage = pathname === '/login'
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -37,8 +59,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
         <QueryClientProvider client={queryClient}>
           <div className="flex">
-            <Sidebar />
-            <main className="flex-1 transition-all duration-300 ml-16 sm:ml-16 md:ml-64">
+            {!isLoginPage && <Sidebar />}
+            <main className={`flex-1 transition-all duration-300 ${isLoginPage ? '' : 'ml-16 sm:ml-16 md:ml-64'}`}>
               <div className="min-h-screen relative z-10">
                 {children}
               </div>

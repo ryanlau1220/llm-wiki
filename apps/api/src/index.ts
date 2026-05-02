@@ -1,19 +1,14 @@
 import { Elysia } from "elysia";
 
-import { askPreview, confirmAskSave } from "./ask";
+import { cors } from "@elysiajs/cors";
 import { loadConfig } from "./config";
-import { reindexFile } from "./reindex";
 import { startIngestionWatcher } from "./watcher";
-
-const config = loadConfig();
-
-import { promises as fs } from "node:fs";
-import { createDbClient } from "@llm-wiki/db";
-
+import { authPlugin, seedDefaultUser } from "./auth";
 import { RPCHandler } from "@orpc/server/fetch";
 import { router } from "./router";
 
-import { cors } from "@elysiajs/cors";
+const config = loadConfig();
+await seedDefaultUser(config);
 
 const rpcHandler = new RPCHandler(router);
 
@@ -30,9 +25,11 @@ const app = new Elysia()
       message: error.message
     };
   })
-  .all("/rpc/*", async ({ request, path }) => {
+  .use(authPlugin(config))
+  .all("/rpc/*", async ({ request, user, jwt, cookie }) => {
     const { response } = await rpcHandler.handle(request, {
-      prefix: "/rpc"
+      prefix: "/rpc",
+      context: { user, jwt, cookie }
     });
     return response;
   }, {

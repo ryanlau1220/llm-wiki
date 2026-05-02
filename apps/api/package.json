@@ -9,13 +9,17 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@elysiajs/cookie": "^0.8.0",
     "@elysiajs/cors": "^1.4.2",
+    "@elysiajs/jwt": "^1.4.2",
     "@llm-wiki/ai": "*",
     "@llm-wiki/core": "*",
     "@llm-wiki/db": "*",
     "@llm-wiki/obsidian": "*",
     "@llm-wiki/types": "*",
     "@orpc/server": "^1.14.0",
+    "@types/bcryptjs": "^3.0.0",
+    "bcryptjs": "^3.0.3",
     "elysia": "^1.1.20"
   },
   "devDependencies": {
