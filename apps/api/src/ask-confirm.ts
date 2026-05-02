@@ -196,7 +196,7 @@ async function hasSemanticDuplicate(
     .limit(resolveCandidateLimit(config));
 
   for (const candidate of candidates) {
-    const vector = parseEmbedding(candidate.embedding);
+    const vector = candidate.embedding;
     if (vector.length !== queryVector.length) {
       continue;
     }
@@ -208,15 +208,6 @@ async function hasSemanticDuplicate(
   }
 
   return false;
-}
-
-function parseEmbedding(value: string): number[] {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map((item) => Number(item)) : [];
-  } catch {
-    return [];
-  }
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {

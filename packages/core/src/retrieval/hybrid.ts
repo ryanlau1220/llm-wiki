@@ -1,7 +1,7 @@
-import { desc, inArray, like } from "drizzle-orm";
+import { inArray, like } from "drizzle-orm";
+import { cosineDistance } from "drizzle-orm/sql";
 
 import type { RetrievalDependencies, RetrievalRequest, RetrievalResponse } from "./types";
-import { cosineSimilarity, parseEmbedding } from "./utils";
 import { chunks, links } from "@llm-wiki/db";
 
 const DEFAULT_TOP_K = 8;
@@ -30,24 +30,21 @@ export async function hybridRetrieve(
     .select({
       documentId: chunks.document_id,
       text: chunks.text,
-      embedding: chunks.embedding
+      distance: cosineDistance(chunks.embedding, queryVector)
     })
     .from(chunks)
-    .orderBy(desc(chunks.updated_at))
+    // pgvector cosine distance: lower is more similar
+    .orderBy(cosineDistance(chunks.embedding, queryVector))
     .limit(vectorLimit);
 
+  // Convert cosine distance to a similarity-ish score in [0, 1] for merging with FTS.
   const vectorScored = vectorCandidates
-    .map((candidate) => {
-      const embedding = parseEmbedding(candidate.embedding);
-      return {
-        documentId: candidate.documentId,
-        text: candidate.text,
-        score: cosineSimilarity(queryVector, embedding),
-        source: "vector" as const
-      };
-    })
-    .filter((candidate) => candidate.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .map((candidate) => ({
+      documentId: candidate.documentId,
+      text: candidate.text,
+      score: Math.max(0, 1 - Number(candidate.distance ?? 1)),
+      source: "vector" as const
+    }))
     .slice(0, topK);
 
   const ftsCandidates = await deps.db

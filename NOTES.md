@@ -453,7 +453,10 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 ### 2026-05-03 (Plan vs Repo Drift)
 - PLAN.md states DB infra is Docker Compose local-first (Postgres + pgvector), with an `infra/` directory.
 - Current repo does not include `infra/` or a checked-in `docker-compose.yml`; DB is currently configured purely via `DATABASE_URL` (see `env.example` and `packages/db/drizzle.config.ts`).
-- Retrieval currently uses JSON-encoded embeddings stored in `chunks.embedding` (text) and computes cosine similarity in application code; pgvector extension/indexing is planned but not implemented yet.
+- (Update 2026-05-03) pgvector migration completed:
+	- `chunks.embedding` is now a `vector(768)` column (Drizzle `vector` type).
+	- Retrieval uses SQL cosine distance ordering (pgvector) instead of application-side cosine similarity over JSON strings.
+	- `./manage.sh db-push` now ensures `CREATE EXTENSION IF NOT EXISTS vector` before pushing schema.
 
 ### 2026-05-03 (Metadata Parity)
 - PLAN.md expects distinct YAML metadata for different AI note sources (`ai_generated` vs `ai_refactored`, etc.).

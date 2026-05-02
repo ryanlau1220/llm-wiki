@@ -13,6 +13,7 @@ function show_help {
     echo "Commands:"
     echo "  check      Run project-wide quality checks (lint, typecheck, build)"
     echo "  test       Run all tests (unit, refactor, and linking suites)"
+    echo "  docker     Run local Postgres via Docker Compose (foreground logs)"
     echo "  dev        Start local development environment via Turbo"
     echo "  db-push    Synchronize Drizzle schema to the database"
     echo "  seed       Setup default users and initial knowledge metrics"
@@ -45,6 +46,18 @@ case $CMD in
         bun run test:linking
         echo "✅ All tests passed."
         ;;
+    "docker")
+        echo "🐳 Starting local database via Docker Compose..."
+        if ! command -v docker >/dev/null 2>&1; then
+            echo "❌ docker is not installed or not on PATH."
+            exit 1
+        fi
+        if [ ! -f "infra/docker/docker-compose.yml" ]; then
+            echo "❌ Missing infra/docker/docker-compose.yml"
+            exit 1
+        fi
+        docker compose -f infra/docker/docker-compose.yml up
+        ;;
     "dev")
         echo "💻 Starting Local Dev Environment..."
         bun run dev
@@ -53,6 +66,8 @@ case $CMD in
         echo "🔄 Synchronizing database schema..."
         # We use drizzle-kit from the db package
         cd packages/db
+        echo "🧩 Ensuring required extensions..."
+        bun run src/ensure-extensions.ts
         bunx drizzle-kit push
         cd ../..
         echo "✅ Schema synchronized."

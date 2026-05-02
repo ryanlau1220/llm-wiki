@@ -92,7 +92,7 @@
 
 ## Plan Drift Fixes (From PLAN.md)
 - [x] Add `infra/docker/docker-compose.yml` for local Postgres (+ pgvector) to match PLAN.md local-first infra.
-- [ ] Migrate embeddings storage to pgvector (schema + migrations) and switch retrieval to SQL vector search (remove JSON-encoded embeddings).
+- [x] Migrate embeddings storage to pgvector (schema + retrieval now uses SQL cosine distance).
 - [ ] Implement Multi-note Synthesis tool (API + UI) per PLAN.md Phase 5.
 - [ ] Expand Knowledge Maintenance system (weak-note detection + improvement suggestions) per PLAN.md Phase 6.
 

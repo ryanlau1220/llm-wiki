@@ -7,6 +7,7 @@ import {
   documents,
   ingestionRuns,
   links,
+  EMBEDDING_DIMENSIONS,
   type DbClient
 } from "@llm-wiki/db";
 
@@ -149,6 +150,13 @@ export async function ingestMarkdown(
       const embeddings = await deps.options.embeddingProvider.embed({
         texts: chunkTexts
       });
+      const dimensions = embeddings.vectors[0]?.length ?? 0;
+      if (dimensions !== EMBEDDING_DIMENSIONS) {
+        throw new Error(
+          `Embedding dimension mismatch: got ${dimensions}, expected ${EMBEDDING_DIMENSIONS}. ` +
+            `Check embedding model/config and reindex after changing models.`
+        );
+      }
       const chunkRows = buildChunkRows(documentId, chunksWithOffsets, embeddings, deps.options);
       if (chunkRows.length) {
         await tx.insert(chunks).values(chunkRows);
@@ -216,7 +224,7 @@ function buildChunkRows(
     document_id: documentId,
     chunk_index: index,
     text: chunk.text,
-    embedding: JSON.stringify(embeddings.vectors[index] ?? []),
+    embedding: embeddings.vectors[index] ?? [],
     embedding_model: embeddings.model.model,
     embedding_version: options.embeddingVersion,
     source_start_offset: chunk.start,

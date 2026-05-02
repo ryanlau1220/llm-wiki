@@ -10,8 +10,11 @@ import {
   uniqueIndex,
   uuid,
   varchar,
-  doublePrecision
+  doublePrecision,
+  vector
 } from "drizzle-orm/pg-core";
+
+export const EMBEDDING_DIMENSIONS = 768;
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -55,7 +58,7 @@ export const chunks = pgTable(
       .references(() => documents.id, { onDelete: "cascade" }),
     chunk_index: integer("chunk_index").notNull(),
     text: text("text").notNull(),
-    embedding: text("embedding").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
     embedding_model: varchar("embedding_model", { length: 100 }).notNull(),
     embedding_version: varchar("embedding_version", { length: 40 }).notNull(),
     source_start_offset: integer("source_start_offset").notNull(),

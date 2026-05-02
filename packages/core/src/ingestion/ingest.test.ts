@@ -14,7 +14,7 @@ describe("Ingestion Flow", () => {
 
     const mockEmbeddingProvider = {
       embed: mock(async () => ({
-        vectors: [[0.1, 0.2]],
+        vectors: [Array.from({ length: 768 }, (_, i) => (i === 0 ? 0.1 : 0))],
         model: { model: "test-model" }
       }))
     };

@@ -1,12 +1,3 @@
-export function parseEmbedding(value: string): number[] {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map((item) => Number(item)) : [];
-  } catch {
-    return [];
-  }
-}
-
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (!a.length || a.length !== b.length) {
     return 0;
