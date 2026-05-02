@@ -45,7 +45,7 @@
 ## Priority 3 - Refactor and Link Intelligence
 - [x] Implement note refactor workflow with source trace in metadata.
 - [x] Implement link validation and missing-note suggestions.
-- [ ] Add safe placeholder generation rules (optional mode only).
+- [x] Add safe placeholder generation rules (optional mode only).
 - [x] Implement Discovery Engine (Vertex AI Search) provider for managed RAG.
 
 ## Priority 4 - Ops and Reliability

@@ -308,3 +308,7 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Implemented `packages/core/src/discovery/provider.ts`.
 	- Provider supports authenticated search against Vertex AI Search (Discovery Engine) data stores.
 	- Ready for integration into a multi-provider RAG strategy.
+- **Placeholder Generation**:
+	- Implemented `packages/core/src/linking/placeholders.ts`.
+	- Logic generates safe markdown "stubs" in `ai-generated/` for missing wiki links.
+	- Includes metadata and audit trail.
