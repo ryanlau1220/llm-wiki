@@ -32,6 +32,8 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 })
 
+import { Sidebar } from '../components/Sidebar'
+
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -40,9 +42,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
-        <Header />
-        {children}
-        <Footer />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 transition-all duration-300 ml-16 sm:ml-16 md:ml-64">
+            <div className="min-h-screen relative z-10">
+              {children}
+            </div>
+          </main>
+        </div>
         <TanStackDevtools
           config={{
             position: 'bottom-right',

@@ -8,6 +8,7 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@orpc/contract": "^1.14.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

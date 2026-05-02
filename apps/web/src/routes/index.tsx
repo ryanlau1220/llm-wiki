@@ -1,87 +1,97 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { orpc } from '../lib/orpc'
+import { useQuery } from '@tanstack/react-query'
+import { 
+  Database, 
+  HardDrive, 
+  Activity, 
+  Clock, 
+  ShieldCheck,
+  AlertTriangle
+} from 'lucide-react'
 
-export const Route = createFileRoute('/')({ component: App })
+export const Route = createFileRoute('/')({
+  component: DashboardComponent,
+})
 
-function App() {
+function DashboardComponent() {
+  const { data: health, isLoading } = useQuery(
+    orpc.health.queryOptions()
+  )
+
+  const stats = [
+    { label: 'Database', status: health?.services?.database, icon: Database },
+    { label: 'Vault', status: health?.services?.vault, icon: HardDrive },
+    { label: 'API', status: health?.services?.api, icon: Activity },
+  ]
+
   return (
-    <main className="page-wrap px-4 pb-8 pt-14">
-      <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-14">
-        <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
-        <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(47,106,74,0.18),transparent_66%)]" />
-        <p className="island-kicker mb-3">TanStack Start Base Template</p>
-        <h1 className="display-title mb-5 max-w-3xl text-4xl leading-[1.02] font-bold tracking-tight text-[var(--sea-ink)] sm:text-6xl">
-          Start simple, ship quickly.
-        </h1>
-        <p className="mb-8 max-w-2xl text-base text-[var(--sea-ink-soft)] sm:text-lg">
-          This base starter intentionally keeps things light: two routes, clean
-          structure, and the essentials you need to build from scratch.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <a
-            href="/about"
-            className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2.5 text-sm font-semibold text-[var(--lagoon-deep)] no-underline transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
-          >
-            About This Starter
-          </a>
-          <a
-            href="https://tanstack.com/router"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-[rgba(23,58,64,0.2)] bg-white/50 px-5 py-2.5 text-sm font-semibold text-[var(--sea-ink)] no-underline transition hover:-translate-y-0.5 hover:border-[rgba(23,58,64,0.35)]"
-          >
-            Router Guide
-          </a>
+    <div className="p-8 max-w-6xl mx-auto">
+      <header className="mb-12 flex items-center justify-between">
+        <div>
+          <h1 className="display-title text-5xl font-bold text-[var(--sea-ink)] mb-2">Wiki Dashboard</h1>
+          <p className="text-[var(--sea-ink-soft)] text-lg">System status and knowledge intelligence overview.</p>
         </div>
-      </section>
+        <div className="flex items-center gap-2 bg-[var(--surface-strong)] px-4 py-2 rounded-full border border-[var(--line)] shadow-sm">
+          <Clock size={16} className="text-[var(--lagoon-deep)]" />
+          <span className="text-xs font-bold text-[var(--sea-ink-soft)] uppercase tracking-wider">
+            {health ? new Date(health.timestamp).toLocaleTimeString() : '--:--'}
+          </span>
+        </div>
+      </header>
 
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          [
-            'Type-Safe Routing',
-            'Routes and links stay in sync across every page.',
-          ],
-          [
-            'Server Functions',
-            'Call server code from your UI without creating API boilerplate.',
-          ],
-          [
-            'Streaming by Default',
-            'Ship progressively rendered responses for faster experiences.',
-          ],
-          [
-            'Tailwind Native',
-            'Design quickly with utility-first styling and reusable tokens.',
-          ],
-        ].map(([title, desc], index) => (
-          <article
-            key={title}
-            className="island-shell feature-card rise-in rounded-2xl p-5"
-            style={{ animationDelay: `${index * 90 + 80}ms` }}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        {stats.map((stat) => (
+          <article 
+            key={stat.label}
+            className="island-shell p-6 rounded-3xl flex items-center gap-5 transition-all hover:translate-y-[-4px]"
           >
-            <h2 className="mb-2 text-base font-semibold text-[var(--sea-ink)]">
-              {title}
-            </h2>
-            <p className="m-0 text-sm text-[var(--sea-ink-soft)]">{desc}</p>
+            <div className={`p-4 rounded-2xl ${
+              stat.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            }`}>
+              <stat.icon size={28} />
+            </div>
+            <div>
+              <h3 className="text-xs uppercase font-bold text-[var(--sea-ink-soft)] tracking-widest mb-1">{stat.label}</h3>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${stat.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="font-bold text-lg text-[var(--sea-ink)] capitalize">
+                  {isLoading ? 'Checking...' : stat.status || 'Offline'}
+                </span>
+              </div>
+            </div>
           </article>
         ))}
       </section>
 
-      <section className="island-shell mt-8 rounded-2xl p-6">
-        <p className="island-kicker mb-2">Quick Start</p>
-        <ul className="m-0 list-disc space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
-          <li>
-            Edit <code>src/routes/index.tsx</code> to customize the home page.
-          </li>
-          <li>
-            Update <code>src/components/Header.tsx</code> and{' '}
-            <code>src/components/Footer.tsx</code> for brand links.
-          </li>
-          <li>
-            Add routes in <code>src/routes</code> and tweak visual tokens in{' '}
-            <code>src/styles.css</code>.
-          </li>
-        </ul>
-      </section>
-    </main>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="island-shell rounded-[2.5rem] p-8">
+          <h2 className="display-title text-2xl font-bold text-[var(--sea-ink)] mb-6">Recent Activity</h2>
+          <div className="space-y-4">
+            {/* Placeholder for real activity log */}
+            <p className="text-[var(--sea-ink-soft)] italic">No recent file changes detected.</p>
+          </div>
+        </section>
+
+        <section className="island-shell rounded-[2.5rem] p-8 border-dashed border-2 border-[var(--lagoon)]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="display-title text-2xl font-bold text-[var(--sea-ink)]">Intelligence Alerts</h2>
+            <ShieldCheck size={24} className="text-[var(--lagoon-deep)]" />
+          </div>
+          
+          <div className="space-y-4">
+            <div className="p-4 bg-[var(--foam)] rounded-2xl border border-[var(--line)] flex items-start gap-4">
+              <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+              <div>
+                <h4 className="font-bold text-[var(--sea-ink)] text-sm mb-1">Knowledge Gaps Detected</h4>
+                <p className="text-xs text-[var(--sea-ink-soft)]">
+                  3 notes have wikilinks to missing pages. Head to <strong className="text-[var(--lagoon-deep)] underline cursor-pointer">Link Health</strong> to fix them.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
   )
 }

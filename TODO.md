@@ -61,12 +61,12 @@
 - [x] Golden dataset for quality/regression checks.
  
 ## Priority 6 - Frontend Development (TanStack Start)
-- [ ] Implement oRPC bridge for type-safe API access.
-- [ ] Build global layout with navigation sidebar.
-- [ ] Build "Ask Knowledge" tool with preview/save flow.
-- [ ] Build "Note Refactor" tool with diff preview.
-- [ ] Build "Link Health" dashboard for broken link management.
-- [ ] Build Dashboard for ingestion stats and system health.
+- [x] Implement oRPC bridge for type-safe API access.
+- [x] Build global layout with navigation sidebar.
+- [x] Build "Ask Knowledge" tool with preview/save flow.
+- [x] Build "Note Refactor" tool with diff preview.
+- [x] Build "Link Health" dashboard for broken link management.
+- [x] Build Dashboard for ingestion stats and system health.
 
 ## Open Decisions
 - [ ] Local-only embedding option for strict local-first users.
@@ -77,16 +77,9 @@
 
 ## Current Focus
 - [x] Finalize Priority 0 items before implementing full MVP features.
+- [x] Complete Frontend Knowledge Dashboard with TanStack Start.
 
 ## Next Focus
-- [x] Bootstrap project skeleton (Turborepo apps/packages layout) and baseline configs.
-- [x] Start Priority 1: DB schema expansion + ingestion idempotency design.
-- [x] Start Priority 2 implementation: watcher module + markdown parser + link extraction.
-- [ ] Implement API routes for Ask preview and write-back approval flow.
-	- [x] Ask preview route (/ask/preview)
-	- [x] Ask confirm route (/ask/confirm)
-- [x] Implement embedding provider interface and first Gemini adapter.
-- [x] Integrate embeddings into ingestion flow and persist vectors to DB chunks table.
-- [x] Wire ingestion pipeline to API entrypoint (watcher start).
-- [x] Add delete handling for unlink events.
-- [x] Add manual reindex endpoint for a single file path.
+- [ ] Implement Knowledge quality scoring rubric.
+- [ ] Add Local-only embedding option (e.g. Transformers.js or Ollama).
+- [ ] Add User Authentication / Session management.

@@ -348,6 +348,18 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **LLM Failures**: Check GCP quota/billing; inspect raw response in logs for safety filters.
 - **DB Errors**: Check connection pool and host reachability via `/health` endpoint.
 
+### 2026-05-02 (Priority 6 Completion)
+- **oRPC Bridge**:
+	- Established end-to-end type safety between `apps/api` and `apps/web`.
+	- Contract defined in `packages/types`, enforced by `ContractRouterClient`.
+- **Knowledge Dashboard**:
+	- Implemented `/ask`, `/refactor`, and `/links` tools.
+	- Professional Sidebar layout with glassmorphism aesthetics.
+	- Real-time system health monitoring integrated into the dashboard.
+- **Monorepo Hardening**:
+	- Standardized `tsconfig.json` inheritance for cross-package path resolution.
+	- Decoupled API (3001) and Web (3000) ports for local development.
+
 ### Observability
 - API logs in structured JSON format.
 - Use `jq 'select(.level == "error")'` for local log analysis.
