@@ -13,6 +13,9 @@ export type AppConfig = {
 export function loadConfig(): AppConfig {
   const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT;
 
+  console.log("[Config] DATABASE_URL found:", !!process.env.DATABASE_URL);
+  console.log("[Config] GOOGLE_CLOUD_PROJECT found:", !!gcpProjectId);
+
   return {
     embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? (gcpProjectId ? "gemini-geap" : "gemini"),
     gcpProjectId,

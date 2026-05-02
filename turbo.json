@@ -1,5 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "VAULT_PATH",
+    "EMBEDDING_PROVIDER",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCLOUD_PROJECT",
+    "GEMINI_GCP_LOCATION",
+    "EMBEDDING_VERSION",
+    "WATCHER_DEBOUNCE_MS",
+    "SEMANTIC_DUPLICATE_THRESHOLD",
+    "SEMANTIC_DUPLICATE_CANDIDATES"
+  ],
   "tasks": {
     "dev": {
       "cache": false,

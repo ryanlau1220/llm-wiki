@@ -13,12 +13,23 @@ import { createDbClient } from "@llm-wiki/db";
 import { RPCHandler } from "@orpc/server/fetch";
 import { router } from "./router";
 
+import { cors } from "@elysiajs/cors";
+
 const rpcHandler = new RPCHandler(router);
 
 const app = new Elysia()
+  .use(cors())
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
+  .onError(({ code, error }) => {
+    console.error(`[API Error] ${code}:`, error);
+    return {
+      status: 500,
+      code,
+      message: error.message
+    };
+  })
   .all("/rpc/*", async ({ request, path }) => {
     const { response } = await rpcHandler.handle(request, {
       prefix: "/rpc"
