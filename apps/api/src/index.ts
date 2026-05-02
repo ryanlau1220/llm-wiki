@@ -46,6 +46,28 @@ const app = new Elysia()
     const result = await reindexFile(config, payload.path);
     return result;
   })
+  .post("/refactor/preview", async ({ body }) => {
+    const payload = body as { path?: string };
+    if (!payload?.path) {
+      return {
+        error: "path is required"
+      };
+    }
+
+    const { refactorNotePreview } = await import("./refactor");
+    return refactorNotePreview(config, payload.path);
+  })
+  .post("/refactor/confirm", async ({ body }) => {
+    const payload = body as { requestId?: string; sourcePath?: string; note?: { title?: string; content?: string; links?: string[]; tags?: string[] } };
+    if (!payload?.requestId || !payload?.sourcePath || !payload?.note?.title || !payload?.note?.content) {
+      return {
+        error: "requestId, sourcePath and note.title/content are required"
+      };
+    }
+
+    const { confirmRefactorSave } = await import("./refactor");
+    return confirmRefactorSave(config, payload.requestId, payload.sourcePath, payload.note as any);
+  })
   .listen(3000);
 
 console.log(`API listening on http://${app.server?.hostname}:${app.server?.port}`);

@@ -294,3 +294,17 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Updated default LLM model to `gemini-3.1-flash` in both Gemini and GEAP providers.
 	- Updated default embedding model to `gemini-embedding-2` in GEAP provider.
 	- Gemini 2.0 series is officially considered outdated and was removed from default configurations.
+
+### 2026-05-02 (Priority 3 Completion)
+- **Note Refactor Engine**:
+	- Implemented `apps/api/src/refactor.ts`.
+	- Added `POST /refactor/preview` and `POST /refactor/confirm` endpoints.
+	- LLM prompt tuned for high-quality knowledge restructuring (Summary, Key Concepts, Breakdown, Links).
+- **Link Intelligence**:
+	- Implemented `packages/core/src/linking/validator.ts`.
+	- Logic checks `links` table against `documents` to identify broken/missing references.
+	- Provides suggestions for missing notes.
+- **Discovery Engine**:
+	- Implemented `packages/core/src/discovery/provider.ts`.
+	- Provider supports authenticated search against Vertex AI Search (Discovery Engine) data stores.
+	- Ready for integration into a multi-provider RAG strategy.

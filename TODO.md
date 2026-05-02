@@ -43,10 +43,10 @@
 - [x] Implement write-back engine that always creates new files in ai-generated/.
 
 ## Priority 3 - Refactor and Link Intelligence
-- [ ] Implement note refactor workflow with source trace in metadata.
-- [ ] Implement link validation and missing-note suggestions.
+- [x] Implement note refactor workflow with source trace in metadata.
+- [x] Implement link validation and missing-note suggestions.
 - [ ] Add safe placeholder generation rules (optional mode only).
-- [ ] Implement Discovery Engine (Vertex AI Search) provider for managed RAG.
+- [x] Implement Discovery Engine (Vertex AI Search) provider for managed RAG.
 
 ## Priority 4 - Ops and Reliability
 - [ ] Add structured logging across watcher, ingestion, retrieval, and write-back.
