@@ -26,7 +26,7 @@ export type GeminiGeapEmbeddingConfig = {
   apiBaseUrl?: string;
 };
 
-const DEFAULT_MODEL = "gemini-embedding-001";
+const DEFAULT_MODEL = "gemini-embedding-2";
 const DEFAULT_LOCATION = "us-central1";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_API_BASE_URL = "https://aiplatform.googleapis.com/v1";

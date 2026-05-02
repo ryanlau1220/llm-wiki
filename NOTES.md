@@ -262,3 +262,35 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - Limitations:
 	- compares against recent chunks only (limit 200)
 	- relies on JSON-encoded embeddings; pgvector index not yet used
+
+### 2026-05-02
+- Audited current project status:
+	- Foundations (Phase 1) mostly complete.
+	- Priority 2 (Ask & Save) partially complete (retrieval and write-back done).
+	- Missing: LLM text generation in `askPreview` flow.
+- LLM generation implemented:
+	- Created `LLMProvider` interface and adapters for Gemini (Direct) and Gemini GEAP (GCP).
+	- Integrated LLM generation into `/ask/preview` endpoint in `apps/api/src/ask.ts`.
+	- System instruction and prompt configured to return structured JSON (answer + suggested note).
+	- Phase 2 (Ask & Save) is now functionally complete.
+
+### 2026-05-02 (Update)
+- Hardened GCP-native authentication:
+	- Updated `LLMProvider` and `EmbeddingProvider` factories to automatically prefer `gemini-geap` (GCP ADC) if a GCP project is detected in the environment.
+	- Removed strict requirement for `GEMINI_API_KEY` when running in a GCP environment.
+	- Configured `apps/api` to auto-detect `GOOGLE_CLOUD_PROJECT`.
+- Observed user activity:
+	- User enabled `discoveryengine.googleapis.com` (Vertex AI Search and Conversation).
+	- This opens the door for managed RAG and grounding via Vertex AI Search.
+	- Future task: Implement `DiscoveryEngineProvider` for enhanced retrieval.
+
+### 2026-05-02 (Model Knowledge Update)
+- Verified current Gemini model landscape (May 2026):
+	- **Flagship LLM**: Gemini 3.1 Pro (Released Feb 2026).
+	- **Fast Production LLM**: Gemini 3.1 Flash / Flash-Lite (Released March/April 2026).
+	- **Previous Generation**: Gemini 2.5 series (still available).
+	- **Embedding**: `gemini-embedding-2` is the current SOTA multimodal embedding model (GA April 2026).
+- Action taken:
+	- Updated default LLM model to `gemini-3.1-flash` in both Gemini and GEAP providers.
+	- Updated default embedding model to `gemini-embedding-2` in GEAP provider.
+	- Gemini 2.0 series is officially considered outdated and was removed from default configurations.

@@ -11,9 +11,11 @@ export type AppConfig = {
 };
 
 export function loadConfig(): AppConfig {
+  const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT;
+
   return {
-    embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? "gemini-geap",
-    gcpProjectId: process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT,
+    embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? (gcpProjectId ? "gemini-geap" : "gemini"),
+    gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
     databaseUrl: process.env.DATABASE_URL,
     vaultPath: process.env.VAULT_PATH ?? "./vault/human",

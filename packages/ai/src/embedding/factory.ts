@@ -16,14 +16,18 @@ export type EmbeddingProviderFactoryConfig = {
 export function createEmbeddingProvider(
   config: EmbeddingProviderFactoryConfig = {}
 ): EmbeddingProvider {
-  const provider = config.provider ?? "gemini-geap";
+  const provider = config.provider ?? (process.env.GOOGLE_CLOUD_PROJECT ? "gemini-geap" : "gemini");
 
   switch (provider) {
     case "gemini-geap":
       return new GeminiGeapEmbeddingProvider(config.geminiGeap);
-    case "gemini":
+    case "gemini": {
+      if (!config.gemini?.apiKey && !process.env.GEMINI_API_KEY && process.env.GOOGLE_CLOUD_PROJECT) {
+        return new GeminiGeapEmbeddingProvider(config.geminiGeap);
+      }
       return new GeminiEmbeddingProvider(config.gemini);
+    }
     default:
-      throw new Error(`Unsupported embedding provider: ${provider satisfies never}`);
+      throw new Error(`Unsupported embedding provider: ${provider}`);
   }
 }

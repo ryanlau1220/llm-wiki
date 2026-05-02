@@ -33,20 +33,20 @@
 ## Priority 2 - MVP Features (Phase 1 + Phase 2)
 - [x] Implement vault watcher for human/ only, ignore ai-generated/.
 - [x] Implement markdown parser + link extraction + YAML extraction + chunking.
-- [ ] Implement embedding pipeline (provider abstraction, Gemini first).
+- [x] Implement embedding pipeline (provider abstraction, Gemini first).
 	- [x] Provider abstraction + Gemini adapter implemented in packages/ai.
 	- [x] Gemini Enterprise Agent Platform (GCP ADC/service account) adapter implemented.
 	- [x] Pipeline integration implemented (ingestion -> embed -> persist chunks).
 	- [x] Wire watcher events to ingestion pipeline.
-- [ ] Implement hybrid retrieval (vector + FTS + link expansion).
 - [x] Implement hybrid retrieval (vector + FTS + link expansion).
-- [ ] Implement Ask Knowledge flow with preview-before-save.
-- [ ] Implement write-back engine that always creates new files in ai-generated/.
+- [x] Implement Ask Knowledge flow with preview-before-save.
+- [x] Implement write-back engine that always creates new files in ai-generated/.
 
 ## Priority 3 - Refactor and Link Intelligence
 - [ ] Implement note refactor workflow with source trace in metadata.
 - [ ] Implement link validation and missing-note suggestions.
 - [ ] Add safe placeholder generation rules (optional mode only).
+- [ ] Implement Discovery Engine (Vertex AI Search) provider for managed RAG.
 
 ## Priority 4 - Ops and Reliability
 - [ ] Add structured logging across watcher, ingestion, retrieval, and write-back.
