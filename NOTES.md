@@ -360,6 +360,25 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Standardized `tsconfig.json` inheritance for cross-package path resolution.
 	- Decoupled API (3001) and Web (3000) ports for local development.
 
+### 2026-05-02 (Monorepo & Environment Hardening)
+- **Unified Environment Strategy**:
+	- Created root `.env` and `.env.example`.
+	- Implemented symlinks (`apps/api/.env` -> `../../.env`) to ensure all workspaces share a single source of truth.
+	- Updated `turbo.json` with `globalPassThroughEnv` to propagate critical keys (`DATABASE_URL`, `GCP_PROJECT`, etc.) to child processes.
+- **Backend Reliability**:
+	- Enabled **CORS** via `@elysiajs/cors` to allow cross-origin oRPC requests.
+	- Implemented global `.onError()` handler and diagnostic config logging.
+- **Frontend SSR Fixes**:
+	- Resolved `TypeError` in TanStack Start by exporting both `getRouter` and `createRouter` in the router entry point.
+	- Corrected GCP region naming conventions in environment variables.
+
+### Quality Scoring Rubric
+- **Weights**:
+  - Link Density (40%): Ratio of wikilinks to content length.
+  - Completeness (30%): Presence of `title` and `tags` in frontmatter.
+  - Coherence (30%): AI-evaluated flow and logical structure (Pending AI implementation).
+- **Storage**: Persisted in `documents.quality_score` and `documents.quality_metrics` (JSONB).
+
 ### Observability
 - API logs in structured JSON format.
 - Use `jq 'select(.level == "error")'` for local log analysis.

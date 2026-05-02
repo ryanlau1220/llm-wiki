@@ -78,8 +78,9 @@
 ## Current Focus
 - [x] Finalize Priority 0 items before implementing full MVP features.
 - [x] Complete Frontend Knowledge Dashboard with TanStack Start.
+- [x] Harden Monorepo Environment Strategy (Unified .env + Symlinks + CORS).
 
 ## Next Focus
-- [ ] Implement Knowledge quality scoring rubric.
+- [/] Implement Knowledge quality scoring rubric (Foundation complete, AI scoring pending).
 - [ ] Add Local-only embedding option (e.g. Transformers.js or Ollama).
 - [ ] Add User Authentication / Session management.

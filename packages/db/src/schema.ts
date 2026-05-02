@@ -9,7 +9,8 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  varchar
+  varchar,
+  doublePrecision
 } from "drizzle-orm/pg-core";
 
 export const documents = pgTable(
@@ -24,6 +25,8 @@ export const documents = pgTable(
     version: integer("version").notNull().default(1),
     source_kind: varchar("source_kind", { length: 40 }).notNull(),
     is_ai_generated: boolean("is_ai_generated").notNull().default(false),
+    quality_score: doublePrecision("quality_score"),
+    quality_metrics: jsonb("quality_metrics"),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },

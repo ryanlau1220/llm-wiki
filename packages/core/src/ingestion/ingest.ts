@@ -11,7 +11,13 @@ import {
 } from "@llm-wiki/db";
 
 import type { IngestionDependencies, IngestionInput, IngestionResult } from "./types";
-import { byteLength, hashContent, inferTitleFromPath, normalizeMarkdownContent } from "./utils";
+import { 
+  byteLength, 
+  calculateAggregateScore, 
+  hashContent, 
+  inferTitleFromPath, 
+  normalizeMarkdownContent 
+} from "./utils";
 
 const DEFAULT_DOCUMENT_TYPE = "note";
 
@@ -76,6 +82,11 @@ export async function ingestMarkdown(
 
       const parsed = parseMarkdownDocument(normalized);
       const title = inferTitleFromPath(input.vaultPath);
+      
+      const qualityScore = parsed.qualityMetrics 
+        ? calculateAggregateScore(parsed.qualityMetrics)
+        : null;
+
       const baseValues = {
         path: input.vaultPath,
         title,
@@ -84,6 +95,8 @@ export async function ingestMarkdown(
         content_hash: contentHash,
         source_kind: input.sourceKind,
         is_ai_generated: input.isAiGenerated,
+        quality_score: qualityScore,
+        quality_metrics: parsed.qualityMetrics,
         updated_at: now()
       };
 

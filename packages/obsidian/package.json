@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "chokidar": "^4.0.1",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "@llm-wiki/types": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

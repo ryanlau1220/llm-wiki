@@ -1,8 +1,11 @@
+import type { QualityMetrics } from "@llm-wiki/types";
+
 export type ParsedMarkdownDocument = {
   content: string;
   metadata: Record<string, unknown>;
   links: string[];
   chunks: string[];
+  qualityMetrics?: QualityMetrics;
 };
 
 export type WatchEvent = {

@@ -33,3 +33,12 @@ export const confirmRefactorSavePayloadSchema = z.object({
 export const reindexPayloadSchema = z.object({
   path: z.string().min(1),
 });
+
+export const qualityMetricsSchema = z.object({
+  linkDensity: z.number().min(0).max(1),
+  completeness: z.number().min(0).max(1),
+  coherence: z.number().min(0).max(1).optional(),
+  wordCount: z.number().int().min(0),
+});
+
+export type QualityMetrics = z.infer<typeof qualityMetricsSchema>;
