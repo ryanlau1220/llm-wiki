@@ -93,7 +93,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <div className="flex">
             {!isLoginPage && <Sidebar />}
-            <main className={`flex-1 transition-all duration-300 ${isLoginPage ? '' : 'ml-16 sm:ml-16 md:ml-64'}`}>
+            <main 
+              className="flex-1 transition-all duration-300"
+              style={{ marginLeft: isLoginPage ? '0' : 'var(--sidebar-width, 256px)' }}
+            >
               <div className="min-h-screen relative z-10">
                 {children}
               </div>

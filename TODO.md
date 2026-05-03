@@ -107,3 +107,6 @@
 - [x] Fix oRPC Hook Mismatch (TanStack Query usage pattern).
 - [x] Implement Hybrid Authentication Fallback (Cookies + Bearer Token).
 - [x] Fix Router Redirection and 404 handling after login.
+- [x] Fix Vault Health Check (Portable Root Resolution).
+- [x] Implement Responsive Sidebar Layout (CSS Variables).
+- [x] Improve Navigation Contrast and Accessibility (Semantic Colors + Indicators).

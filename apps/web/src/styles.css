@@ -20,6 +20,8 @@
   --line: rgba(23, 58, 64, 0.14);
   --inset-glint: rgba(255, 255, 255, 0.82);
   --kicker: rgba(47, 106, 74, 0.9);
+  --nav-active-bg: var(--lagoon);
+  --nav-active-text: var(--sea-ink);
   --bg-base: #e7f3ec;
   --header-bg: rgba(251, 255, 248, 0.84);
   --chip-bg: rgba(255, 255, 255, 0.8);
@@ -42,6 +44,8 @@
   --line: rgba(141, 229, 219, 0.18);
   --inset-glint: rgba(194, 247, 238, 0.14);
   --kicker: #b8efe5;
+  --nav-active-bg: var(--sea-ink);
+  --nav-active-text: var(--bg-base);
   --bg-base: #0a1418;
   --header-bg: rgba(10, 20, 24, 0.8);
   --chip-bg: rgba(13, 28, 32, 0.9);
@@ -65,6 +69,8 @@
     --line: rgba(141, 229, 219, 0.18);
     --inset-glint: rgba(194, 247, 238, 0.14);
     --kicker: #b8efe5;
+    --nav-active-bg: var(--sea-ink);
+    --nav-active-text: var(--bg-base);
     --bg-base: #0a1418;
     --header-bg: rgba(10, 20, 24, 0.8);
     --chip-bg: rgba(13, 28, 32, 0.9);

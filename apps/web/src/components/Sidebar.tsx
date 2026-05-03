@@ -12,7 +12,7 @@ import {
   ShieldAlert,
   LogOut
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -30,6 +30,13 @@ export function Sidebar() {
       }
     })
   )
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--sidebar-width',
+      isCollapsed ? '64px' : '256px'
+    )
+  }, [isCollapsed])
 
   const navItems = [
     { label: 'Dashboard', icon: Activity, to: '/' },
@@ -64,7 +71,7 @@ export function Sidebar() {
             <li key={item.label}>
               <Link
                 to={item.to}
-                activeProps={{ className: 'bg-[var(--lagoon)] text-white shadow-sm' }}
+                activeProps={{ className: 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)] shadow-xl font-bold scale-[1.02] border-l-4 border-[var(--lagoon)]' }}
                 inactiveProps={{ className: 'text-[var(--sea-ink-soft)] hover:bg-[var(--line)]' }}
                 className={`flex items-center gap-3 p-2 rounded-xl transition-all duration-200 no-underline group ${
                   isCollapsed ? 'justify-center' : ''
@@ -79,11 +86,11 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-[var(--line)] space-y-3">
-        <button type="button" className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-white hover:bg-[var(--lagoon-deep)] transition-colors ${
+        <button type="button" className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-[var(--sand)] hover:bg-[var(--lagoon-deep)] transition-colors shadow-lg ${
           isCollapsed ? 'justify-center' : ''
         }`}>
           <PlusCircle size={20} />
-          {!isCollapsed && <span>New Note</span>}
+          {!isCollapsed && <span className="font-bold">New Note</span>}
         </button>
         
         <button 

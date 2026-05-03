@@ -119,6 +119,7 @@ export const router = os.router({
     return getGlobalLinkHealth(db);
   }),
   health: os.health.handler(async () => {
+    console.log("[Health] Checking system status...");
     const health: any = {
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -136,7 +137,8 @@ export const router = os.router({
     try {
       await fs.access(config.vaultPath);
       health.services.vault = "ok";
-    } catch (_e) {
+    } catch (e: any) {
+      console.error(`[Health] Vault access failed for path: ${config.vaultPath}`, e.message);
       health.status = "error";
       health.services.vault = "error";
     }

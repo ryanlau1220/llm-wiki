@@ -35,6 +35,10 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- prevents unsafe or unmeasurable implementation drift
 	- creates a baseline for regression checks before feature buildout
 - Next implementation direction:
+	- [x] Fix Router Redirection and 404 handling after login.
+	- [x] Fix Vault Health Check (Portable Root Resolution).
+	- [x] Implement Responsive Sidebar Layout (CSS Variables).
+	- [x] Improve Navigation Contrast and Accessibility (Semantic Colors + Indicators).
 	- bootstrap project skeleton and baseline tooling
 	- expand DB schema with provenance/versioning/audit fields
 - Monorepo bootstrap completed:
@@ -499,3 +503,11 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- API now returns signed JWT in both `Set-Cookie` header and response body.
 	- Web Client uses a hybrid fetch link: reads from `localStorage` (Bearer token) if cookies are restricted by browser port-security.
 	- Added comprehensive auth telemetry to the API for real-time session debugging.
+
+- **Vault Health Fix (Portability)**:
+	- Refactored `loadConfig` in `apps/api/src/config.ts` to resolve `VAULT_PATH` relative to the monorepo root using `path.resolve` and `import.meta.url`.
+	- Reverted `.env` to use the relative path `./vault/human`, making the repository portable for other collaborators without manual path adjustments.
+	- Added detailed error logging to the `/health` endpoint in `router.ts` to debug vault access failures.
+- **Sidebar Accessibility Hardening**:
+	- Introduced semantic CSS variables `--nav-active-bg` and `--nav-active-text` in `styles.css` for both light and dark themes.
+	- Updated `Sidebar.tsx` to use these variables and added a `border-l-4 border-[var(--lagoon)]` indicator for the active state, ensuring high visibility in all visual modes.
