@@ -110,7 +110,8 @@ Provide your answer and suggested note in JSON format.
 
     return {
       requestId,
-      ...parsed,
+      answer: parsed.answer,
+      note: parsed.suggested_note,
       retrieval: {
         chunkCount: retrievalResults.chunks.length,
         linkCount: retrievalResults.links.length
