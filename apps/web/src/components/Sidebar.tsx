@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import ThemeToggle from './ThemeToggle'
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -92,6 +93,8 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-[var(--line)] space-y-2">
+        <ThemeToggle collapsed={isCollapsed} />
+        
         <button 
           type="button" 
           onClick={() => navigate({ to: '/generator' })}

@@ -55,7 +55,7 @@ export const router = os.router({
     return { success: true };
   }),
   askPreview: os.askPreview.use(authMiddleware).handler(async ({ input }: any) => {
-    return askPreview(config, input.query, input.topK);
+    return askPreview(config, input.query, input.topK, input.mode);
   }),
   confirmAskSave: os.confirmAskSave.use(authMiddleware).handler(async ({ input }: any) => {
     return confirmAskSave(config, input.requestId, input.note);
