@@ -7,6 +7,7 @@ import { authPlugin, seedDefaultUser } from "./auth";
 import { RPCHandler } from "@orpc/server/fetch";
 import { router } from "./router";
 import { sseEmitter } from "./events";
+import { createLogger } from "@llm-wiki/core";
 
 const config = loadConfig();
 await seedDefaultUser(config);
@@ -19,6 +20,17 @@ const app = new Elysia()
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
   }))
+  .onRequest(({ request }) => {
+    const logger = createLogger("http");
+    const url = new URL(request.url);
+    logger.info(`Incoming request: ${request.method} ${url.pathname}${url.search}`);
+  })
+  .onAfterResponse(({ request, set }) => {
+    const logger = createLogger("http");
+    const url = new URL(request.url);
+    const status = set.status ?? 200;
+    logger.info(`Response completed: ${request.method} ${url.pathname} - Status ${status}`);
+  })
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
