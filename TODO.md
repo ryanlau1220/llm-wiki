@@ -120,3 +120,4 @@
 - [x] Hook up detail actions (Reindex note & Refactor pre-selection)
 - [x] Fix ask preview note key mismatch causing components to crash on render
 - [x] Add dynamic lagoon-text brand styling variables to prevent low contrast green buttons
+- [x] Limit ThemeToggle to light/dark modes and position it globally in the top right

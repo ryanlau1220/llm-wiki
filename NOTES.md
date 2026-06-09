@@ -530,3 +530,6 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Brand Theme Variable Hardening**:
 	- Created a dynamic `--lagoon-text` brand variable (white in light mode, dark in dark mode) to ensure perfect accessibility on all green/lagoon button highlights.
 	- Replaced manual `text-white dark:text-bg-base` overrides with the fully compiled semantic `text-bg-base` and `text-lagoon-text` utility classes across all screens.
+- **Floating Theme Toggle**:
+	- Redesigned `ThemeToggle.tsx` to toggle strictly between light and dark modes (removing auto mode).
+	- Positioned the toggle floating absolute at `top-6 right-8` of the page layout, rendering it in `__root.tsx` instead of the sidebar.
