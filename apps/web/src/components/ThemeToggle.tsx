@@ -24,7 +24,11 @@ function applyThemeMode(mode: ThemeMode) {
   document.documentElement.style.colorScheme = mode
 }
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  collapsed?: boolean
+}
+
+export default function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
   const [mode, setMode] = useState<ThemeMode>('light')
 
   useEffect(() => {
@@ -49,9 +53,12 @@ export default function ThemeToggle() {
       onClick={toggleMode}
       aria-label={label}
       title={label}
-      className="absolute top-6 right-8 z-40 p-3 rounded-full border border-line bg-surface-strong text-sea-ink hover:bg-foam hover:scale-105 active:scale-95 transition-all shadow-md flex items-center justify-center cursor-pointer"
+      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border border-line bg-surface-strong text-sea-ink hover:bg-foam transition-all text-sm cursor-pointer hover:scale-[1.01] active:scale-[0.99] shadow-sm shrink-0 ${
+        collapsed ? 'justify-center' : ''
+      }`}
     >
-      <Icon size={20} className="text-sea-ink-soft shrink-0" />
+      <Icon size={18} className="text-sea-ink-soft shrink-0" />
+      {!collapsed && <span className="font-semibold text-sea-ink-soft">{mode === 'light' ? 'Dark Mode' : 'Light Mode'}</span>}
     </button>
   )
 }
