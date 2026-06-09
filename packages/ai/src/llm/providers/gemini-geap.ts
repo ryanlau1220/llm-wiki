@@ -60,7 +60,7 @@ export class GeminiGeapLLMProvider implements LLMProvider {
       generationConfig: {
         temperature: request.temperature,
         maxOutputTokens: request.maxOutputTokens,
-        responseMimeType: request.responseMimeType
+        responseMimeType: request.webSearch ? undefined : request.responseMimeType
       }
     };
 
