@@ -43,6 +43,15 @@ export async function confirmAskSave(
     return { status: "rejected", error: "DATABASE_URL is required" };
   }
 
+  const sanitizedTags = (note.tags || [])
+    .map((tag) =>
+      tag
+        .replace(/\s+/g, "-")          // Replace spaces with hyphens
+        .replace(/[^a-zA-Z0-9_-]/g, "") // Remove other invalid characters
+        .slice(0, 50)                  // Limit to 50 characters max
+    )
+    .filter((tag) => tag.length > 0);
+
   const payload = {
     request_id: requestId,
     action: "create_note",
@@ -51,7 +60,7 @@ export async function confirmAskSave(
       title: note.title ?? "",
       content: note.content ?? "",
       links: note.links,
-      tags: note.tags,
+      tags: sanitizedTags,
       source: frontmatter.source
     },
     reason: "user_confirmed"
@@ -85,7 +94,7 @@ export async function confirmAskSave(
   await fs.mkdir(vaultRoot, { recursive: true });
   const filePath = await resolveUniquePath(vaultRoot, safeSlug);
 
-  const noteContent = buildNoteFile(note, frontmatter);
+  const noteContent = buildNoteFile({ ...note, tags: sanitizedTags }, frontmatter);
   await fs.writeFile(filePath, noteContent, "utf8");
 
   // Ingest the note immediately into the database
