@@ -64,6 +64,10 @@ export class GeminiGeapLLMProvider implements LLMProvider {
       }
     };
 
+    if (request.webSearch) {
+      body.tools = [{ googleSearch: {} }];
+    }
+
     if (request.systemInstruction) {
       body.systemInstruction = {
         parts: [{ text: request.systemInstruction }]
