@@ -11,23 +11,27 @@ export const Route = createFileRoute('/synthesis')({
 function SynthesisComponent() {
   const [topic, setTopic] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   const previewMutation = useMutation(
     orpc.synthesisPreview.mutationOptions({
       onSuccess: (data) => {
         setPreviewData(data)
-        setSaved(false)
+        setSaveStatus(null)
       },
     })
   )
 
   const saveMutation = useMutation(
     orpc.confirmSynthesisSave.mutationOptions({
-      onSuccess: () => {
-        setPreviewData(null)
-        setTopic('')
-        setSaved(true)
+      onSuccess: (data) => {
+        if (data.status === 'rejected') {
+          setSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
+        } else {
+          setSaveStatus({ type: 'success', message: 'Knowledge successfully synthesized and saved to your vault!' })
+          setPreviewData(null)
+          setTopic('')
+        }
       },
     })
   )
@@ -50,6 +54,17 @@ function SynthesisComponent() {
         <p className="text-[var(--sea-ink-soft)] text-base">Generate a wiki page by synthesizing multiple sources.</p>
       </header>
 
+      {saveStatus && (
+        <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
+          saveStatus.type === 'success' 
+            ? 'bg-green-50 border-green-100 text-green-700' 
+            : 'bg-amber-50 border-amber-100 text-amber-700'
+        }`}>
+          {saveStatus.type === 'success' ? <Sparkles size={20} /> : <AlertCircle size={20} />}
+          <span className="text-sm font-medium">{saveStatus.message}</span>
+        </div>
+      )}
+
       <form onSubmit={handlePreview} className="relative mb-8">
         <input
           type="text"
@@ -71,13 +86,6 @@ function SynthesisComponent() {
         <div className="p-4 mb-6 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600">
           <AlertCircle size={20} />
           <span>Error generating synthesis. Please try again.</span>
-        </div>
-      )}
-
-      {saved && (
-        <div className="p-4 mb-6 bg-[var(--foam)] border border-[var(--lagoon)] rounded-xl flex items-center gap-3 text-[var(--lagoon-deep)] shadow-sm rise-in">
-          <Sparkles size={20} />
-          <span className="font-medium">Knowledge successfully synthesized and saved to your vault!</span>
         </div>
       )}
 
@@ -110,6 +118,8 @@ function SynthesisComponent() {
                         key={src.id}
                         to="/vault"
                         search={{ path: src.path }}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2.5 py-1 rounded-full border border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--line)] hover:text-[var(--lagoon-deep)] transition-all font-medium"
                       >
                         <FileText size={10} className="shrink-0" /> {src.title || src.path.split('/').pop()}
