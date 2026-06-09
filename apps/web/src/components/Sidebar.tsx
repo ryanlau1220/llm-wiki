@@ -25,7 +25,7 @@ export function Sidebar() {
     orpc.logout.mutationOptions({
       onSuccess: () => {
         localStorage.removeItem('llm_wiki_token');
-        queryClient.setQueryData(orpc.me.queryKey(), null);
+        queryClient.removeQueries({ queryKey: orpc.me.queryKey() });
         navigate({ to: '/login' });
       }
     })
@@ -71,8 +71,8 @@ export function Sidebar() {
             <li key={item.label}>
               <Link
                 to={item.to}
-                activeProps={{ className: 'bg-[var(--nav-active-bg)] text-[var(--nav-active-text)] shadow-xl font-bold scale-[1.02] border-l-4 border-[var(--lagoon)]' }}
-                inactiveProps={{ className: 'text-[var(--sea-ink-soft)] hover:bg-[var(--line)]' }}
+                activeProps={{ className: 'bg-nav-active-bg text-nav-active-text shadow-xl font-bold scale-[1.02] border-l-4 border-lagoon' }}
+                inactiveProps={{ className: 'text-sea-ink-soft hover:bg-line' }}
                 className={`flex items-center gap-3 p-2 rounded-xl transition-all duration-200 no-underline group ${
                   isCollapsed ? 'justify-center' : ''
                 }`}
@@ -86,9 +86,13 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-[var(--line)] space-y-3">
-        <button type="button" className={`w-full flex items-center gap-3 p-2 rounded-xl bg-[var(--sea-ink)] text-[var(--sand)] hover:bg-[var(--lagoon-deep)] transition-colors shadow-lg ${
-          isCollapsed ? 'justify-center' : ''
-        }`}>
+        <button 
+          type="button" 
+          onClick={() => navigate({ to: '/ask' })}
+          className={`w-full flex items-center gap-3 p-2 rounded-xl bg-sea-ink text-sand hover:bg-lagoon-deep transition-colors shadow-lg ${
+            isCollapsed ? 'justify-center' : ''
+          }`}
+        >
           <PlusCircle size={20} />
           {!isCollapsed && <span className="font-bold">New Note</span>}
         </button>
