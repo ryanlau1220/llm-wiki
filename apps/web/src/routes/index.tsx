@@ -5,7 +5,6 @@ import {
   Database, 
   HardDrive, 
   Activity, 
-  Clock, 
   ShieldCheck,
   AlertTriangle,
   FileText,
@@ -46,12 +45,6 @@ function DashboardComponent() {
         <div>
           <h1 className="display-title text-5xl font-bold text-[var(--sea-ink)] mb-2">Wiki Dashboard</h1>
           <p className="text-[var(--sea-ink-soft)] text-lg">System status and knowledge intelligence overview.</p>
-        </div>
-        <div className="flex items-center gap-2 bg-[var(--surface-strong)] px-4 py-2 rounded-full border border-[var(--line)] shadow-sm">
-          <Clock size={16} className="text-[var(--lagoon-deep)]" />
-          <span className="text-xs font-bold text-[var(--sea-ink-soft)] uppercase tracking-wider">
-            {health ? new Date(health.timestamp).toLocaleTimeString() : '--:--'}
-          </span>
         </div>
       </header>
 
