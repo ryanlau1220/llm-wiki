@@ -140,6 +140,12 @@
 - [x] Fix active sub-tab styling in refactor to prevent light-text-on-light-bg contrast issue
 - [x] Add Tavily API Key placeholder to env.example template
 
+## Priority 12 - Bug Fixes & Refactor UI Simplification
+- [x] Fix Gemini native search grounding JSON mime type conflict (omit responseMimeType when webSearch is enabled)
+- [x] Sanitize note tags in confirmAskSave to satisfy strict alphanumeric/hyphen/underscore validation
+- [x] Simplify Note Refactor page layout, removing tab switcher and displaying a single unified notes list with warning tags
+
+
 
 
 

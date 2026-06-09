@@ -560,4 +560,10 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Card Background Harmonization**: Refactored note lists and content boxes across `refactor.tsx`, `vault.tsx`, `generator.tsx`, and `index.tsx` by replacing hardcoded `bg-white/40`, `bg-white/35`, and similar overlays with native `.island-shell` backgrounds (`var(--surface-strong)`) or `bg-surface` (`var(--surface)`) to align with the dark green theme under dark mode.
 - **Tavily Configuration Update**: Added the `TAVILY_API_KEY` placeholder in `env.example` to document requirements for live web-grounding under the chatbot's Ask AI mode.
 
+### 2026-06-10 (Fixes: Grounding Structured Output Conflict, Tag Validation, Refactor Page Simplification)
+- **Native Grounding JSON Fix**: Fixed a conflict where the Gemini/Vertex API does not support `responseMimeType: "application/json"` (controlled generation) simultaneously with native `webSearch` (Google Search tool) grounding. Omitted `responseMimeType` in `gemini.ts` and `gemini-geap.ts` when `webSearch` is enabled, letting prompt rules and backend regex JSON extraction handle structured output parsing safely.
+- **Tag Validation Error Fix**: Sanitized tag strings in `confirmAskSave` (`ask-confirm.ts`) by replacing spaces with hyphens and removing invalid characters. This ensures AI-generated tags (like `"TOO SHORT"` or `"LOW LINK DENSITY"`) satisfy the strict regex schema `/^[a-zA-Z0-9_-]{1,50}$/` on saving.
+- **Refactor Page Simplification**: Removed the tab switcher in `refactor.tsx`. Unified the view to list notes needing refactoring at the top and all searchable notes below in a single streamlined interface.
+
+
 
