@@ -84,41 +84,48 @@ Synthesize a concise wiki note.
 
   const rawText = llmResponse.text;
 
+  let noteData: any = null;
   try {
     const parsed = JSON.parse(rawText);
+    noteData = parsed.note;
+  } catch (_error) {
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        noteData = parsed.note;
+      }
+    } catch (_fallbackError) {
+      // Ignore fallback error
+    }
+  }
+
+  if (noteData) {
     const requestId = crypto.randomUUID();
+    const documentIds = [...new Set(retrievalResults.chunks.map((c) => c.documentId))];
+    let sources: Array<{ id: string; title: string; path: string }> = [];
+    if (documentIds.length > 0) {
+      const { inArray } = await import("drizzle-orm");
+      const { documents } = await import("@llm-wiki/db");
+      sources = await db
+        .select({ id: documents.id, title: documents.title, path: documents.path })
+        .from(documents)
+        .where(inArray(documents.id, documentIds));
+    }
     return {
       requestId,
-      note: parsed.note,
+      note: noteData,
+      sources,
       retrieval: {
         chunkCount: retrievalResults.chunks.length,
         linkCount: retrievalResults.links.length
       }
     };
-  } catch (_error) {
-    // Fallback: try to find the JSON block if it's wrapped or has stray characters
-    try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const requestId = crypto.randomUUID();
-        return {
-          requestId,
-          note: parsed.note,
-          retrieval: {
-            chunkCount: retrievalResults.chunks.length,
-            linkCount: retrievalResults.links.length
-          }
-        };
-      }
-    } catch (_fallbackError) {
-      // Ignore fallback error
-    }
-
-    return {
-      error: "Failed to generate structured synthesis",
-      rawResponse: rawText
-    };
   }
+
+  return {
+    error: "Failed to generate structured synthesis",
+    rawResponse: rawText
+  };
 }
 
