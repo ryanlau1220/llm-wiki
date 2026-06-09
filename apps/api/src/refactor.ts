@@ -11,11 +11,12 @@ export async function refactorNotePreview(
   config: AppConfig,
   filePath: string
 ) {
-  const fullPath = path.resolve(config.vaultPath, filePath);
+  const vaultParent = path.resolve(config.vaultPath, "..");
+  const fullPath = path.resolve(vaultParent, filePath);
   
-  // Safety check: ensure file is within vault human root
-  if (!fullPath.startsWith(path.resolve(config.vaultPath))) {
-    throw new Error("Invalid file path: must be within vault human directory");
+  // Safety check: ensure file is within vault root directory
+  if (!fullPath.startsWith(vaultParent)) {
+    throw new Error("Invalid file path: must be within vault directory");
   }
 
   const content = await fs.readFile(fullPath, "utf8");
