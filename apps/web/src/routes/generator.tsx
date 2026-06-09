@@ -11,7 +11,7 @@ import {
   FileText,
   Link as LinkIcon,
   Tag as TagIcon,
-  Sparkles
+  ChevronRight
 } from 'lucide-react'
 
 export const Route = createFileRoute('/generator')({
@@ -19,23 +19,25 @@ export const Route = createFileRoute('/generator')({
 })
 
 function GeneratorComponent() {
-  const [activeTab, setActiveTab] = useState<'ask' | 'synthesis'>('ask')
+  const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis'>('rag')
+  const [queryText, setQueryText] = useState('')
+  const [result, setResult] = useState<{
+    mode: 'rag' | 'general' | 'synthesis';
+    query: string;
+    data: any;
+  } | null>(null)
   
-  // Q&A (Ask) state
-  const [query, setQuery] = useState('')
-  const [askPreviewData, setAskPreviewData] = useState<any>(null)
-  const [askSaveStatus, setAskSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
-
-  // Synthesis state
-  const [topic, setTopic] = useState('')
-  const [synthesisPreviewData, setSynthesisPreviewData] = useState<any>(null)
-  const [synthesisSaveStatus, setSynthesisSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   const askMutation = useMutation(
     orpc.askPreview.mutationOptions({
       onSuccess: (data) => {
-        setAskPreviewData(data)
-        setAskSaveStatus(null)
+        setResult({
+          mode: activeMode, // 'rag' or 'general'
+          query: queryText,
+          data
+        })
+        setSaveStatus(null)
       }
     })
   )
@@ -44,11 +46,11 @@ function GeneratorComponent() {
     orpc.confirmAskSave.mutationOptions({
       onSuccess: (data) => {
         if (data.status === 'rejected') {
-          setAskSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
+          setSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
         } else {
-          setAskSaveStatus({ type: 'success', message: 'Note successfully saved to vault!' })
-          setAskPreviewData(null)
-          setQuery('')
+          setSaveStatus({ type: 'success', message: 'Note successfully saved to vault!' })
+          setResult(null)
+          setQueryText('')
         }
       }
     })
@@ -57,8 +59,12 @@ function GeneratorComponent() {
   const synthesisMutation = useMutation(
     orpc.synthesisPreview.mutationOptions({
       onSuccess: (data) => {
-        setSynthesisPreviewData(data)
-        setSynthesisSaveStatus(null)
+        setResult({
+          mode: 'synthesis',
+          query: queryText,
+          data
+        })
+        setSaveStatus(null)
       }
     })
   )
@@ -67,168 +73,238 @@ function GeneratorComponent() {
     orpc.confirmSynthesisSave.mutationOptions({
       onSuccess: (data) => {
         if (data.status === 'rejected') {
-          setSynthesisSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
+          setSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
         } else {
-          setSynthesisSaveStatus({ type: 'success', message: 'Knowledge successfully synthesized and saved to your vault!' })
-          setSynthesisPreviewData(null)
-          setTopic('')
+          setSaveStatus({ type: 'success', message: 'Knowledge successfully synthesized and saved to your vault!' })
+          setResult(null)
+          setQueryText('')
         }
       }
     })
   )
 
-  const handleAsk = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!query.trim()) return
-    askMutation.mutate({ query })
+    if (!queryText.trim()) return
+
+    if (activeMode === 'synthesis') {
+      synthesisMutation.mutate({ topic: queryText })
+    } else {
+      askMutation.mutate({ query: queryText, mode: activeMode })
+    }
   }
 
-  const handleAskSave = () => {
-    if (!askPreviewData) return
-    askSaveMutation.mutate({
-      requestId: askPreviewData.requestId,
-      note: askPreviewData.note
-    })
-  }
-
-  const handleSynthesis = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!topic.trim()) return
-    synthesisMutation.mutate({ topic })
-  }
-
-  const handleSynthesisSave = () => {
-    if (!synthesisPreviewData?.note) return
-    synthesisSaveMutation.mutate({
-      requestId: synthesisPreviewData.requestId,
-      note: synthesisPreviewData.note
-    })
+  const handleSave = () => {
+    if (!result) return
+    if (result.mode === 'synthesis') {
+      if (!result.data?.note) return
+      synthesisSaveMutation.mutate({
+        requestId: result.data.requestId,
+        note: result.data.note
+      })
+    } else {
+      if (!result.data?.note) return
+      askSaveMutation.mutate({
+        requestId: result.data.requestId,
+        note: result.data.note
+      })
+    }
   }
 
   return (
     <div className="p-5 max-w-5xl mx-auto">
-      <header className="mb-6">
-        <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">AI Generator</h1>
-        <p className="text-[var(--sea-ink-soft)] text-base">Generate fresh knowledge using Q&A or topic synthesis.</p>
+      <header className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">AI Assistant</h1>
+          <p className="text-[var(--sea-ink-soft)] text-base">Generate fresh knowledge using local notes or web search.</p>
+        </div>
       </header>
 
-      {/* Tabs Switcher */}
-      <div className="flex bg-[var(--foam)] p-1 rounded-xl max-w-md mb-8 border border-[var(--line)]">
-        <button
-          type="button"
-          onClick={() => setActiveTab('ask')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'ask'
-              ? 'bg-white text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
-              : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
-          }`}
-        >
-          <Send size={14} />
-          Ask Q&A
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('synthesis')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-            activeTab === 'synthesis'
-              ? 'bg-white text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
-              : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
-          }`}
-        >
-          <Sparkles size={14} />
-          Topic Synthesis
-        </button>
-      </div>
+      {saveStatus && (
+        <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
+          saveStatus.type === 'success' 
+            ? 'bg-green-50 border-green-100 text-green-700' 
+            : 'bg-amber-50 border-amber-100 text-amber-700'
+        }`}>
+          {saveStatus.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="text-sm font-medium">{saveStatus.message}</span>
+        </div>
+      )}
 
-      {activeTab === 'ask' ? (
-        <div className="rise-in">
-          {askSaveStatus && (
-            <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
-              askSaveStatus.type === 'success' 
-                ? 'bg-green-50 border-green-100 text-green-700' 
-                : 'bg-amber-50 border-amber-100 text-amber-700'
-            }`}>
-              {askSaveStatus.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-              <span className="text-sm font-medium">{askSaveStatus.message}</span>
+      {!result ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto text-center rise-in">
+          <h2 className="display-title text-4xl font-extrabold text-[var(--sea-ink)] mb-3 leading-tight tracking-tight">
+            What would you like to generate today?
+          </h2>
+          <p className="text-[var(--sea-ink-soft)] text-sm mb-8 max-w-md">
+            Query your local wiki, search the live web for general knowledge, or synthesize multiple pages.
+          </p>
+
+          <form onSubmit={handleSubmit} className="w-full relative shadow-md rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] flex items-center p-1.5 focus-within:ring-2 focus-within:ring-[var(--lagoon)] transition-all">
+            <div className="shrink-0 pl-3 pr-2 border-r border-[var(--line)]">
+              <select
+                value={activeMode}
+                onChange={(e) => setActiveMode(e.target.value as any)}
+                className="bg-transparent text-xs font-bold text-[var(--sea-ink)] focus:outline-none cursor-pointer pr-2 py-2"
+              >
+                <option value="rag">Ask Wiki (RAG)</option>
+                <option value="general">Ask AI (Web Search)</option>
+                <option value="synthesis">Synthesize Topic</option>
+              </select>
             </div>
-          )}
 
-          <form onSubmit={handleAsk} className="relative mb-8">
             <input
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask a question about your wiki content..."
-              className="w-full bg-[var(--surface-strong)] border border-[var(--line)] rounded-xl px-5 py-4 pr-14 text-lg text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-sm transition-all"
+              value={queryText}
+              onChange={(e) => setQueryText(e.target.value)}
+              placeholder={
+                activeMode === 'rag' 
+                  ? "Ask a question about your wiki content..." 
+                  : activeMode === 'general' 
+                  ? "Ask general knowledge or browse the web..." 
+                  : "Enter a topic to synthesize (e.g. 'Drizzle ORM')"
+              }
+              className="flex-1 bg-transparent px-4 py-3 text-base text-[var(--sea-ink)] focus:outline-none placeholder:text-[var(--sea-ink-soft)]"
             />
+
             <button
               type="submit"
-              disabled={askMutation.isPending}
-              className="absolute right-2.5 top-2.5 p-2.5 bg-sea-ink text-bg-base rounded-lg hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-colors cursor-pointer"
+              disabled={askMutation.isPending || synthesisMutation.isPending}
+              className="p-3 bg-sea-ink text-bg-base rounded-xl hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-all cursor-pointer shrink-0"
             >
-              {askMutation.isPending ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+              {askMutation.isPending || synthesisMutation.isPending ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <Send size={18} />
+              )}
             </button>
           </form>
+        </div>
+      ) : (
+        <div className="space-y-6 rise-in">
+          {/* Consolidated query bar at the top */}
+          <div className="island-shell p-3 rounded-xl bg-white/40 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null)
+                setQueryText('')
+              }}
+              className="p-2 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors cursor-pointer shrink-0"
+              title="New Chat"
+            >
+              <ChevronRight className="rotate-180" size={18} />
+            </button>
 
-          {askMutation.isError && (
-            <div className="p-4 mb-6 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600">
-              <AlertCircle size={20} />
-              <span>Error generating answer. Please try again.</span>
+            <form onSubmit={handleSubmit} className="flex-1 flex items-center p-1 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)]">
+              <div className="shrink-0 pl-3 pr-2 border-r border-[var(--line)]">
+                <select
+                  value={activeMode}
+                  onChange={(e) => setActiveMode(e.target.value as any)}
+                  className="bg-transparent text-xs font-bold text-[var(--sea-ink)] focus:outline-none cursor-pointer pr-1 py-1"
+                >
+                  <option value="rag">Ask Wiki (RAG)</option>
+                  <option value="general">Ask AI (Web Search)</option>
+                  <option value="synthesis">Synthesize Topic</option>
+                </select>
+              </div>
+
+              <input
+                type="text"
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+                className="flex-1 bg-transparent px-3 py-1.5 text-sm text-[var(--sea-ink)] focus:outline-none"
+              />
+
+              <button
+                type="submit"
+                disabled={askMutation.isPending || synthesisMutation.isPending}
+                className="p-2 mr-1 bg-sea-ink text-bg-base rounded-lg hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {askMutation.isPending || synthesisMutation.isPending ? (
+                  <Loader2 className="animate-spin" size={14} />
+                ) : (
+                  <Send size={14} />
+                )}
+              </button>
+            </form>
+          </div>
+
+          {(askMutation.isPending || synthesisMutation.isPending) && (
+            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center bg-white/40">
+              <Loader2 className="animate-spin text-[var(--lagoon-deep)] mb-4" size={48} />
+              <h3 className="text-xl font-bold text-[var(--sea-ink)] mb-1">Generating Response</h3>
+              <p className="text-sm text-[var(--sea-ink-soft)]">Please wait while the AI compiles your knowledge...</p>
             </div>
           )}
 
-          {askPreviewData && (
+          {!(askMutation.isPending || synthesisMutation.isPending) && result.data && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 rise-in">
-              <section className="island-shell rounded-xl p-5 bg-white/40">
+              {/* Left Column: AI Answer (or Proposed Note for Synthesis) */}
+              <section className="island-shell rounded-xl p-5 bg-white/40 flex flex-col min-h-[28rem]">
                 <h2 className="island-kicker mb-3 flex items-center gap-2">
-                  <CheckCircle2 size={12} /> AI Answer
+                  <CheckCircle2 size={12} /> {result.mode === 'synthesis' ? 'Synthesized Wiki Note' : 'AI Response'}
                 </h2>
-                <div className="prose prose-slate max-w-none text-sm text-[var(--sea-ink)] leading-relaxed whitespace-pre-wrap">
-                  {askPreviewData.answer}
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <div className="prose prose-slate max-w-none text-sm text-[var(--sea-ink)] leading-relaxed whitespace-pre-wrap font-sans select-text">
+                    {result.mode === 'synthesis' ? result.data.note?.content : result.data.answer}
+                  </div>
                 </div>
               </section>
 
+              {/* Right Column: Details, Draft Note & Ingestion Actions */}
               <section className="flex flex-col gap-5">
-                <div className="island-shell rounded-xl p-5 flex-1 border border-[var(--lagoon)] bg-white/50 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-2.5 bg-[var(--lagoon)] text-white text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg">
-                    Draft Note
+                <div className="island-shell rounded-xl p-5 flex-1 border border-[var(--lagoon)] bg-white/50 relative flex flex-col min-h-[24rem]">
+                  <div className="absolute top-0 right-0 p-2.5 bg-[var(--lagoon)] text-white text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg shrink-0">
+                    Proposed Wiki Draft
                   </div>
                   
-                  <h2 className="island-kicker mb-4 flex items-center gap-2">
-                    <FileText size={12} /> Proposed Note
+                  <h2 className="island-kicker mb-4 flex items-center gap-2 shrink-0">
+                    <FileText size={12} /> Note Structure
                   </h2>
 
-                  <div className="space-y-4">
+                  <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Title</span>
-                      <div className="text-xl font-bold text-[var(--sea-ink)]">{askPreviewData.note.title}</div>
+                      <div className="text-xl font-bold text-[var(--sea-ink)]">{result.data.note?.title}</div>
                     </div>
 
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content</span>
-                      <div className="text-xs text-[var(--sea-ink-soft)] line-clamp-[10] bg-white/30 p-3 rounded-lg border border-[var(--line)] font-mono whitespace-pre-wrap overflow-y-auto max-h-[16rem]">
-                        {askPreviewData.note.content}
+                    {result.mode !== 'synthesis' && (
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content Summary</span>
+                        <div className="text-xs text-[var(--sea-ink-soft)] bg-white/30 p-3 rounded-lg border border-[var(--line)] font-mono whitespace-pre-wrap overflow-y-auto max-h-[12rem] select-text">
+                          {result.data.note?.content}
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {result.mode === 'synthesis' && (
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Retrieval metrics</span>
+                        <div className="text-xs text-[var(--sea-ink-soft)] font-semibold">
+                          Chunks Analyzed: {result.data.retrieval?.chunkCount ?? 0} • Links Checked: {result.data.retrieval?.linkCount ?? 0}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-3">
-                      {askPreviewData.note.links?.length > 0 && (
+                      {result.data.note?.links?.length > 0 && (
                         <div className="flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2 py-0.5 rounded-full border border-[var(--line)] text-[var(--lagoon-deep)] font-medium">
-                          <LinkIcon size={10} /> {askPreviewData.note.links.length} Links
+                          <LinkIcon size={10} /> {result.data.note.links.length} Links
                         </div>
                       )}
-                      {askPreviewData.note.tags?.length > 0 && (
+                      {result.data.note?.tags?.length > 0 && (
                         <div className="flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2 py-0.5 rounded-full border border-[var(--line)] text-[var(--palm)] font-medium">
-                          <TagIcon size={10} /> {askPreviewData.note.tags.length} Tags
+                          <TagIcon size={10} /> {result.data.note.tags.length} Tags
                         </div>
                       )}
                     </div>
 
-                    {askPreviewData.sources?.length > 0 && (
-                      <div className="border-t border-[var(--line)] pt-3.5 mt-2">
+                    {result.data.sources?.length > 0 && (
+                      <div className="border-t border-[var(--line)] pt-3.5 mt-2 shrink-0">
                         <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1.5">Referred Sources</span>
                         <div className="flex flex-wrap gap-1.5">
-                          {askPreviewData.sources.map((src: any) => (
+                          {result.data.sources.map((src: any) => (
                             <Link
                               key={src.id}
                               to="/vault"
@@ -248,113 +324,16 @@ function GeneratorComponent() {
 
                 <button
                   type="button"
-                  onClick={handleAskSave}
-                  disabled={askSaveMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-lagoon text-lagoon-text rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-lagoon-text shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                  onClick={handleSave}
+                  disabled={askSaveMutation.isPending || synthesisSaveMutation.isPending}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-lagoon text-lagoon-text rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-lagoon-text shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
                 >
-                  {askSaveMutation.isPending ? (
+                  {askSaveMutation.isPending || synthesisSaveMutation.isPending ? (
                     <Loader2 className="animate-spin" size={18} />
                   ) : (
                     <>
                       <Save size={16} />
-                      Save to Wiki
-                    </>
-                  )}
-                </button>
-              </section>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="rise-in">
-          {synthesisSaveStatus && (
-            <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
-              synthesisSaveStatus.type === 'success' 
-                ? 'bg-green-50 border-green-100 text-green-700' 
-                : 'bg-amber-50 border-amber-100 text-amber-700'
-            }`}>
-              {synthesisSaveStatus.type === 'success' ? <Sparkles size={20} /> : <AlertCircle size={20} />}
-              <span className="text-sm font-medium">{synthesisSaveStatus.message}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSynthesis} className="relative mb-8">
-            <input
-              type="text"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="Topic to synthesize (e.g. 'Drizzle ORM Integration')"
-              className="w-full bg-[var(--surface-strong)] border border-[var(--line)] rounded-xl px-5 py-4 pr-14 text-lg text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-sm transition-all"
-            />
-            <button
-              type="submit"
-              disabled={synthesisMutation.isPending}
-              className="absolute right-2.5 top-2.5 p-2.5 bg-sea-ink text-bg-base rounded-lg hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {synthesisMutation.isPending ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-            </button>
-          </form>
-
-          {synthesisMutation.isError && (
-            <div className="p-4 mb-6 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600">
-              <AlertCircle size={20} />
-              <span>Error generating synthesis. Please try again.</span>
-            </div>
-          )}
-
-          {synthesisPreviewData?.note && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 rise-in">
-              <section className="island-shell rounded-xl p-5 bg-white/40">
-                <h2 className="island-kicker mb-3 flex items-center gap-2">
-                  <FileText size={12} /> Proposed Note
-                </h2>
-                <div className="space-y-3">
-                  <div className="text-xl font-bold text-[var(--sea-ink)]">{synthesisPreviewData.note.title}</div>
-                  <div className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap bg-white/30 p-3 rounded-lg border border-[var(--line)] max-h-[24rem] overflow-auto font-mono">
-                    {synthesisPreviewData.note.content}
-                  </div>
-                </div>
-              </section>
-
-              <section className="flex flex-col gap-5">
-                <div className="island-shell rounded-xl p-5 border border-[var(--lagoon)] bg-white/40">
-                  <h2 className="island-kicker mb-3">Retrieval</h2>
-                  <div className="text-xs text-[var(--sea-ink-soft)] mb-3 font-semibold">
-                    Chunks Analyzed: {synthesisPreviewData.retrieval?.chunkCount ?? 0} • Links Checked: {synthesisPreviewData.retrieval?.linkCount ?? 0}
-                  </div>
-                  {synthesisPreviewData.sources?.length > 0 && (
-                    <div className="border-t border-[var(--line)] pt-3.5">
-                      <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-2">Referred Sources</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {synthesisPreviewData.sources.map((src: any) => (
-                          <Link
-                            key={src.id}
-                            to="/vault"
-                            search={{ path: src.path }}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2.5 py-1 rounded-full border border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--line)] hover:text-[var(--lagoon-deep)] transition-all font-medium"
-                          >
-                            <FileText size={10} className="shrink-0" /> {src.title || src.path.split('/').pop()}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={handleSynthesisSave}
-                  disabled={synthesisSaveMutation.isPending}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-lagoon text-lagoon-text rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-lagoon-text shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {synthesisSaveMutation.isPending ? (
-                    <Loader2 className="animate-spin" size={18} />
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Save Synthesized Note
+                      {result.mode === 'synthesis' ? 'Save Synthesized Note' : 'Save to Wiki'}
                     </>
                   )}
                 </button>
