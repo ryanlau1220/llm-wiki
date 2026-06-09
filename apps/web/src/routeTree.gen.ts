@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VaultRouteImport } from './routes/vault'
 import { Route as SynthesisRouteImport } from './routes/synthesis'
 import { Route as RefactorRouteImport } from './routes/refactor'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
@@ -17,6 +18,11 @@ import { Route as LinksRouteImport } from './routes/links'
 import { Route as AskRouteImport } from './routes/ask'
 import { Route as IndexRouteImport } from './routes/index'
 
+const VaultRoute = VaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SynthesisRoute = SynthesisRouteImport.update({
   id: '/synthesis',
   path: '/synthesis',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
   '/synthesis': typeof SynthesisRoute
+  '/vault': typeof VaultRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
   '/synthesis': typeof SynthesisRoute
+  '/vault': typeof VaultRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
   '/synthesis': typeof SynthesisRoute
+  '/vault': typeof VaultRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/refactor'
     | '/synthesis'
+    | '/vault'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/refactor'
     | '/synthesis'
+    | '/vault'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/maintenance'
     | '/refactor'
     | '/synthesis'
+    | '/vault'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,10 +131,18 @@ export interface RootRouteChildren {
   MaintenanceRoute: typeof MaintenanceRoute
   RefactorRoute: typeof RefactorRoute
   SynthesisRoute: typeof SynthesisRoute
+  VaultRoute: typeof VaultRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vault': {
+      id: '/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof VaultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/synthesis': {
       id: '/synthesis'
       path: '/synthesis'
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   MaintenanceRoute: MaintenanceRoute,
   RefactorRoute: RefactorRoute,
   SynthesisRoute: SynthesisRoute,
+  VaultRoute: VaultRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

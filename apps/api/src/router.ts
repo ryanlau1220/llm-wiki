@@ -155,5 +155,25 @@ export const router = os.router({
       qualityMetrics: documents.quality_metrics
     }).from(documents);
     return results;
+  }),
+  getNote: os.getNote.use(authMiddleware).handler(async ({ input }: any) => {
+    const { createDbClient, documents } = await import("@llm-wiki/db");
+    const { eq } = await import("drizzle-orm");
+    const { db } = createDbClient(config.databaseUrl!);
+    const results = await db.select().from(documents).where(eq(documents.id, input.id)).limit(1);
+    if (!results.length) throw new Error("Note not found");
+    const doc = results[0];
+    return {
+      id: doc.id,
+      path: doc.path,
+      title: doc.title,
+      content: doc.content,
+      type: doc.type,
+      is_ai_generated: doc.is_ai_generated,
+      qualityScore: doc.quality_score,
+      qualityMetrics: doc.quality_metrics,
+      created_at: doc.created_at.toISOString(),
+      updated_at: doc.updated_at.toISOString()
+    };
   })
 });
