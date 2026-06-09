@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { orpc } from '../lib/orpc'
 import { useQuery } from '@tanstack/react-query'
 import { 
@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   AlertTriangle,
   FileText,
-  TrendingUp,
+  Link2,
   Award
 } from 'lucide-react'
 
@@ -25,6 +25,10 @@ function DashboardComponent() {
     orpc.listNotes.queryOptions()
   )
 
+  const { data: linkHealth, isLoading: linkHealthLoading } = useQuery(
+    orpc.getLinkHealth.queryOptions()
+  )
+
   const stats = [
     { label: 'Database', status: health?.services?.database, icon: Database },
     { label: 'Vault', status: health?.services?.vault, icon: HardDrive },
@@ -38,6 +42,9 @@ function DashboardComponent() {
     : 0
 
   const lowQualityNotes = notes?.filter(n => (n.qualityScore ?? 1) < 0.5) ?? []
+
+  // Calculate total broken links count
+  const totalBrokenLinks = linkHealth?.reduce((acc, l) => acc + l.count, 0) ?? 0
 
   return (
     <div className="p-5 max-w-6xl mx-auto">
@@ -97,12 +104,12 @@ function DashboardComponent() {
           <p className="text-[10px] font-bold uppercase text-[var(--sea-ink-soft)] tracking-wider">Quality Alerts</p>
         </div>
 
-        <div className="island-shell p-5 rounded-xl border-b-2 border-b-[var(--sea-ink)]">
+        <div className="island-shell p-5 rounded-xl border-b-2 border-b-red-500">
           <div className="flex items-center justify-between mb-3">
-            <TrendingUp size={18} className="text-[var(--sea-ink)]" />
-            <span className="text-xl font-bold text-[var(--sea-ink)]">{healthLoading || notesLoading ? '...' : 'Live'}</span>
+            <Link2 size={18} className="text-red-500" />
+            <span className="text-xl font-bold text-[var(--sea-ink)]">{linkHealthLoading ? '...' : totalBrokenLinks}</span>
           </div>
-          <p className="text-[10px] font-bold uppercase text-[var(--sea-ink-soft)] tracking-wider">Sync Status</p>
+          <p className="text-[10px] font-bold uppercase text-[var(--sea-ink-soft)] tracking-wider">Broken Links</p>
         </div>
       </section>
 
@@ -138,23 +145,36 @@ function DashboardComponent() {
           </div>
           
           <div className="space-y-3">
-            {lowQualityNotes.length > 0 ? (
-              lowQualityNotes.slice(0, 3).map(note => (
-                <div key={note.id} className="p-3 bg-[var(--foam)] rounded-lg border border-[var(--line)] flex items-start gap-3">
-                  <AlertTriangle className="text-amber-500 shrink-0" size={18} />
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-[var(--sea-ink)] text-xs mb-0.5 truncate">Improve "{note.title || note.path}"</h4>
-                    <p className="text-[11px] text-[var(--sea-ink-soft)]">
-                      Scored low on coherence. Try using <strong className="text-[var(--lagoon-deep)] underline cursor-pointer">Refactor Note</strong> to clean it up.
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
+            {lowQualityNotes.length === 0 && (!linkHealth || linkHealth.length === 0) ? (
               <div className="p-3 bg-green-50 rounded-lg border border-green-100 flex items-center gap-3">
                 <Award className="text-green-600" size={18} />
                 <p className="text-xs font-bold text-green-800">Knowledge base is healthy!</p>
               </div>
+            ) : (
+              <>
+                {lowQualityNotes.slice(0, 2).map(note => (
+                  <div key={note.id} className="p-3 bg-[var(--foam)] rounded-lg border border-[var(--line)] flex items-start gap-3">
+                    <AlertTriangle className="text-amber-500 shrink-0" size={18} />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-[var(--sea-ink)] text-xs mb-0.5 truncate">Improve "{note.title || note.path}"</h4>
+                      <p className="text-[11px] text-[var(--sea-ink-soft)]">
+                        Quality score is lower than threshold. Try using <Link to="/refactor" search={{ path: note.path }} className="text-[var(--lagoon-deep)] underline font-bold">Refactor Note</Link> to clean it up.
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {linkHealth?.slice(0, 2).map(link => (
+                  <div key={link.label} className="p-3 bg-red-50/50 rounded-lg border border-red-150 flex items-start gap-3">
+                    <Link2 className="text-red-500 shrink-0" size={18} />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-[var(--sea-ink)] text-xs mb-0.5 truncate">Broken Link: [[{link.label}]]</h4>
+                      <p className="text-[11px] text-[var(--sea-ink-soft)]">
+                        Referenced in {link.sourcePaths.length} note{link.sourcePaths.length > 1 ? 's' : ''}. Try creating or fixing the link from the vault.
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </section>
