@@ -25,7 +25,7 @@ const app = new Elysia()
   .get("/events", ({ set }) => {
     set.headers["Content-Type"] = "text/event-stream";
     set.headers["Cache-Control"] = "no-cache";
-    set.headers["Connection"] = "keep-alive";
+    set.headers.Connection = "keep-alive";
 
     let listener: ((data: any) => void) | null = null;
 

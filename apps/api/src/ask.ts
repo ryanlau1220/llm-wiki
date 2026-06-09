@@ -108,10 +108,22 @@ Provide your answer and suggested note in JSON format.
       title: parsed.suggested_note?.title 
     });
 
+    const documentIds = [...new Set(retrievalResults.chunks.map((c) => c.documentId))];
+    let sources: Array<{ id: string; title: string; path: string }> = [];
+    if (documentIds.length > 0) {
+      const { inArray } = await import("drizzle-orm");
+      const { documents } = await import("@llm-wiki/db");
+      sources = await db
+        .select({ id: documents.id, title: documents.title, path: documents.path })
+        .from(documents)
+        .where(inArray(documents.id, documentIds));
+    }
+
     return {
       requestId,
       answer: parsed.answer,
       note: parsed.suggested_note,
+      sources,
       retrieval: {
         chunkCount: retrievalResults.chunks.length,
         linkCount: retrievalResults.links.length
