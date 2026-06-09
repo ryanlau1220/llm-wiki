@@ -14,7 +14,8 @@ import {
   AlertTriangle,
   Loader2,
   CheckCircle,
-  Copy
+  Copy,
+  ShieldCheck
 } from 'lucide-react'
 
 export const Route = createFileRoute('/vault')({
@@ -64,6 +65,14 @@ function VaultComponent() {
     })
   )
 
+  const reindexAllMutation = useMutation(
+    orpc.reindexAll.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries()
+      }
+    })
+  )
+
   const filteredNotes = notes?.filter(note => 
     note.path.toLowerCase().includes(searchTerm.toLowerCase()) ||
     note.title?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -89,9 +98,27 @@ function VaultComponent() {
 
   return (
     <div className="p-5 max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
-      <header className="mb-5 shrink-0">
-        <h1 className="display-title text-3xl font-bold text-sea-ink mb-1">Wiki Pages</h1>
-        <p className="text-sea-ink-soft text-base">Explore and manage notes stored in your local knowledge vault.</p>
+      <header className="mb-5 shrink-0 flex justify-between items-center">
+        <div>
+          <h1 className="display-title text-3xl font-bold text-sea-ink mb-1">Wiki Pages</h1>
+          <p className="text-sea-ink-soft text-base">Explore and manage notes stored in your local knowledge vault.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {reindexAllMutation.isSuccess && (
+            <span className="flex items-center gap-1.5 text-xs text-green-700 font-bold bg-green-50 px-3 py-1.5 rounded-lg border border-green-150 rise-in">
+              <ShieldCheck size={14} /> Synced
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={reindexAllMutation.isPending}
+            onClick={() => reindexAllMutation.mutate(undefined)}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--lagoon)] text-white hover:bg-[var(--lagoon-deep)] transition-all font-bold text-sm rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
+          >
+            {reindexAllMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+            Reindex Vault
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 min-h-0">
