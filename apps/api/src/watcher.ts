@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { createEmbeddingProvider } from "@llm-wiki/ai";
 import { deleteDocumentByPath, ingestMarkdown } from "@llm-wiki/core";
-import { createDbClient } from "@llm-wiki/db";
+import { createDbClient, documents } from "@llm-wiki/db";
 import { startVaultWatcher, type WatchEvent } from "@llm-wiki/obsidian";
 
 import type { AppConfig } from "./config";
@@ -13,6 +13,105 @@ export type WatcherHandle = {
 };
 
 import { createLogger } from "@llm-wiki/core";
+
+// Recursive walk function to find all markdown files
+async function getMarkdownFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...(await getMarkdownFiles(fullPath)));
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // Ignore if directory doesn't exist yet
+  }
+  return files;
+}
+
+export async function syncVault(
+  config: AppConfig,
+  db: any,
+  embeddingProvider: any,
+  llmProvider: any
+): Promise<void> {
+  const logger = createLogger("sync");
+  logger.info("Starting startup vault synchronization...");
+
+  const humanRoot = path.resolve(config.vaultPath);
+  const aiRoot = path.resolve(config.vaultPath, "..", "ai-generated");
+
+  const humanFiles = await getMarkdownFiles(humanRoot);
+  const aiFiles = await getMarkdownFiles(aiRoot);
+
+  const activePaths = new Set<string>();
+
+  const deps = {
+    db,
+    options: {
+      embeddingProvider,
+      llmProvider,
+      embeddingVersion: config.embeddingVersion
+    }
+  };
+
+  // Ingest human notes
+  for (const filePath of humanFiles) {
+    try {
+      const relative = path.relative(humanRoot, filePath);
+      const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+      activePaths.add(vaultPath);
+
+      const rawContent = await fs.readFile(filePath, "utf8");
+      await ingestMarkdown(deps, {
+        vaultPath,
+        rawContent,
+        sourceKind: "human",
+        isAiGenerated: false
+      });
+    } catch (error) {
+      logger.error(`Failed to ingest human note ${filePath}`, error);
+    }
+  }
+
+  // Ingest AI-generated notes
+  for (const filePath of aiFiles) {
+    try {
+      const relative = path.relative(aiRoot, filePath);
+      const vaultPath = path.join("ai-generated", relative).replace(/\\/g, "/");
+      activePaths.add(vaultPath);
+
+      const rawContent = await fs.readFile(filePath, "utf8");
+      await ingestMarkdown(deps, {
+        vaultPath,
+        rawContent,
+        sourceKind: "ai",
+        isAiGenerated: true
+      });
+    } catch (error) {
+      logger.error(`Failed to ingest AI note ${filePath}`, error);
+    }
+  }
+
+  // Find obsolete records in DB and delete them
+  try {
+    const dbDocs = await db.select({ id: documents.id, path: documents.path }).from(documents);
+    for (const doc of dbDocs) {
+      if (!activePaths.has(doc.path)) {
+        logger.info(`Deleting obsolete database record: ${doc.path}`);
+        await deleteDocumentByPath(deps, doc.path);
+      }
+    }
+  } catch (error) {
+    logger.error("Failed to clean up obsolete database records", error);
+  }
+
+  logger.info("Startup vault synchronization completed.");
+}
 
 export async function startIngestionWatcher(config: AppConfig): Promise<WatcherHandle> {
   const logger = createLogger("watcher");
@@ -52,6 +151,9 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
   const rootPath = path.resolve(config.vaultPath);
 
   logger.info("Starting ingestion watcher", { rootPath, debounceMs: config.watcherDebounceMs });
+
+  // Run startup synchronization
+  await syncVault(config, db, embeddingProvider, llmProvider);
 
   const stop = startVaultWatcher({
     rootPath,

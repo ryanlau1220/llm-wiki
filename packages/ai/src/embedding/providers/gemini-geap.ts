@@ -100,7 +100,10 @@ export class GeminiGeapEmbeddingProvider implements EmbeddingProvider {
             {
               content: text
             }
-          ]
+          ],
+          parameters: {
+            outputDimensionality: 768
+          }
         }),
         signal: controller.signal
       });

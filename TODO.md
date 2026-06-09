@@ -121,3 +121,9 @@
 - [x] Fix ask preview note key mismatch causing components to crash on render
 - [x] Add dynamic lagoon-text brand styling variables to prevent low contrast green buttons
 - [x] Limit ThemeToggle to light/dark modes and position it globally in the top right
+
+## Priority 9 - Ingestion Hardening & Clock Removal
+- [x] Remove clock/time pill from top-right of Dashboard
+- [x] Implement startup sync for pre-existing vault files
+- [x] Ingest AI-generated notes to database on confirmation/save
+

@@ -4,9 +4,10 @@ import crypto from "node:crypto";
 
 import { desc, eq } from "drizzle-orm";
 
-import { createEmbeddingProvider } from "@llm-wiki/ai";
+import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
 import { actionAuditEvents, chunks, createDbClient, documents } from "@llm-wiki/db";
 import { aiActionEnvelopeSchema } from "@llm-wiki/types";
+import { ingestMarkdown } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
 
@@ -83,7 +84,58 @@ export async function confirmAskSave(
   await fs.mkdir(vaultRoot, { recursive: true });
   const filePath = await resolveUniquePath(vaultRoot, safeSlug);
 
-  await fs.writeFile(filePath, buildNoteFile(note, frontmatter), "utf8");
+  const noteContent = buildNoteFile(note, frontmatter);
+  await fs.writeFile(filePath, noteContent, "utf8");
+
+  // Ingest the note immediately into the database
+  try {
+    const embeddingProvider = createEmbeddingProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpEmbeddingModel
+      },
+      ollama: {
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaEmbeddingModel
+      }
+    });
+
+    const llmProvider = createLLMProvider({
+      provider: config.embeddingProvider as any,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpLlmModel
+      },
+      ollama: {
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaLlmModel
+      }
+    });
+
+    const relativePath = path.relative(path.resolve(config.vaultPath, ".."), filePath).replace(/\\/g, "/");
+
+    await ingestMarkdown(
+      {
+        db,
+        options: {
+          embeddingProvider,
+          llmProvider,
+          embeddingVersion: config.embeddingVersion
+        }
+      },
+      {
+        vaultPath: relativePath,
+        rawContent: noteContent,
+        sourceKind: "ai",
+        isAiGenerated: true
+      }
+    );
+  } catch (ingestError: any) {
+    console.error(`Failed to ingest saved AI note: ${filePath}`, ingestError);
+  }
 
   await recordAudit(db, requestId, "create_note", "accepted", undefined, {
     path: filePath

@@ -533,3 +533,19 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Floating Theme Toggle**:
 	- Redesigned `ThemeToggle.tsx` to toggle strictly between light and dark modes (removing auto mode).
 	- Positioned the toggle floating absolute at `top-6 right-8` of the page layout, rendering it in `__root.tsx` instead of the sidebar.
+
+### 2026-06-09 (Ingestion Hardening & Clock Removal)
+- **Clock Removal**:
+	- Removed the Clock icon and timestamp pill from the top-right header of the Dashboard (`apps/web/src/routes/index.tsx`).
+- **Startup Vault Synchronization**:
+	- Implemented recursive directory walking and synchronization in `apps/api/src/watcher.ts`.
+	- On API boot, the server scans both `vault/human/` and `vault/ai-generated/` directories for `.md` files, ingests them into the Postgres database, and deletes obsolete database records for notes that were removed from disk.
+- **AI-generated Note Ingestion on Confirm**:
+	- Modified `confirmAskSave` in `apps/api/src/ask-confirm.ts` to immediately call `ingestMarkdown` when a note is saved. This ensures AI-generated notes are parsed, scored, and embedded in real-time without requiring server restarts or directory watches.
+- **GCP GEAP 768-Dimension Enforcer**:
+	- Discovered that the Gemini Enterprise Agent Platform predict endpoint was returning 3072 dimensions by default, causing pgvector constraint conflicts in PostgreSQL (which expects `vector(768)`).
+	- Added `parameters: { outputDimensionality: 768 }` to the predict body in `gemini-geap.ts` to guarantee database-compatible embedding lengths.
+- **SSR Page Refresh Auth Fix**:
+	- Discovered that page refresh triggers SSR (Server-Side Rendering) in TanStack Start, which has no access to client-side localStorage and request-forwarded cookies. This caused the SSR route loader to receive a `null` user from the API and redirect to `/login`.
+	- Modified `beforeLoad` in `__root.tsx` to skip redirection if `typeof window === 'undefined'` (on the server). The client hydrates and resolves the session state via cookies and localStorage tokens seamlessly.
+
