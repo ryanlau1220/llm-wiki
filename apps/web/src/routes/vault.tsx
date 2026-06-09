@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { orpc } from '../lib/orpc'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { z } from 'zod'
 import { 
   BookOpen, 
   Search, 
@@ -17,19 +18,35 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/vault')({
+  validateSearch: z.object({
+    noteId: z.string().optional(),
+    path: z.string().optional(),
+  }),
   component: VaultComponent,
 })
 
 function VaultComponent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { noteId: queryNoteId, path: queryPath } = Route.useSearch()
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(queryNoteId || null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
 
   const { data: notes, isLoading: isLoadingNotes } = useQuery(
     orpc.listNotes.queryOptions()
   )
+
+  useEffect(() => {
+    if (queryNoteId) {
+      setSelectedNoteId(queryNoteId)
+    } else if (queryPath && notes) {
+      const found = notes.find(n => n.path === queryPath)
+      if (found) {
+        setSelectedNoteId(found.id)
+      }
+    }
+  }, [queryNoteId, queryPath, notes])
 
   const { data: activeNote, isLoading: isLoadingActiveNote } = useQuery({
     ...orpc.getNote.queryOptions({ input: { id: selectedNoteId ?? '' } }),
@@ -71,33 +88,33 @@ function VaultComponent() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
-      <header className="mb-8 shrink-0">
-        <h1 className="display-title text-4xl font-bold text-sea-ink mb-2">Wiki Pages</h1>
-        <p className="text-sea-ink-soft text-lg">Explore and manage notes stored in your local knowledge vault.</p>
+    <div className="p-5 max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
+      <header className="mb-5 shrink-0">
+        <h1 className="display-title text-3xl font-bold text-sea-ink mb-1">Wiki Pages</h1>
+        <p className="text-sea-ink-soft text-base">Explore and manage notes stored in your local knowledge vault.</p>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8 min-h-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 min-h-0">
         {/* Notes List Column */}
-        <section className="lg:col-span-1 island-shell rounded-[2.5rem] p-6 flex flex-col min-h-0 bg-white/40">
-          <div className="relative mb-6 shrink-0">
-            <Search className="absolute left-4 top-3.5 text-sea-ink-soft" size={20} />
+        <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0 bg-white/40">
+          <div className="relative mb-4 shrink-0">
+            <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
             <input 
               type="text" 
               placeholder="Search wiki pages..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-foam border border-line rounded-xl py-3 pl-12 pr-4 text-sea-ink focus:outline-none focus:ring-2 focus:ring-lagoon shadow-inner"
+              className="w-full bg-foam border border-line rounded-lg py-2.5 pl-11 pr-4 text-sm text-sea-ink focus:outline-none focus:ring-2 focus:ring-lagoon shadow-inner"
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
             {isLoadingNotes ? (
               <div className="flex justify-center items-center py-20">
-                <Loader2 className="animate-spin text-lagoon-deep" size={32} />
+                <Loader2 className="animate-spin text-lagoon-deep" size={28} />
               </div>
             ) : filteredNotes.length === 0 ? (
-              <div className="text-center py-20 text-sea-ink-soft italic">
+              <div className="text-center py-20 text-sm text-sea-ink-soft italic">
                 No notes found matching search.
               </div>
             ) : (
@@ -110,34 +127,28 @@ function VaultComponent() {
                     type="button"
                     key={note.id}
                     onClick={() => setSelectedNoteId(note.id)}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-left group ${
+                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
                       isActive 
-                        ? 'bg-nav-active-bg border-lagoon text-nav-active-text shadow-lg font-medium scale-[1.01]' 
-                        : 'bg-white/50 border-transparent hover:bg-foam hover:border-line'
+                        ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
+                        : 'bg-white/50 border-transparent hover:bg-foam/30 hover:border-line'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className={`font-bold truncate ${isActive ? 'text-nav-active-text' : 'text-sea-ink'}`}>
+                      <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
                         {note.title || note.path.split('/').pop()?.replace('.md', '')}
                       </div>
-                      <div className={`text-xs truncate mt-0.5 ${isActive ? 'text-nav-active-text/80' : 'text-sea-ink-soft'}`}>
+                      <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
                         {note.path}
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <div className="flex items-center gap-1.5 shrink-0 ml-4">
                       {isAI && (
-                        <span className={`text-[9px] uppercase tracking-widest font-black px-2 py-0.5 rounded ${
-                          isActive ? 'bg-nav-active-text/10 text-nav-active-text' : 'bg-lagoon/15 text-lagoon-deep'
-                        }`}>
+                        <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
                           AI
                         </span>
                       )}
-                      <span className={`text-[10px] font-black px-2 py-1 rounded-md border ${
-                        isActive 
-                          ? 'bg-nav-active-text/10 border-nav-active-text/20 text-nav-active-text' 
-                          : getScoreColor(note.qualityScore)
-                      }`}>
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
                         {getScoreBadge(note.qualityScore)}
                       </span>
                     </div>
@@ -151,29 +162,29 @@ function VaultComponent() {
         {/* Note Detail Panel */}
         <section className="lg:col-span-2 flex flex-col min-h-0">
           {isLoadingActiveNote ? (
-            <div className="island-shell rounded-[2.5rem] p-8 flex-1 flex flex-col justify-center items-center bg-white/40">
-              <Loader2 className="animate-spin text-lagoon-deep mb-4" size={48} />
-              <p className="text-sea-ink-soft font-bold">Loading note content...</p>
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center bg-white/40">
+              <Loader2 className="animate-spin text-lagoon-deep mb-3" size={36} />
+              <p className="text-sm text-sea-ink-soft font-bold">Loading note content...</p>
             </div>
           ) : activeNote ? (
-            <div className="island-shell rounded-[2.5rem] p-8 flex-1 flex flex-col min-h-0 bg-white/40 relative overflow-hidden rise-in">
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col min-h-0 bg-white/40 relative overflow-hidden rise-in">
               {/* Header Info */}
-              <div className="border-b border-line pb-6 mb-6 shrink-0">
-                <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
-                  <h2 className="display-title text-3xl font-bold text-sea-ink leading-tight">{activeNote.title}</h2>
+              <div className="border-b border-line pb-4 mb-4 shrink-0">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+                  <h2 className="display-title text-2xl font-bold text-sea-ink leading-tight">{activeNote.title}</h2>
                   <div className="flex gap-2">
-                    <span className={`text-xs font-black px-3.5 py-1.5 rounded-full border ${getScoreColor(activeNote.qualityScore)}`}>
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${getScoreColor(activeNote.qualityScore)}`}>
                       Quality: {getScoreBadge(activeNote.qualityScore)}
                     </span>
-                    <span className="text-xs font-bold bg-foam border border-line text-sea-ink-soft px-3.5 py-1.5 rounded-full capitalize">
+                    <span className="text-[10px] font-bold bg-foam border border-line text-sea-ink-soft px-2.5 py-1 rounded-full capitalize">
                       {activeNote.type.replace('_', ' ')}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-sea-ink-soft">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-sea-ink-soft">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <FileText size={16} className="shrink-0" />
+                    <FileText size={14} className="shrink-0" />
                     <span className="truncate font-mono">
                       {activeNote.path}
                     </span>
@@ -183,21 +194,21 @@ function VaultComponent() {
                       className="p-1 rounded hover:bg-foam text-sea-ink-soft shrink-0"
                       title="Copy path"
                     >
-                      {copiedPath === activeNote.path ? <CheckCircle size={14} className="text-green-600" /> : <Copy size={14} />}
+                      {copiedPath === activeNote.path ? <CheckCircle size={12} className="text-green-600" /> : <Copy size={12} />}
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Calendar size={16} />
+                    <Calendar size={14} />
                     <span>Updated {new Date(activeNote.updated_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
 
               {/* Grid Content/Metadata split */}
-              <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-0 mb-6">
+              <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
                 {/* Markdown content */}
-                <div className="xl:col-span-2 flex flex-col min-h-0 bg-white/35 rounded-2xl border border-line p-6 shadow-inner">
-                  <h3 className="island-kicker mb-3">Document Content</h3>
+                <div className="xl:col-span-2 flex flex-col min-h-0 bg-white/35 rounded-xl border border-line p-4 shadow-inner">
+                  <h3 className="island-kicker mb-2">Document Content</h3>
                   <div className="flex-1 overflow-y-auto pr-1">
                     <pre className="text-sm font-sans text-sea-ink leading-relaxed whitespace-pre-wrap select-text selection:bg-lagoon/20">
                       {activeNote.content}
@@ -206,23 +217,23 @@ function VaultComponent() {
                 </div>
 
                 {/* Metadata / Details */}
-                <div className="xl:col-span-1 space-y-6 overflow-y-auto pr-1">
-                  <div className="bg-foam/80 rounded-2xl border border-line p-5">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-sea-ink-soft mb-4 flex items-center gap-2">
-                      <Info size={14} /> Quality Metrics
+                <div className="xl:col-span-1 space-y-4 overflow-y-auto pr-1">
+                  <div className="bg-foam/80 rounded-xl border border-line p-4">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-3 flex items-center gap-1.5">
+                      <Info size={12} /> Quality Metrics
                     </h4>
                     {activeNote.qualityMetrics ? (
-                      <div className="space-y-3">
+                      <div className="space-y-3.5">
                         <div>
                           <div className="flex justify-between text-xs text-sea-ink-soft font-bold mb-1">
                             <span>Link Density</span>
                             <span>{(activeNote.qualityMetrics.link_density ?? 0).toFixed(2)}</span>
                           </div>
-                          <div className="w-full bg-line h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-line h-1 rounded-full overflow-hidden">
                             <div 
                               className="bg-lagoon h-full" 
                               style={{ width: `${Math.min((activeNote.qualityMetrics.link_density ?? 0) * 100, 100)}%` }} 
-                            />
+                              />
                           </div>
                         </div>
 
@@ -231,21 +242,21 @@ function VaultComponent() {
                             <span>Completeness</span>
                             <span>{activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%'}</span>
                           </div>
-                          <div className="w-full bg-line h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-line h-1 rounded-full overflow-hidden">
                             <div 
                               className="bg-palm h-full" 
                               style={{ width: activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%' }} 
-                            />
+                              />
                           </div>
                         </div>
 
                         {activeNote.qualityMetrics.reasons?.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-line">
-                            <span className="text-[10px] uppercase font-bold text-sea-ink-soft tracking-wider block mb-2">Quality Alerts</span>
-                            <div className="space-y-1.5">
+                          <div className="mt-3 pt-3 border-t border-line">
+                            <span className="text-[9px] uppercase font-bold text-sea-ink-soft tracking-wider block mb-1.5">Quality Alerts</span>
+                            <div className="space-y-1">
                               {activeNote.qualityMetrics.reasons.map((r: string) => (
-                                <div key={r} className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-100 font-medium">
-                                  <AlertTriangle size={12} className="shrink-0" />
+                                <div key={r} className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 font-medium">
+                                  <AlertTriangle size={10} className="shrink-0" />
                                   <span className="truncate">{r.replace(/_/g, ' ')}</span>
                                 </div>
                               ))}
@@ -254,20 +265,20 @@ function VaultComponent() {
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs text-sea-ink-soft italic">No metrics parsed.</p>
+                      <p className="text-[11px] text-sea-ink-soft italic">No metrics parsed.</p>
                     )}
                   </div>
 
                   {/* Actions Box */}
-                  <div className="bg-white/45 border border-line rounded-2xl p-5 space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-sea-ink-soft mb-2">Actions</h4>
+                  <div className="bg-white/45 border border-line rounded-xl p-4 space-y-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-1">Actions</h4>
                     
                     <button
                       type="button"
                       onClick={() => navigate({ to: '/refactor', search: { path: activeNote.path } })}
-                    className="w-full py-3 bg-sea-ink text-bg-base font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow"
+                      className="w-full py-2 bg-sea-ink text-bg-base font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow-sm cursor-pointer"
                     >
-                      <Sparkles size={16} />
+                      <Sparkles size={14} />
                       Refactor Note
                     </button>
 
@@ -275,9 +286,9 @@ function VaultComponent() {
                       type="button"
                       disabled={reindexMutation.isPending}
                       onClick={() => reindexMutation.mutate({ path: activeNote.path })}
-                      className="w-full py-3 bg-foam border border-line text-sea-ink font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-line transition-colors"
+                      className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors cursor-pointer"
                     >
-                      <RefreshCw size={16} className={reindexMutation.isPending ? 'animate-spin' : ''} />
+                      <RefreshCw size={14} className={reindexMutation.isPending ? 'animate-spin' : ''} />
                       {reindexMutation.isPending ? 'Reindexing...' : 'Reindex Note'}
                     </button>
                   </div>
@@ -285,10 +296,10 @@ function VaultComponent() {
               </div>
             </div>
           ) : (
-            <div className="island-shell rounded-[2.5rem] p-8 flex-1 flex flex-col justify-center items-center bg-white/40 text-center">
-              <BookOpen className="text-sea-ink-soft opacity-30 mb-4" size={64} />
-              <h3 className="text-2xl font-bold text-sea-ink mb-2">No Note Selected</h3>
-              <p className="text-sea-ink-soft max-w-sm">Select a note from the sidebar list to inspect its contents, check quality scores, and perform actions.</p>
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center bg-white/40 text-center">
+              <BookOpen className="text-sea-ink-soft opacity-30 mb-3" size={48} />
+              <h3 className="text-xl font-bold text-sea-ink mb-1">No Note Selected</h3>
+              <p className="text-sm text-sea-ink-soft max-w-sm">Select a note from the sidebar list to inspect its contents, check quality scores, and perform actions.</p>
             </div>
           )}
         </section>
