@@ -525,3 +525,8 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Added `getNote` to types contract and API router.
 	- Implemented the `/vault` route page featuring a searchable sidebar list, a detailed note viewer, quality scoring indicators, and actions for refactoring or reindexing selected notes.
 	- Pre-populated `/refactor` with an optional `path` query parameter when clicked from `/vault`.
+- **Ask Knowledge Property Mismatch**:
+	- Fixed a property mismatch where `/ask/preview` returned `suggested_note` while the React code expected `note` inside `previewData`. Updated `ask.ts` to return the `note` property mapping correctly, preventing the `Cannot read properties of undefined (reading 'title')` component crash.
+- **Brand Theme Variable Hardening**:
+	- Created a dynamic `--lagoon-text` brand variable (white in light mode, dark in dark mode) to ensure perfect accessibility on all green/lagoon button highlights.
+	- Replaced manual `text-white dark:text-bg-base` overrides with the fully compiled semantic `text-bg-base` and `text-lagoon-text` utility classes across all screens.

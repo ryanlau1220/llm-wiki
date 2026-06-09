@@ -265,7 +265,7 @@ function VaultComponent() {
                     <button
                       type="button"
                       onClick={() => navigate({ to: '/refactor', search: { path: activeNote.path } })}
-                      className="w-full py-3 bg-sea-ink text-white dark:text-bg-base font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base transition-colors shadow"
+                    className="w-full py-3 bg-sea-ink text-bg-base font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow"
                     >
                       <Sparkles size={16} />
                       Refactor Note

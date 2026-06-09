@@ -169,7 +169,7 @@ function RefactorComponent() {
                     note: previewData.note
                   })}
                   disabled={confirmMutation.isPending}
-                  className="w-full py-4 bg-sea-ink text-white dark:text-bg-base rounded-3xl font-bold text-lg hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full py-4 bg-sea-ink text-bg-base rounded-3xl font-bold text-lg hover:bg-lagoon-deep hover:text-bg-base shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={20} /> Save Refactored Version</>}
                 </button>
@@ -185,7 +185,7 @@ function RefactorComponent() {
               <button 
                 type="button"
                 onClick={() => handleRefactor(selectedPath)}
-                className="px-6 py-2 bg-sea-ink text-white dark:text-bg-base rounded-xl font-bold"
+                className="px-6 py-2 bg-sea-ink text-bg-base rounded-xl font-bold"
               >
                 Retry
               </button>

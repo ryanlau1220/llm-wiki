@@ -19,6 +19,7 @@
   --color-nav-active-bg: var(--nav-active-bg);
   --color-nav-active-text: var(--nav-active-text);
   --color-bg-base: var(--bg-base);
+  --color-lagoon-text: var(--lagoon-text);
 }
 
 :root {
@@ -43,6 +44,7 @@
   --link-bg-hover: rgba(255, 255, 255, 0.9);
   --hero-a: rgba(79, 184, 178, 0.36);
   --hero-b: rgba(47, 106, 74, 0.2);
+  --lagoon-text: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -67,6 +69,7 @@
   --link-bg-hover: rgba(24, 44, 49, 0.8);
   --hero-a: rgba(96, 215, 207, 0.18);
   --hero-b: rgba(110, 200, 154, 0.12);
+  --lagoon-text: #0a1418;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -88,6 +91,7 @@
     --bg-base: #0a1418;
     --header-bg: rgba(10, 20, 24, 0.8);
     --chip-bg: rgba(13, 28, 32, 0.9);
+    --lagoon-text: #0a1418;
     --chip-line: rgba(141, 229, 219, 0.24);
     --link-bg-hover: rgba(24, 44, 49, 0.8);
     --hero-a: rgba(96, 215, 207, 0.18);

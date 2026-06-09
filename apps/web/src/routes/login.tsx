@@ -131,7 +131,7 @@ function LoginComponent() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 rounded-2xl bg-sea-ink text-white dark:text-bg-base font-bold flex items-center justify-center gap-2 hover:bg-sea-ink-soft transition-all disabled:opacity-50 shadow-lg shadow-[var(--sea-ink-soft)]/20 active:scale-[0.98]"
+              className="w-full py-4 rounded-2xl bg-sea-ink text-bg-base font-bold flex items-center justify-center gap-2 hover:bg-sea-ink-soft hover:text-bg-base transition-all disabled:opacity-50 shadow-lg shadow-[var(--sea-ink-soft)]/20 active:scale-[0.98]"
             >
               {isLoading ? (
                 <Loader2 className="animate-spin" size={20} />

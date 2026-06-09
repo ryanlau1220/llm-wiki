@@ -118,3 +118,5 @@
 - [x] Make "New Note" navigate to Ask page
 - [x] Resolve 404 for Wiki Pages `/vault` route with an interactive file explorer
 - [x] Hook up detail actions (Reindex note & Refactor pre-selection)
+- [x] Fix ask preview note key mismatch causing components to crash on render
+- [x] Add dynamic lagoon-text brand styling variables to prevent low contrast green buttons
