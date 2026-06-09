@@ -3,6 +3,7 @@ import { z } from "zod";
 export const askPreviewPayloadSchema = z.object({
   query: z.string().min(1),
   topK: z.number().int().min(1).max(20).optional(),
+  mode: z.enum(["rag", "general"]).optional(),
 });
 
 export const confirmAskSavePayloadSchema = z.object({
