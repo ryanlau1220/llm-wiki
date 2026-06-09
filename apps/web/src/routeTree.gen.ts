@@ -10,12 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VaultRouteImport } from './routes/vault'
-import { Route as SynthesisRouteImport } from './routes/synthesis'
 import { Route as RefactorRouteImport } from './routes/refactor'
-import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as LinksRouteImport } from './routes/links'
-import { Route as AskRouteImport } from './routes/ask'
+import { Route as GeneratorRouteImport } from './routes/generator'
 import { Route as IndexRouteImport } from './routes/index'
 
 const VaultRoute = VaultRouteImport.update({
@@ -23,19 +20,9 @@ const VaultRoute = VaultRouteImport.update({
   path: '/vault',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SynthesisRoute = SynthesisRouteImport.update({
-  id: '/synthesis',
-  path: '/synthesis',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const RefactorRoute = RefactorRouteImport.update({
   id: '/refactor',
   path: '/refactor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MaintenanceRoute = MaintenanceRouteImport.update({
-  id: '/maintenance',
-  path: '/maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -43,14 +30,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LinksRoute = LinksRouteImport.update({
-  id: '/links',
-  path: '/links',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AskRoute = AskRouteImport.update({
-  id: '/ask',
-  path: '/ask',
+const GeneratorRoute = GeneratorRouteImport.update({
+  id: '/generator',
+  path: '/generator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -61,76 +43,39 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/ask': typeof AskRoute
-  '/links': typeof LinksRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
-  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
-  '/synthesis': typeof SynthesisRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/ask': typeof AskRoute
-  '/links': typeof LinksRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
-  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
-  '/synthesis': typeof SynthesisRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/ask': typeof AskRoute
-  '/links': typeof LinksRoute
+  '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
-  '/maintenance': typeof MaintenanceRoute
   '/refactor': typeof RefactorRoute
-  '/synthesis': typeof SynthesisRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/ask'
-    | '/links'
-    | '/login'
-    | '/maintenance'
-    | '/refactor'
-    | '/synthesis'
-    | '/vault'
+  fullPaths: '/' | '/generator' | '/login' | '/refactor' | '/vault'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/ask'
-    | '/links'
-    | '/login'
-    | '/maintenance'
-    | '/refactor'
-    | '/synthesis'
-    | '/vault'
-  id:
-    | '__root__'
-    | '/'
-    | '/ask'
-    | '/links'
-    | '/login'
-    | '/maintenance'
-    | '/refactor'
-    | '/synthesis'
-    | '/vault'
+  to: '/' | '/generator' | '/login' | '/refactor' | '/vault'
+  id: '__root__' | '/' | '/generator' | '/login' | '/refactor' | '/vault'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AskRoute: typeof AskRoute
-  LinksRoute: typeof LinksRoute
+  GeneratorRoute: typeof GeneratorRoute
   LoginRoute: typeof LoginRoute
-  MaintenanceRoute: typeof MaintenanceRoute
   RefactorRoute: typeof RefactorRoute
-  SynthesisRoute: typeof SynthesisRoute
   VaultRoute: typeof VaultRoute
 }
 
@@ -143,25 +88,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VaultRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/synthesis': {
-      id: '/synthesis'
-      path: '/synthesis'
-      fullPath: '/synthesis'
-      preLoaderRoute: typeof SynthesisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/refactor': {
       id: '/refactor'
       path: '/refactor'
       fullPath: '/refactor'
       preLoaderRoute: typeof RefactorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/maintenance': {
-      id: '/maintenance'
-      path: '/maintenance'
-      fullPath: '/maintenance'
-      preLoaderRoute: typeof MaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -171,18 +102,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/links': {
-      id: '/links'
-      path: '/links'
-      fullPath: '/links'
-      preLoaderRoute: typeof LinksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ask': {
-      id: '/ask'
-      path: '/ask'
-      fullPath: '/ask'
-      preLoaderRoute: typeof AskRouteImport
+    '/generator': {
+      id: '/generator'
+      path: '/generator'
+      fullPath: '/generator'
+      preLoaderRoute: typeof GeneratorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -197,12 +121,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AskRoute: AskRoute,
-  LinksRoute: LinksRoute,
+  GeneratorRoute: GeneratorRoute,
   LoginRoute: LoginRoute,
-  MaintenanceRoute: MaintenanceRoute,
   RefactorRoute: RefactorRoute,
-  SynthesisRoute: SynthesisRoute,
   VaultRoute: VaultRoute,
 }
 export const routeTree = rootRouteImport

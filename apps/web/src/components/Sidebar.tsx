@@ -1,15 +1,12 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { 
-  Search, 
   RotateCcw, 
-  Link2, 
   Activity, 
   BookOpen, 
   ChevronLeft,
   ChevronRight,
   PlusCircle,
   Sparkles,
-  ShieldAlert,
   LogOut
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -46,11 +43,8 @@ export function Sidebar() {
 
   const navItems = [
     { label: 'Dashboard', icon: Activity, to: '/' },
-    { label: 'Ask Knowledge', icon: Search, to: '/ask' },
+    { label: 'AI Generator', icon: Sparkles, to: '/generator' },
     { label: 'Refactor Note', icon: RotateCcw, to: '/refactor' },
-    { label: 'Synthesis', icon: Sparkles, to: '/synthesis' },
-    { label: 'Link Health', icon: Link2, to: '/links' },
-    { label: 'Maintenance', icon: ShieldAlert, to: '/maintenance' },
     { label: 'Wiki Pages', icon: BookOpen, to: '/vault' },
   ]
 
@@ -100,7 +94,7 @@ export function Sidebar() {
       <div className="p-4 border-t border-[var(--line)] space-y-2">
         <button 
           type="button" 
-          onClick={() => navigate({ to: '/ask' })}
+          onClick={() => navigate({ to: '/generator' })}
           className={`w-full flex items-center gap-3 p-2 rounded-xl bg-sea-ink text-sand hover:bg-lagoon-deep transition-colors shadow-sm text-sm ${
             isCollapsed ? 'justify-center' : ''
           }`}
