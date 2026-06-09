@@ -6,6 +6,7 @@ import { ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
+import { sseEmitter } from "./events";
 
 export type ReindexResult = {
   vaultPath: string;
@@ -77,6 +78,8 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
       isAiGenerated
     }
   );
+
+  sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
 
   return {
     vaultPath,
