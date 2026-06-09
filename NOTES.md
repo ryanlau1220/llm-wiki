@@ -548,4 +548,9 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **SSR Page Refresh Auth Fix**:
 	- Discovered that page refresh triggers SSR (Server-Side Rendering) in TanStack Start, which has no access to client-side localStorage and request-forwarded cookies. This caused the SSR route loader to receive a `null` user from the API and redirect to `/login`.
 	- Modified `beforeLoad` in `__root.tsx` to skip redirection if `typeof window === 'undefined'` (on the server). The client hydrates and resolves the session state via cookies and localStorage tokens seamlessly.
+- **Real-Time SSE Listener Loop**:
+	- Created a central Event Broker (`apps/api/src/events.ts`) using standard Node.js `EventEmitter`.
+	- Added a `.get("/events", ...)` streaming endpoint in the Elysia server (`index.ts`) using standard web `ReadableStream` to stream events to clients.
+	- Hooked `watcher.ts` and `ask-confirm.ts` to emit `"change"` events when notes are modified on disk or saved via AI.
+	- Wired a global `EventSource` listener in `__root.tsx` on the client side that hooks into these events and invalidates React Query caches (`listNotes` and `getNote`), triggering immediate UI sync updates.
 

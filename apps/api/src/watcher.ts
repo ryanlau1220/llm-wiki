@@ -7,6 +7,7 @@ import { createDbClient, documents } from "@llm-wiki/db";
 import { startVaultWatcher, type WatchEvent } from "@llm-wiki/obsidian";
 
 import type { AppConfig } from "./config";
+import { sseEmitter } from "./events";
 
 export type WatcherHandle = {
   stop: () => Promise<void>;
@@ -182,6 +183,7 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
             vaultPath
           );
           logger.info("Document deleted", { path: vaultPath });
+          sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
           return;
         }
 
@@ -203,6 +205,7 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
           }
         );
         logger.info("Document ingested", { path: vaultPath });
+        sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
       } catch (error) {
         logger.error("Watcher event processing failed", error, { event: event.event, path: event.path });
       }

@@ -10,6 +10,7 @@ import { aiActionEnvelopeSchema } from "@llm-wiki/types";
 import { ingestMarkdown } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
+import { sseEmitter } from "./events";
 
 export type AskNoteInput = {
   title?: string;
@@ -133,6 +134,7 @@ export async function confirmAskSave(
         isAiGenerated: true
       }
     );
+    sseEmitter.emit("change", { type: "note_changed", path: relativePath });
   } catch (ingestError: any) {
     console.error(`Failed to ingest saved AI note: ${filePath}`, ingestError);
   }

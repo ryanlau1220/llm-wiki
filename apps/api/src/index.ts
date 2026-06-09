@@ -6,6 +6,7 @@ import { startIngestionWatcher } from "./watcher";
 import { authPlugin, seedDefaultUser } from "./auth";
 import { RPCHandler } from "@orpc/server/fetch";
 import { router } from "./router";
+import { sseEmitter } from "./events";
 
 const config = loadConfig();
 await seedDefaultUser(config);
@@ -21,6 +22,28 @@ const app = new Elysia()
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
+  .get("/events", ({ set }) => {
+    set.headers["Content-Type"] = "text/event-stream";
+    set.headers["Cache-Control"] = "no-cache";
+    set.headers["Connection"] = "keep-alive";
+
+    return new ReadableStream({
+      start(controller) {
+        const listener = (data: any) => {
+          controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+        };
+        sseEmitter.on("change", listener);
+        (controller as any).closeListener = () => {
+          sseEmitter.off("change", listener);
+        };
+      },
+      cancel(controller: any) {
+        if (controller.closeListener) {
+          controller.closeListener();
+        }
+      }
+    });
+  })
   .onError(({ code, error }: any) => {
     console.error(`[API Error] ${code}:`, error);
     return {

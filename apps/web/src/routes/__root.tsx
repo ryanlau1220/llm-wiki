@@ -1,4 +1,5 @@
 import { HeadContent, Scripts, createRootRouteWithContext, useLocation } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -87,6 +88,32 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { queryClient } = Route.useRouteContext()
   const { pathname } = useLocation()
   const isLoginPage = pathname === '/login'
+
+  useEffect(() => {
+    if (isLoginPage) return
+
+    // Open connection to backend SSE events stream
+    const eventSource = new EventSource('http://localhost:3001/events')
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        console.log('[SSE] Event received:', data)
+        if (data.type === 'note_changed') {
+          // Invalidate notes list in React Query
+          queryClient.invalidateQueries({ queryKey: orpc.listNotes.queryKey() })
+          // Invalidate single note details in case it was the active one
+          queryClient.invalidateQueries({ queryKey: orpc.getNote.queryKey({ input: undefined as any }) })
+        }
+      } catch (err) {
+        console.error('[SSE] Failed to parse event:', err)
+      }
+    }
+
+    return () => {
+      eventSource.close()
+    }
+  }, [queryClient, isLoginPage])
 
   return (
     <html lang="en" suppressHydrationWarning>

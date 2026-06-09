@@ -126,4 +126,6 @@
 - [x] Remove clock/time pill from top-right of Dashboard
 - [x] Implement startup sync for pre-existing vault files
 - [x] Ingest AI-generated notes to database on confirmation/save
+- [x] Implement real-time SSE listener loop for UI updates
+
 
