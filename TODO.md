@@ -128,4 +128,18 @@
 - [x] Ingest AI-generated notes to database on confirmation/save
 - [x] Implement real-time SSE listener loop for UI updates
 
+## Priority 10 - Streamlined Sidebar Categories & Theme Toggle
+- [x] Move ThemeToggle component to bottom of the Sidebar
+- [x] Implement categorized sidebar sections (KNOWLEDGE vs. AI ASSISTANT)
+- [x] Unify AI Generator interface (Ask RAG, Ask AI Web Search, Synthesize Topic) into a single chatbot page with mode dropdown selector
+- [x] Resolve ThemeToggle overlap by removing absolute positioning on header
+
+## Priority 11 - Dark Mode Styles & Env Template Update
+- [x] Style select option elements to ensure readability in dark mode
+- [x] Update note card backgrounds in note refactor, wiki pages, and dashboard to use theme-aware background surfaces
+- [x] Fix active sub-tab styling in refactor to prevent light-text-on-light-bg contrast issue
+- [x] Add Tavily API Key placeholder to env.example template
+
+
+
 

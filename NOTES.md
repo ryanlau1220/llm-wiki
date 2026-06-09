@@ -554,3 +554,10 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 	- Hooked `watcher.ts` and `ask-confirm.ts` to emit `"change"` events when notes are modified on disk or saved via AI.
 	- Wired a global `EventSource` listener in `__root.tsx` on the client side that hooks into these events and invalidates React Query caches (`listNotes` and `getNote`), triggering immediate UI sync updates.
 
+### 2026-06-10 (Dark Mode Style Tweaks & Env Example Update)
+- **Select Option Contrast Fix**: Styled `select option` in `styles.css` using `--sand` background and `--sea-ink` text to prevent text invisibility issues on Linux/Chrome/Firefox in dark mode.
+- **Tab Contrast Hardening**: Switched active sub-tab buttons on the Note Refactor page (`refactor.tsx`) from a hardcoded `bg-white` (which resulted in near-white text on white background) to `bg-surface-strong` for robust theme-aware contrast.
+- **Card Background Harmonization**: Refactored note lists and content boxes across `refactor.tsx`, `vault.tsx`, `generator.tsx`, and `index.tsx` by replacing hardcoded `bg-white/40`, `bg-white/35`, and similar overlays with native `.island-shell` backgrounds (`var(--surface-strong)`) or `bg-surface` (`var(--surface)`) to align with the dark green theme under dark mode.
+- **Tavily Configuration Update**: Added the `TAVILY_API_KEY` placeholder in `env.example` to document requirements for live web-grounding under the chatbot's Ask AI mode.
+
+
