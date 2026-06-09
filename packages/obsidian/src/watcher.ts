@@ -12,7 +12,7 @@ export function startVaultWatcher(config: WatcherConfig): () => Promise<void> {
   const pendingByPath = new Map<string, PendingEvent>();
 
   const watcher = chokidar.watch(config.rootPath, {
-    ignored: ["**/ai-generated/**", ...(config.ignoredGlobs ?? [])],
+    ignored: config.ignoredGlobs ?? [],
     ignoreInitial: true,
     persistent: true,
     awaitWriteFinish: {
