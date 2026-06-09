@@ -511,3 +511,17 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Sidebar Accessibility Hardening**:
 	- Introduced semantic CSS variables `--nav-active-bg` and `--nav-active-text` in `styles.css` for both light and dark themes.
 	- Updated `Sidebar.tsx` to use these variables and added a `border-l-4 border-[var(--lagoon)]` indicator for the active state, ensuring high visibility in all visual modes.
+
+### 2026-06-09 (UI Polishing & Vault Explorer)
+- **Tailwind v4 Theme Registration**:
+	- Integrated all semantic variables as colors in the Tailwind v4 `@theme` block in `styles.css`. This ensures compiled utility classes like `text-nav-active-text` take high priority.
+- **Login Contrast & Transition fixes**:
+	- Fixed "Sign In to Wiki" contrast by adding dynamic light/dark classes (`text-white dark:text-bg-base`).
+	- Resolved login loops by changing `setQueryData(..., null)` to `removeQueries(...)` on logout.
+- **Navigation & Form Button Polish**:
+	- Connected the sidebar "New Note" button directly to `/ask` for interactive note generation.
+	- Hardened all primary buttons (Ask, Refactor, Synthesis, Maintenance) with `text-white dark:text-bg-base` classes for clear contrast.
+- **Vault Explorer Route (/vault)**:
+	- Added `getNote` to types contract and API router.
+	- Implemented the `/vault` route page featuring a searchable sidebar list, a detailed note viewer, quality scoring indicators, and actions for refactoring or reindexing selected notes.
+	- Pre-populated `/refactor` with an optional `path` query parameter when clicked from `/vault`.

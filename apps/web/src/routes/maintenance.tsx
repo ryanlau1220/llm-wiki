@@ -112,7 +112,7 @@ function MaintenanceComponent() {
                   type="button"
                   disabled={analyzingId === note.id}
                   onClick={() => handleAnalyze(note.id)}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--sea-ink)] text-white rounded-xl font-bold text-sm hover:bg-[var(--lagoon-deep)] transition-all disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-sea-ink text-white dark:text-bg-base rounded-xl font-bold text-sm hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base transition-all disabled:opacity-50"
                 >
                   {analyzingId === note.id ? (
                     <>

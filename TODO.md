@@ -110,3 +110,11 @@
 - [x] Fix Vault Health Check (Portable Root Resolution).
 - [x] Implement Responsive Sidebar Layout (CSS Variables).
 - [x] Improve Navigation Contrast and Accessibility (Semantic Colors + Indicators).
+
+## Priority 8 - UI Polish & Explorer Implementation
+- [x] Integrate brand variables in Tailwind v4 `@theme` block
+- [x] Fix login button contrast on Login page and primary form action buttons
+- [x] Fix logout/login redirect state loop via Query Cache reset
+- [x] Make "New Note" navigate to Ask page
+- [x] Resolve 404 for Wiki Pages `/vault` route with an interactive file explorer
+- [x] Hook up detail actions (Reindex note & Refactor pre-selection)

@@ -28,8 +28,8 @@ function LoginComponent() {
           // Store token for manual Bearer auth fallback
           localStorage.setItem('llm_wiki_token', data.token);
           
-          // Invalidate 'me' query to update global state
-          await queryClient.invalidateQueries({ queryKey: orpc.me.queryKey() })
+          // Clear any stale query cache for user to force re-fetch
+          queryClient.removeQueries({ queryKey: orpc.me.queryKey() });
           
           // If there's a redirect param, go there, otherwise go to root
           if (redirect) {
@@ -131,7 +131,7 @@ function LoginComponent() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 rounded-2xl bg-[var(--sea-ink)] text-white font-bold flex items-center justify-center gap-2 hover:bg-[var(--sea-ink-soft)] transition-all disabled:opacity-50 shadow-lg shadow-[var(--sea-ink-soft)]/20 active:scale-[0.98]"
+              className="w-full py-4 rounded-2xl bg-sea-ink text-white dark:text-bg-base font-bold flex items-center justify-center gap-2 hover:bg-sea-ink-soft transition-all disabled:opacity-50 shadow-lg shadow-[var(--sea-ink-soft)]/20 active:scale-[0.98]"
             >
               {isLoading ? (
                 <Loader2 className="animate-spin" size={20} />

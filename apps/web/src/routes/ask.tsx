@@ -71,7 +71,7 @@ function AskComponent() {
         <button
           type="submit"
           disabled={askMutation.isPending}
-          className="absolute right-3 top-3 p-3 bg-[var(--sea-ink)] text-white rounded-xl hover:bg-[var(--lagoon-deep)] disabled:opacity-50 transition-colors"
+          className="absolute right-3 top-3 p-3 bg-sea-ink text-white dark:text-bg-base rounded-xl hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base disabled:opacity-50 transition-colors"
         >
           {askMutation.isPending ? <Loader2 className="animate-spin" /> : <Send size={24} />}
         </button>
@@ -139,7 +139,7 @@ function AskComponent() {
               type="button"
               onClick={handleSave}
               disabled={saveMutation.isPending}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-[var(--lagoon)] text-white rounded-[1.5rem] font-bold text-lg hover:bg-[var(--lagoon-deep)] shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-3 py-4 bg-lagoon text-white dark:text-bg-base rounded-[1.5rem] font-bold text-lg hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50"
             >
               {saveMutation.isPending ? (
                 <Loader2 className="animate-spin" />

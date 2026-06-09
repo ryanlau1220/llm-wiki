@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { z } from 'zod'
 import { 
   RotateCcw, 
   FileText, 
@@ -14,11 +15,15 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/refactor')({
+  validateSearch: z.object({
+    path: z.string().optional(),
+  }),
   component: RefactorComponent,
 })
 
 function RefactorComponent() {
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const { path } = Route.useSearch()
+  const [selectedPath, setSelectedPath] = useState<string | null>(path || null)
   const [previewData, setPreviewData] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -33,6 +38,13 @@ function RefactorComponent() {
       }
     })
   )
+
+  // Run refactor analysis immediately on mount if path is provided in query params
+  useEffect(() => {
+    if (path) {
+      previewMutation.mutate({ path })
+    }
+  }, [path, previewMutation])
 
   const confirmMutation = useMutation(
     orpc.confirmRefactorSave.mutationOptions({
@@ -157,7 +169,7 @@ function RefactorComponent() {
                     note: previewData.note
                   })}
                   disabled={confirmMutation.isPending}
-                  className="w-full py-4 bg-[var(--sea-ink)] text-white rounded-3xl font-bold text-lg hover:bg-[var(--lagoon-deep)] shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full py-4 bg-sea-ink text-white dark:text-bg-base rounded-3xl font-bold text-lg hover:bg-lagoon-deep hover:text-white dark:hover:text-bg-base shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={20} /> Save Refactored Version</>}
                 </button>
@@ -173,7 +185,7 @@ function RefactorComponent() {
               <button 
                 type="button"
                 onClick={() => handleRefactor(selectedPath)}
-                className="px-6 py-2 bg-[var(--sea-ink)] text-white rounded-xl font-bold"
+                className="px-6 py-2 bg-sea-ink text-white dark:text-bg-base rounded-xl font-bold"
               >
                 Retry
               </button>
