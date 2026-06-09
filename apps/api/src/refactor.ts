@@ -73,40 +73,37 @@ Provide the refactored version in JSON format.
   });
 
   const rawText = llmResponse.text;
-
+  let noteData: any = null;
   try {
-    // Attempt direct parse first
     const parsed = JSON.parse(rawText);
-    const requestId = crypto.randomUUID();
-
-    return {
-      requestId,
-      sourcePath: filePath,
-      ...parsed
-    };
+    noteData = parsed.refactored_note || parsed.note || parsed;
   } catch (_error) {
-    // Fallback: try to find the JSON block if it's wrapped or has stray characters
     try {
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        const requestId = crypto.randomUUID();
-        return {
-          requestId,
-          sourcePath: filePath,
-          ...parsed
-        };
+        noteData = parsed.refactored_note || parsed.note || parsed;
       }
     } catch (_fallbackError) {
-      // Ignore fallback error and report original failure
+      // Ignore fallback error
     }
+  }
 
-    console.error("Failed to parse LLM refactor response:", rawText);
+  if (noteData) {
+    const requestId = crypto.randomUUID();
     return {
-      error: "Failed to generate structured refactor",
-      rawResponse: rawText
+      requestId,
+      sourcePath: filePath,
+      originalContent: content,
+      note: noteData
     };
   }
+
+  console.error("Failed to parse LLM refactor response:", rawText);
+  return {
+    error: "Failed to generate structured refactor",
+    rawResponse: rawText
+  };
 }
 
 export async function confirmRefactorSave(
