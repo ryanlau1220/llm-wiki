@@ -149,7 +149,7 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     }
   });
 
-  const rootPath = path.resolve(config.vaultPath);
+  const rootPath = path.resolve(config.vaultPath, "..");
 
   logger.info("Starting ingestion watcher", { rootPath, debounceMs: config.watcherDebounceMs });
 
@@ -159,6 +159,7 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
   const stop = startVaultWatcher({
     rootPath,
     debounceMs: config.watcherDebounceMs,
+    ignoredGlobs: ["**/.*/**", "**/.*"],
     onEvent: async (event: WatchEvent) => {
       try {
         const relative = path.relative(rootPath, event.path);
@@ -166,7 +167,17 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
           throw new Error(`Watcher event outside vault root: ${event.path}`);
         }
 
-        const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+        const vaultPath = relative.replace(/\\/g, "/");
+        const parts = vaultPath.split("/");
+        const folder = parts[0];
+
+        if (folder !== "human" && folder !== "ai-generated") {
+          // Ignore files outside human/ and ai-generated/ folders (e.g. .obsidian config)
+          return;
+        }
+
+        const sourceKind = folder === "human" ? "human" : "ai";
+        const isAiGenerated = folder === "ai-generated";
 
         logger.debug("Watcher event received", { event: event.event, path: vaultPath });
 
@@ -200,8 +211,8 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
           {
             vaultPath,
             rawContent,
-            sourceKind: "human",
-            isAiGenerated: false
+            sourceKind,
+            isAiGenerated
           }
         );
         logger.info("Document ingested", { path: vaultPath });
