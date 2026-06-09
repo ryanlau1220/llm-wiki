@@ -20,7 +20,7 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     throw new Error("DATABASE_URL is required to reindex");
   }
 
-  const rootPath = path.resolve(config.vaultPath);
+  const rootPath = path.resolve(config.vaultPath, "..");
   const normalizedRelative = path.normalize(relativePath).replace(/^\/+/, "");
   const filePath = path.resolve(rootPath, normalizedRelative);
   const relative = path.relative(rootPath, filePath);
@@ -29,7 +29,16 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     throw new Error("Reindex path must be inside vault root");
   }
 
-  const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+  const vaultPath = relative.replace(/\\/g, "/");
+  const parts = vaultPath.split("/");
+  const folder = parts[0];
+  if (folder !== "human" && folder !== "ai-generated") {
+    throw new Error(`Invalid vault path directory: ${folder}`);
+  }
+
+  const sourceKind = folder === "human" ? "human" : "ai";
+  const isAiGenerated = folder === "ai-generated";
+
   const rawContent = await fs.readFile(filePath, "utf8");
 
   const { db } = createDbClient(config.databaseUrl);
@@ -64,8 +73,8 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     {
       vaultPath,
       rawContent,
-      sourceKind: "human",
-      isAiGenerated: false
+      sourceKind,
+      isAiGenerated
     }
   );
 
