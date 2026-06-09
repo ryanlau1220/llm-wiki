@@ -20,20 +20,27 @@ export const Route = createFileRoute('/ask')({
 function AskComponent() {
   const [query, setQuery] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   
   const askMutation = useMutation(
     orpc.askPreview.mutationOptions({
       onSuccess: (data) => {
         setPreviewData(data)
+        setSaveStatus(null)
       }
     })
   )
 
   const saveMutation = useMutation(
     orpc.confirmAskSave.mutationOptions({
-      onSuccess: () => {
-        setPreviewData(null)
-        setQuery('')
+      onSuccess: (data) => {
+        if (data.status === 'rejected') {
+          setSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
+        } else {
+          setSaveStatus({ type: 'success', message: 'Note successfully saved to vault!' })
+          setPreviewData(null)
+          setQuery('')
+        }
       }
     })
   )
@@ -58,6 +65,17 @@ function AskComponent() {
         <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">Ask Knowledge</h1>
         <p className="text-[var(--sea-ink-soft)] text-base">Query your wiki and generate new structured notes.</p>
       </header>
+
+      {saveStatus && (
+        <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
+          saveStatus.type === 'success' 
+            ? 'bg-green-50 border-green-100 text-green-700' 
+            : 'bg-amber-50 border-amber-100 text-amber-700'
+        }`}>
+          {saveStatus.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="text-sm font-medium">{saveStatus.message}</span>
+        </div>
+      )}
 
       <form onSubmit={handleAsk} className="relative mb-8">
         <input
@@ -141,6 +159,8 @@ function AskComponent() {
                           key={src.id}
                           to="/vault"
                           search={{ path: src.path }}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2.5 py-1 rounded-full border border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--line)] hover:text-[var(--lagoon-deep)] transition-all font-medium"
                         >
                           <FileText size={10} /> {src.title || src.path.split('/').pop()}

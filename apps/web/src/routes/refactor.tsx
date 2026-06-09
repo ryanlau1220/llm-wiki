@@ -27,6 +27,7 @@ function RefactorComponent() {
   const [selectedPath, setSelectedPath] = useState<string | null>(path || null)
   const [previewData, setPreviewData] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   const { data: notes, isLoading: isLoadingNotes } = useQuery(
     orpc.listNotes.queryOptions()
@@ -36,6 +37,7 @@ function RefactorComponent() {
     orpc.refactorPreview.mutationOptions({
       onSuccess: (data) => {
         setPreviewData(data)
+        setSaveStatus(null)
       }
     })
   )
@@ -52,10 +54,15 @@ function RefactorComponent() {
 
   const confirmMutation = useMutation(
     orpc.confirmRefactorSave.mutationOptions({
-      onSuccess: () => {
-        setPreviewData(null)
-        setSelectedPath(null)
-        navigate({ to: '/refactor', search: { path: undefined } })
+      onSuccess: (data) => {
+        if (data.status === 'rejected') {
+          setSaveStatus({ type: 'error', message: `Refactor save rejected: ${data.error?.replace(/_/g, ' ')}` })
+        } else {
+          setSaveStatus({ type: 'success', message: 'Note successfully refactored and saved!' })
+          setPreviewData(null)
+          setSelectedPath(null)
+          navigate({ to: '/refactor', search: { path: undefined } })
+        }
       }
     })
   )
@@ -76,6 +83,17 @@ function RefactorComponent() {
         <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">Note Refactor</h1>
         <p className="text-[var(--sea-ink-soft)] text-base">Clean up and structure messy notes using AI.</p>
       </header>
+
+      {saveStatus && (
+        <div className={`p-4 mb-6 border rounded-xl flex items-center gap-3 ${
+          saveStatus.type === 'success' 
+            ? 'bg-green-50 border-green-100 text-green-700' 
+            : 'bg-amber-50 border-amber-100 text-amber-700'
+        }`}>
+          {saveStatus.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="text-sm font-medium">{saveStatus.message}</span>
+        </div>
+      )}
 
       {!selectedPath ? (
         <section className="island-shell rounded-xl p-5 overflow-hidden bg-white/40">
@@ -145,26 +163,28 @@ function RefactorComponent() {
 
           {previewData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <article className="island-shell p-5 rounded-xl bg-white/40">
+              <article className="island-shell p-5 rounded-xl bg-white/40 flex flex-col h-[32rem]">
                 <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
-                <div className="prose prose-sm max-w-none text-[var(--sea-ink-soft)] line-clamp-[15] text-xs">
-                   <p className="italic">Original file: {selectedPath}</p>
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <pre className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap font-mono select-text leading-relaxed">
+                    {previewData.originalContent}
+                  </pre>
                 </div>
               </article>
 
               <div className="flex flex-col gap-5">
-                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-white/50 relative">
+                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-white/50 relative flex flex-col h-[28rem]">
                   <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
                     Refactored Preview
                   </div>
-                  <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)]">
+                  <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)] shrink-0">
                     <CheckCircle2 size={12} /> AI Improvements
                   </h3>
                   
-                  <div className="space-y-3">
-                    <div className="text-lg font-bold text-[var(--sea-ink)]">{previewData.title}</div>
-                    <div className="text-xs text-[var(--sea-ink)] bg-white/40 p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono h-56 overflow-y-auto">
-                      {previewData.content}
+                  <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                    <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
+                    <div className="flex-1 text-xs text-[var(--sea-ink)] bg-white/40 p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
+                      {previewData.note.content}
                     </div>
                   </div>
                 </article>
@@ -175,10 +195,10 @@ function RefactorComponent() {
                     requestId: previewData.requestId,
                     sourcePath: selectedPath,
                     note: {
-                      title: previewData.title,
-                      content: previewData.content,
-                      tags: previewData.tags,
-                      links: previewData.links
+                      title: previewData.note.title,
+                      content: previewData.note.content,
+                      tags: previewData.note.tags,
+                      links: previewData.note.links
                     }
                   })}
                   disabled={confirmMutation.isPending}
