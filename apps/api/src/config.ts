@@ -17,6 +17,7 @@ export type AppConfig = {
   embeddingVersion: string;
   semanticDuplicateThreshold: number;
   semanticDuplicateCandidates: number;
+  tavilyApiKey?: string;
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,7 @@ export function loadConfig(): AppConfig {
     watcherDebounceMs: Number(process.env.WATCHER_DEBOUNCE_MS ?? 5000),
     embeddingVersion: process.env.EMBEDDING_VERSION ?? "v1",
     semanticDuplicateThreshold: Number(process.env.SEMANTIC_DUPLICATE_THRESHOLD ?? 0.92),
-    semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? 200)
+    semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? 200),
+    tavilyApiKey: process.env.TAVILY_API_KEY
   };
 }
