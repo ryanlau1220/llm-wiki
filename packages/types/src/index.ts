@@ -63,6 +63,18 @@ export const appContract = oc.router({
     qualityScore: z.number().nullable().optional(),
     qualityMetrics: z.any().optional(),
   }))),
+  getNote: oc.input(z.object({ id: z.string() })).output(z.object({
+    id: z.string(),
+    path: z.string(),
+    title: z.string(),
+    content: z.string(),
+    type: z.string(),
+    is_ai_generated: z.boolean(),
+    qualityScore: z.number().nullable().optional(),
+    qualityMetrics: z.any().optional(),
+    created_at: z.string(),
+    updated_at: z.string()
+  })),
 });
 
 export type AppRouter = typeof appContract;
