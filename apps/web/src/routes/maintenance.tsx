@@ -1,7 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { orpc } from '../lib/orpc'
-import { AlertTriangle, ShieldCheck, Sparkles, Loader2, ListChecks } from 'lucide-react'
+import { AlertTriangle, ShieldCheck, Sparkles, Loader2, ListChecks, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/maintenance')({
@@ -9,6 +9,7 @@ export const Route = createFileRoute('/maintenance')({
 })
 
 function MaintenanceComponent() {
+  const queryClient = useQueryClient()
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<Record<string, any[]>>({})
 
@@ -26,6 +27,14 @@ function MaintenanceComponent() {
     })
   )
 
+  const reindexAllMutation = useMutation(
+    orpc.reindexAll.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries()
+      }
+    })
+  )
+
   const handleAnalyze = (documentId: string) => {
     setAnalyzingId(documentId)
     improveMutation.mutate({ documentId })
@@ -33,10 +42,28 @@ function MaintenanceComponent() {
 
   return (
     <div className="p-5 max-w-5xl mx-auto">
-      <header className="mb-8">
-        <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">Maintenance</h1>
-        <p className="text-[var(--sea-ink-soft)] text-base">Identify weak notes and prioritize improvements.</p>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">Maintenance</h1>
+          <p className="text-[var(--sea-ink-soft)] text-base">Identify weak notes and prioritize improvements.</p>
+        </div>
+        <button
+          type="button"
+          disabled={reindexAllMutation.isPending}
+          onClick={() => reindexAllMutation.mutate(undefined)}
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--lagoon)] text-white hover:bg-[var(--lagoon-deep)] transition-all font-bold text-sm rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
+        >
+          {reindexAllMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+          Reindex Vault
+        </button>
       </header>
+
+      {reindexAllMutation.isSuccess && (
+        <div className="p-4 mb-6 bg-[var(--foam)] border border-[var(--lagoon)] rounded-xl flex items-center gap-3 text-[var(--lagoon-deep)] shadow-sm rise-in">
+          <ShieldCheck size={20} />
+          <span className="font-medium">Vault successfully reindexed and synchronized!</span>
+        </div>
+      )}
 
       <section className="island-shell rounded-xl p-5 bg-white/40">
         <h2 className="island-kicker mb-4 flex items-center gap-2">
@@ -108,24 +135,34 @@ function MaintenanceComponent() {
                   </div>
                 ) : null}
 
-                <button
-                  type="button"
-                  disabled={analyzingId === note.id}
-                  onClick={() => handleAnalyze(note.id)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-sea-ink text-bg-base rounded-lg font-bold text-xs hover:bg-lagoon-deep hover:text-bg-base transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {analyzingId === note.id ? (
-                    <>
-                      <Loader2 className="animate-spin" size={14} />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} />
-                      Analyze Improvements
-                    </>
-                  )}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    disabled={analyzingId === note.id}
+                    onClick={() => handleAnalyze(note.id)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-foam border border-line text-sea-ink rounded-lg font-bold text-xs hover:bg-line transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {analyzingId === note.id ? (
+                      <>
+                        <Loader2 className="animate-spin" size={14} />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        Analyze Improvements
+                      </>
+                    )}
+                  </button>
+                  <Link
+                    to="/refactor"
+                    search={{ path: note.path }}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-sea-ink text-bg-base rounded-lg font-bold text-xs hover:bg-lagoon-deep hover:text-bg-base transition-all no-underline"
+                  >
+                    <RotateCcw size={14} />
+                    Refactor Note
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
