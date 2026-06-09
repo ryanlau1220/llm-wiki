@@ -27,19 +27,18 @@ const app = new Elysia()
     set.headers["Cache-Control"] = "no-cache";
     set.headers["Connection"] = "keep-alive";
 
+    let listener: ((data: any) => void) | null = null;
+
     return new ReadableStream({
       start(controller) {
-        const listener = (data: any) => {
+        listener = (data: any) => {
           controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
         };
         sseEmitter.on("change", listener);
-        (controller as any).closeListener = () => {
-          sseEmitter.off("change", listener);
-        };
       },
-      cancel(controller: any) {
-        if (controller.closeListener) {
-          controller.closeListener();
+      cancel() {
+        if (listener) {
+          sseEmitter.off("change", listener);
         }
       }
     });
