@@ -103,6 +103,11 @@
   box-sizing: border-box;
 }
 
+select option {
+  background-color: var(--sand);
+  color: var(--sea-ink);
+}
+
 html,
 body,
 #app {

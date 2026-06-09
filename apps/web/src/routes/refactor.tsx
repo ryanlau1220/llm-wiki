@@ -118,7 +118,7 @@ function RefactorComponent() {
               onClick={() => setLandingTab('weak')}
               className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 landingTab === 'weak'
-                  ? 'bg-white text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
+                  ? 'bg-surface-strong text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
                   : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
               }`}
             >
@@ -130,7 +130,7 @@ function RefactorComponent() {
               onClick={() => setLandingTab('all')}
               className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 landingTab === 'all'
-                  ? 'bg-white text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
+                  ? 'bg-surface-strong text-[var(--sea-ink)] shadow-sm border border-[var(--line)]'
                   : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
               }`}
             >
@@ -140,7 +140,7 @@ function RefactorComponent() {
           </div>
 
           {landingTab === 'weak' ? (
-            <section className="island-shell rounded-xl p-5 bg-white/40 rise-in">
+            <section className="island-shell rounded-xl p-5 rise-in">
               <h2 className="island-kicker mb-4 flex items-center gap-2">
                 <AlertTriangle size={12} className="text-amber-500" /> Notes Needing Refactoring
               </h2>
@@ -164,7 +164,7 @@ function RefactorComponent() {
                   {weakNotes.map((note) => (
                     <article
                       key={note.id}
-                      className="p-4 rounded-xl bg-white/35 border border-[var(--line)] flex flex-col justify-between hover:shadow-sm transition-all"
+                      className="p-4 rounded-xl bg-surface border border-[var(--line)] flex flex-col justify-between hover:shadow-sm transition-all"
                     >
                       <div className="mb-4">
                         <div className="flex items-start justify-between gap-4 mb-2">
@@ -200,7 +200,7 @@ function RefactorComponent() {
               )}
             </section>
           ) : (
-            <section className="island-shell rounded-xl p-5 overflow-hidden bg-white/40 rise-in">
+            <section className="island-shell rounded-xl p-5 overflow-hidden rise-in">
               <div className="relative mb-4">
                 <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
                 <input 
@@ -226,7 +226,7 @@ function RefactorComponent() {
                       className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-1.5 bg-white rounded-md shadow-sm shrink-0 border border-line">
+                        <div className="p-1.5 bg-surface rounded-md shadow-sm shrink-0 border border-line">
                           <FileText size={16} className="text-[var(--sea-ink-soft)]" />
                         </div>
                         <div className="truncate">
@@ -260,7 +260,7 @@ function RefactorComponent() {
           </div>
 
           {previewMutation.isPending && (
-            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center bg-white/40">
+            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center">
               <RotateCcw className="animate-spin text-[var(--lagoon-deep)] mb-4" size={48} />
               <h3 className="text-xl font-bold text-[var(--sea-ink)] mb-1">Analyzing Note</h3>
               <p className="text-sm text-[var(--sea-ink-soft)]">AI is restructuring your content for better clarity...</p>
@@ -269,7 +269,7 @@ function RefactorComponent() {
 
           {previewData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <article className="island-shell p-5 rounded-xl bg-white/40 flex flex-col h-[32rem]">
+              <article className="island-shell p-5 rounded-xl flex flex-col h-[32rem]">
                 <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
                 <div className="flex-1 overflow-y-auto pr-1">
                   <pre className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap font-mono select-text leading-relaxed">
@@ -280,7 +280,7 @@ function RefactorComponent() {
 
               <div className="flex flex-col gap-5">
                 {previewData.improvements && previewData.improvements.length > 0 && (
-                  <div className="island-shell p-5 rounded-xl bg-white/40 border border-[var(--line)]">
+                  <div className="island-shell p-5 rounded-xl">
                     <h3 className="island-kicker mb-3 flex items-center gap-1.5 text-[var(--lagoon-deep)]">
                       <ListChecks size={14} /> Quality Improvement Roadmap
                     </h3>
@@ -311,7 +311,7 @@ function RefactorComponent() {
                   </div>
                 )}
 
-                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-white/50 relative flex flex-col h-[28rem]">
+                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[28rem]">
                   <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
                     Refactored Preview
                   </div>
@@ -321,7 +321,7 @@ function RefactorComponent() {
                   
                   <div className="flex-1 flex flex-col min-h-0 space-y-3">
                     <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
-                    <div className="flex-1 text-xs text-[var(--sea-ink)] bg-white/40 p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
+                    <div className="flex-1 text-xs text-[var(--sea-ink)] bg-surface p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
                       {previewData.note.content}
                     </div>
                   </div>
@@ -349,7 +349,7 @@ function RefactorComponent() {
           )}
 
           {previewMutation.isError && (
-            <div className="p-8 island-shell rounded-xl text-center bg-white/40">
+            <div className="p-8 island-shell rounded-xl text-center">
               <AlertCircle className="text-red-500 mx-auto mb-3" size={36} />
               <h3 className="text-lg font-bold text-red-700">Refactor Failed</h3>
               <p className="text-sm text-red-600 mb-4">Something went wrong while refactoring the note.</p>

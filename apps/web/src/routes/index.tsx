@@ -114,7 +114,7 @@ function DashboardComponent() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="island-shell rounded-xl p-5 bg-white/40">
+        <section className="island-shell rounded-xl p-5">
           <h2 className="display-title text-xl font-bold text-[var(--sea-ink)] mb-4">Recent Activity</h2>
           <div className="space-y-3">
             {notesLoading ? (
@@ -138,7 +138,7 @@ function DashboardComponent() {
           </div>
         </section>
 
-        <section className="island-shell rounded-xl p-5 border border-[var(--lagoon)] bg-white/40">
+        <section className="island-shell rounded-xl p-5 border border-[var(--lagoon)] bg-surface-strong">
           <div className="flex items-center justify-between mb-4">
             <h2 className="display-title text-xl font-bold text-[var(--sea-ink)]">Intelligence Alerts</h2>
             <ShieldCheck size={20} className="text-[var(--lagoon-deep)]" />

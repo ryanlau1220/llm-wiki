@@ -123,7 +123,7 @@ function VaultComponent() {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 min-h-0">
         {/* Notes List Column */}
-        <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0 bg-white/40">
+        <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0">
           <div className="relative mb-4 shrink-0">
             <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
             <input 
@@ -157,7 +157,7 @@ function VaultComponent() {
                     className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
                       isActive 
                         ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
-                        : 'bg-white/50 border-transparent hover:bg-foam/30 hover:border-line'
+                        : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
@@ -189,12 +189,12 @@ function VaultComponent() {
         {/* Note Detail Panel */}
         <section className="lg:col-span-2 flex flex-col min-h-0">
           {isLoadingActiveNote ? (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center bg-white/40">
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center">
               <Loader2 className="animate-spin text-lagoon-deep mb-3" size={36} />
               <p className="text-sm text-sea-ink-soft font-bold">Loading note content...</p>
             </div>
           ) : activeNote ? (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col min-h-0 bg-white/40 relative overflow-hidden rise-in">
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col min-h-0 relative overflow-hidden rise-in">
               {/* Header Info */}
               <div className="border-b border-line pb-4 mb-4 shrink-0">
                 <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
@@ -234,7 +234,7 @@ function VaultComponent() {
               {/* Grid Content/Metadata split */}
               <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
                 {/* Markdown content */}
-                <div className="xl:col-span-2 flex flex-col min-h-0 bg-white/35 rounded-xl border border-line p-4 shadow-inner">
+                <div className="xl:col-span-2 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner">
                   <h3 className="island-kicker mb-2">Document Content</h3>
                   <div className="flex-1 overflow-y-auto pr-1">
                     <pre className="text-sm font-sans text-sea-ink leading-relaxed whitespace-pre-wrap select-text selection:bg-lagoon/20">
@@ -297,7 +297,7 @@ function VaultComponent() {
                   </div>
 
                   {/* Actions Box */}
-                  <div className="bg-white/45 border border-line rounded-xl p-4 space-y-2">
+                  <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-1">Actions</h4>
                     
                     <button
@@ -323,7 +323,7 @@ function VaultComponent() {
               </div>
             </div>
           ) : (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center bg-white/40 text-center">
+            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center text-center">
               <BookOpen className="text-sea-ink-soft opacity-30 mb-3" size={48} />
               <h3 className="text-xl font-bold text-sea-ink mb-1">No Note Selected</h3>
               <p className="text-sm text-sea-ink-soft max-w-sm">Select a note from the sidebar list to inspect its contents, check quality scores, and perform actions.</p>

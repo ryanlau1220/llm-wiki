@@ -183,7 +183,7 @@ function GeneratorComponent() {
       ) : (
         <div className="space-y-6 rise-in">
           {/* Consolidated query bar at the top */}
-          <div className="island-shell p-3 rounded-xl bg-white/40 flex items-center gap-3">
+          <div className="island-shell p-3 rounded-xl flex items-center gap-3">
             <button
               type="button"
               onClick={() => {
@@ -231,7 +231,7 @@ function GeneratorComponent() {
           </div>
 
           {(askMutation.isPending || synthesisMutation.isPending) && (
-            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center bg-white/40">
+            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center">
               <Loader2 className="animate-spin text-[var(--lagoon-deep)] mb-4" size={48} />
               <h3 className="text-xl font-bold text-[var(--sea-ink)] mb-1">Generating Response</h3>
               <p className="text-sm text-[var(--sea-ink-soft)]">Please wait while the AI compiles your knowledge...</p>
@@ -241,7 +241,7 @@ function GeneratorComponent() {
           {!(askMutation.isPending || synthesisMutation.isPending) && result.data && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 rise-in">
               {/* Left Column: AI Answer (or Proposed Note for Synthesis) */}
-              <section className="island-shell rounded-xl p-5 bg-white/40 flex flex-col min-h-[28rem]">
+              <section className="island-shell rounded-xl p-5 flex flex-col min-h-[28rem]">
                 <h2 className="island-kicker mb-3 flex items-center gap-2">
                   <CheckCircle2 size={12} /> {result.mode === 'synthesis' ? 'Synthesized Wiki Note' : 'AI Response'}
                 </h2>
@@ -254,7 +254,7 @@ function GeneratorComponent() {
 
               {/* Right Column: Details, Draft Note & Ingestion Actions */}
               <section className="flex flex-col gap-5">
-                <div className="island-shell rounded-xl p-5 flex-1 border border-[var(--lagoon)] bg-white/50 relative flex flex-col min-h-[24rem]">
+                <div className="island-shell rounded-xl p-5 flex-1 border border-[var(--lagoon)] bg-surface-strong relative flex flex-col min-h-[24rem]">
                   <div className="absolute top-0 right-0 p-2.5 bg-[var(--lagoon)] text-white text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg shrink-0">
                     Proposed Wiki Draft
                   </div>
@@ -272,7 +272,7 @@ function GeneratorComponent() {
                     {result.mode !== 'synthesis' && (
                       <div>
                         <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content Summary</span>
-                        <div className="text-xs text-[var(--sea-ink-soft)] bg-white/30 p-3 rounded-lg border border-[var(--line)] font-mono whitespace-pre-wrap overflow-y-auto max-h-[12rem] select-text">
+                        <div className="text-xs text-[var(--sea-ink-soft)] bg-surface p-3 rounded-lg border border-[var(--line)] font-mono whitespace-pre-wrap overflow-y-auto max-h-[12rem] select-text">
                           {result.data.note?.content}
                         </div>
                       </div>
