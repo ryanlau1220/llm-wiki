@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
 import { createLogger, hybridRetrieve } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
@@ -7,10 +8,11 @@ import type { AppConfig } from "./config";
 export async function askPreview(
   config: AppConfig,
   query: string,
-  topK?: number
+  topK?: number,
+  mode: "rag" | "general" = "rag"
 ) {
   const logger = createLogger("ask");
-  logger.info("New knowledge request", { query, topK });
+  logger.info("New knowledge request", { query, topK, mode });
 
   if (!config.databaseUrl) {
     throw new Error("DATABASE_URL is required");
@@ -18,30 +20,62 @@ export async function askPreview(
 
   const { db } = createDbClient(config.databaseUrl);
   
-  const embeddingProvider = createEmbeddingProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpEmbeddingModel
-    }
-  });
+  let contextText = "";
+  let webSearchEnabled = false;
+  let retrievalResults: any = { chunks: [], links: [] };
 
-  const retrievalResults = await hybridRetrieve(
-    {
-      db,
-      embeddingProvider
-    },
-    {
-      query,
-      topK
-    }
-  );
+  if (mode === "rag") {
+    const embeddingProvider = createEmbeddingProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpEmbeddingModel
+      }
+    });
 
-  logger.debug("Retrieval completed", { 
-    chunks: retrievalResults.chunks.length, 
-    links: retrievalResults.links.length 
-  });
+    retrievalResults = await hybridRetrieve(
+      {
+        db,
+        embeddingProvider
+      },
+      {
+        query,
+        topK
+      }
+    );
+
+    logger.debug("Retrieval completed", { 
+      chunks: retrievalResults.chunks.length, 
+      links: retrievalResults.links.length 
+    });
+
+    contextText = (retrievalResults.chunks as any[])
+      .map((c: any, i: number) => `[Context ${i + 1}]:\n${c.text}`)
+      .join("\n\n");
+  } else {
+    // General Knowledge / Web Search mode
+    if (config.tavilyApiKey) {
+      logger.info("Performing web search via Tavily...");
+      try {
+        const { createWebSearchProvider } = await import("@llm-wiki/ai");
+        const searchProvider = createWebSearchProvider({
+          tavily: { apiKey: config.tavilyApiKey }
+        });
+        const searchResponse = await searchProvider.search({ query, maxResults: 5 });
+        contextText = (searchResponse.results || [])
+          .map((r, i) => `[Web Search Context ${i + 1}] (${r.title} - ${r.url}):\n${r.content}`)
+          .join("\n\n");
+      } catch (err) {
+        logger.error("Tavily search failed, falling back to local weights...", err);
+      }
+    } else if (config.embeddingProvider === "gemini" || config.embeddingProvider === "gemini-geap") {
+      logger.info("Using native Gemini search grounding...");
+      webSearchEnabled = true;
+    } else {
+      logger.warn("No web search key configured and active provider is not Gemini. Answering with model knowledge only.");
+    }
+  }
 
   const llmProvider = createLLMProvider({
     provider: config.embeddingProvider,
@@ -52,11 +86,8 @@ export async function askPreview(
     }
   });
 
-  const contextText = retrievalResults.chunks
-    .map((c, i) => `[Context ${i + 1}]:\n${c.text}`)
-    .join("\n\n");
-
-  const systemInstruction = `
+  const systemInstruction = mode === "rag" 
+    ? `
 You are an expert knowledge assistant for "LLM Wiki".
 Your goal is to answer the user's question based on their personal Obsidian vault notes provided as context.
 
@@ -77,13 +108,42 @@ JSON SCHEMA:
     "tags": ["string"]
   }
 }
+`.trim()
+    : `
+You are an expert knowledge assistant for "LLM Wiki".
+Your goal is to answer the user's question using general knowledge (and any provided web search context).
+
+RULES:
+1. Provide a helpful, comprehensive yet concise "answer" incorporating relevant facts.
+2. Provide a "suggested_note" that summarizes the core knowledge, concepts, or guidelines discussed so the user can save it as a structured wiki page.
+3. The "suggested_note" should be structured with a "title", "content" (markdown, without frontmatter), and optional "links" (wikilinks format without brackets) and "tags".
+4. ALWAYS output valid JSON matching the schema below.
+
+JSON SCHEMA:
+{
+  "answer": "string",
+  "suggested_note": {
+    "title": "string",
+    "content": "string (markdown)",
+    "links": ["string"],
+    "tags": ["string"]
+  }
+}
 `.trim();
 
-  const prompt = `
+  const prompt = mode === "rag"
+    ? `
 USER QUESTION: ${query}
 
 CONTEXT FROM VAULT:
 ${contextText || "No relevant notes found in vault."}
+
+Provide your answer and suggested note in JSON format.
+`.trim()
+    : `
+USER QUESTION: ${query}
+
+${contextText ? `CONTEXT FROM WEB SEARCH:\n${contextText}` : ""}
 
 Provide your answer and suggested note in JSON format.
 `.trim();
@@ -94,8 +154,9 @@ Provide your answer and suggested note in JSON format.
     prompt,
     systemInstruction,
     responseMimeType: "application/json",
-    temperature: 0.2
-  });
+    temperature: 0.2,
+    webSearch: webSearchEnabled
+  } as any);
   const duration = Date.now() - startTime;
 
   try {
@@ -108,7 +169,7 @@ Provide your answer and suggested note in JSON format.
       title: parsed.suggested_note?.title 
     });
 
-    const documentIds = [...new Set(retrievalResults.chunks.map((c) => c.documentId))];
+    const documentIds = [...new Set((retrievalResults.chunks || []).map((c: any) => c.documentId))];
     let sources: Array<{ id: string; title: string; path: string }> = [];
     if (documentIds.length > 0) {
       const { inArray } = await import("drizzle-orm");
@@ -116,7 +177,7 @@ Provide your answer and suggested note in JSON format.
       sources = await db
         .select({ id: documents.id, title: documents.title, path: documents.path })
         .from(documents)
-        .where(inArray(documents.id, documentIds));
+        .where(inArray(documents.id, documentIds as string[]));
     }
 
     return {
@@ -125,8 +186,8 @@ Provide your answer and suggested note in JSON format.
       note: parsed.suggested_note,
       sources,
       retrieval: {
-        chunkCount: retrievalResults.chunks.length,
-        linkCount: retrievalResults.links.length
+        chunkCount: (retrievalResults.chunks || []).length,
+        linkCount: (retrievalResults.links || []).length
       }
     };
   } catch (error) {
