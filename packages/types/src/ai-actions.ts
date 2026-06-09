@@ -7,7 +7,7 @@ const actionNameSchema = z.enum([
   "search"
 ]);
 
-const tagSchema = z.string().regex(/^[a-z0-9_-]{1,50}$/);
+const tagSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,50}$/);
 const linkSchema = z.string().min(1).max(200);
 
 export const createNotePayloadSchema = z.object({
@@ -15,7 +15,7 @@ export const createNotePayloadSchema = z.object({
   content: z.string().min(1).max(50_000),
   links: z.array(linkSchema).max(100).optional(),
   tags: z.array(tagSchema).max(30).optional(),
-  source: z.enum(["ask", "synthesis", "manual"]).optional()
+  source: z.enum(["ask", "synthesis", "manual", "refactor"]).optional()
 });
 
 export const refactorNotePayloadSchema = z.object({
