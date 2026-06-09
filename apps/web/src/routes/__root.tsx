@@ -18,6 +18,11 @@ import { redirect } from '@tanstack/react-router'
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: async ({ context, location }) => {
+    // Only enforce auth and redirect on the client-side to allow SSR hydration with localStorage tokens/cookies
+    if (typeof window === 'undefined') {
+      return { user: null }
+    }
+
     const user = await context.queryClient.ensureQueryData(
       orpc.me.queryOptions()
     )
