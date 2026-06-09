@@ -112,6 +112,39 @@ export const router = os.router({
   reindex: os.reindex.use(authMiddleware).handler(async ({ input }: any) => {
     return reindexFile(config, input.path);
   }),
+  reindexAll: os.reindexAll.use(authMiddleware).handler(async () => {
+    const { syncVault } = await import("./watcher");
+    const { createDbClient } = await import("@llm-wiki/db");
+    const { createEmbeddingProvider, createLLMProvider } = await import("@llm-wiki/ai");
+    
+    const { db } = createDbClient(config.databaseUrl!);
+    const embeddingProvider = createEmbeddingProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpEmbeddingModel
+      }
+    });
+    const llmProvider = createLLMProvider({
+      provider: config.embeddingProvider as any,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpLlmModel
+      }
+    });
+
+    const logger = (await import("@llm-wiki/core")).createLogger("sync");
+    logger.info("Manual reindexing of entire vault triggered");
+    
+    await syncVault(config, db, embeddingProvider, llmProvider);
+    
+    const { sseEmitter } = await import("./events");
+    sseEmitter.emit("change", { type: "note_changed", path: "*" });
+    
+    return { success: true };
+  }),
   getLinkHealth: os.getLinkHealth.handler(async () => {
     const { createDbClient } = await import("@llm-wiki/db");
     const { getGlobalLinkHealth } = await import("@llm-wiki/core");

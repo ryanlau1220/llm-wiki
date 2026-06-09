@@ -103,10 +103,20 @@ Provide the refactored version in JSON format.
       durationMs: duration,
       title: noteData.title
     });
+
+    let improvements: any[] = [];
+    try {
+      const { suggestImprovements } = await import("@llm-wiki/core");
+      improvements = await suggestImprovements(llmProvider, content);
+    } catch (err) {
+      logger.error("Failed to suggest improvements for note", err);
+    }
+
     return {
       requestId,
       sourcePath: filePath,
       originalContent: content,
+      improvements,
       note: noteData
     };
   }

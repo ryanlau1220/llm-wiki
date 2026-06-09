@@ -33,6 +33,7 @@ export const appContract = oc.router({
     actionLabel: z.string()
   }))),
   reindex: oc.input(reindexPayloadSchema).output(z.any()),
+  reindexAll: oc.input(z.void().optional()).output(z.any()),
   getLinkHealth: oc.input(z.void().optional()).output(z.array(z.object({
     label: z.string(),
     count: z.number(),
