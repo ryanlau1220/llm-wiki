@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -22,6 +22,7 @@ export const Route = createFileRoute('/refactor')({
 })
 
 function RefactorComponent() {
+  const navigate = useNavigate()
   const { path } = Route.useSearch()
   const [selectedPath, setSelectedPath] = useState<string | null>(path || null)
   const [previewData, setPreviewData] = useState<any>(null)
@@ -39,25 +40,29 @@ function RefactorComponent() {
     })
   )
 
+  const { mutate: previewMutate } = previewMutation
+
   // Run refactor analysis immediately on mount if path is provided in query params
   useEffect(() => {
     if (path) {
-      previewMutation.mutate({ path })
+      setSelectedPath(path)
+      previewMutate({ path })
     }
-  }, [path, previewMutation])
+  }, [path, previewMutate])
 
   const confirmMutation = useMutation(
     orpc.confirmRefactorSave.mutationOptions({
       onSuccess: () => {
         setPreviewData(null)
         setSelectedPath(null)
+        navigate({ to: '/refactor', search: { path: undefined } })
       }
     })
   )
 
-  const handleRefactor = (path: string) => {
-    setSelectedPath(path)
-    previewMutation.mutate({ path })
+  const handleRefactor = (targetPath: string) => {
+    setSelectedPath(targetPath)
+    navigate({ to: '/refactor', search: { path: targetPath } })
   }
 
   const filteredNotes = notes?.filter(note => 
@@ -66,48 +71,48 @@ function RefactorComponent() {
   )
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      <header className="mb-12">
-        <h1 className="display-title text-4xl font-bold text-[var(--sea-ink)] mb-2">Note Refactor</h1>
-        <p className="text-[var(--sea-ink-soft)] text-lg">Clean up and structure messy notes using AI.</p>
+    <div className="p-5 max-w-6xl mx-auto">
+      <header className="mb-8">
+        <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">Note Refactor</h1>
+        <p className="text-[var(--sea-ink-soft)] text-base">Clean up and structure messy notes using AI.</p>
       </header>
 
       {!selectedPath ? (
-        <section className="island-shell rounded-[2.5rem] p-8 overflow-hidden">
-          <div className="relative mb-6">
-            <Search className="absolute left-4 top-3.5 text-[var(--sea-ink-soft)]" size={20} />
+        <section className="island-shell rounded-xl p-5 overflow-hidden bg-white/40">
+          <div className="relative mb-4">
+            <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
             <input 
               type="text" 
               placeholder="Search notes to refactor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-xl py-3 pl-12 pr-4 text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
+              className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-lg py-2.5 pl-11 pr-4 text-sm text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
             />
           </div>
 
           {isLoadingNotes ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={32} />
+              <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
             </div>
           ) : (
-            <div className="max-h-[500px] overflow-y-auto pr-2 space-y-2">
+            <div className="max-h-[400px] overflow-y-auto pr-1 space-y-1.5">
               {filteredNotes?.map((note) => (
                 <button
                   type="button"
                   key={note.id}
                   onClick={() => handleRefactor(note.path)}
-                  className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group"
+                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <FileText size={20} className="text-[var(--sea-ink-soft)]" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-1.5 bg-white rounded-md shadow-sm shrink-0 border border-line">
+                      <FileText size={16} className="text-[var(--sea-ink-soft)]" />
                     </div>
-                    <div className="text-left">
-                      <div className="font-bold text-[var(--sea-ink)]">{note.title || note.path.split('/').pop()}</div>
-                      <div className="text-xs text-[var(--sea-ink-soft)]">{note.path}</div>
+                    <div className="truncate">
+                      <div className="font-bold text-sm text-[var(--sea-ink)] truncate">{note.title || note.path.split('/').pop()}</div>
+                      <div className="text-[11px] text-[var(--sea-ink-soft)] truncate">{note.path}</div>
                     </div>
                   </div>
-                  <ChevronRight size={20} className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors" />
+                  <ChevronRight size={16} className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-2" />
                 </button>
               ))}
             </div>
@@ -115,48 +120,51 @@ function RefactorComponent() {
         </section>
       ) : (
         <section className="rise-in">
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-3 mb-6">
             <button 
               type="button"
-              onClick={() => { setSelectedPath(null); setPreviewData(null); }}
-              className="p-2 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors"
+              onClick={() => { 
+                setSelectedPath(null); 
+                setPreviewData(null); 
+                navigate({ to: '/refactor', search: { path: undefined } })
+              }}
+              className="p-1.5 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors cursor-pointer"
             >
-              <ChevronRight size={24} className="rotate-180" />
+              <ChevronRight size={20} className="rotate-180" />
             </button>
-            <h2 className="text-2xl font-bold text-[var(--sea-ink)]">Refactoring: {selectedPath.split('/').pop()}</h2>
+            <h2 className="text-xl font-bold text-[var(--sea-ink)]">Refactoring: {selectedPath.split('/').pop()}</h2>
           </div>
 
           {previewMutation.isPending && (
-            <div className="island-shell p-20 rounded-[3rem] text-center flex flex-col items-center">
-              <RotateCcw className="animate-spin text-[var(--lagoon-deep)] mb-6" size={64} />
-              <h3 className="text-2xl font-bold text-[var(--sea-ink)] mb-2">Analyzing Note</h3>
-              <p className="text-[var(--sea-ink-soft)]">AI is restructuring your content for better clarity...</p>
+            <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center bg-white/40">
+              <RotateCcw className="animate-spin text-[var(--lagoon-deep)] mb-4" size={48} />
+              <h3 className="text-xl font-bold text-[var(--sea-ink)] mb-1">Analyzing Note</h3>
+              <p className="text-sm text-[var(--sea-ink-soft)]">AI is restructuring your content for better clarity...</p>
             </div>
           )}
 
           {previewData && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-               <article className="island-shell p-8 rounded-[2rem]">
-                <h3 className="island-kicker mb-4 flex items-center gap-2">Original Content</h3>
-                <div className="prose prose-sm max-w-none text-[var(--sea-ink-soft)] line-clamp-[20]">
-                   {/* In a real app we'd fetch the actual content, but for preview we show the result */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+               <article className="island-shell p-5 rounded-xl bg-white/40">
+                <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
+                <div className="prose prose-sm max-w-none text-[var(--sea-ink-soft)] line-clamp-[15] text-xs">
                    <p className="italic">Original file: {selectedPath}</p>
                 </div>
               </article>
 
-              <div className="flex flex-col gap-6">
-                <article className="island-shell p-8 rounded-[2rem] border-2 border-[var(--lagoon)] bg-white/50 relative">
-                  <div className="absolute top-0 right-0 p-3 bg-[var(--lagoon)] text-white text-[10px] font-bold uppercase tracking-widest rounded-bl-lg">
+              <div className="flex flex-col gap-5">
+                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-white/50 relative">
+                  <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
                     Refactored Preview
                   </div>
-                  <h3 className="island-kicker mb-6 flex items-center gap-2 text-[var(--lagoon-deep)]">
-                    <CheckCircle2 size={14} /> AI Improvements
+                  <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)]">
+                    <CheckCircle2 size={12} /> AI Improvements
                   </h3>
                   
-                  <div className="space-y-4">
-                    <div className="text-xl font-bold text-[var(--sea-ink)]">{previewData.note.title}</div>
-                    <div className="text-sm text-[var(--sea-ink)] bg-white/40 p-4 rounded-xl border border-[var(--line)] whitespace-pre-wrap font-mono h-64 overflow-y-auto">
-                      {previewData.note.content}
+                  <div className="space-y-3">
+                    <div className="text-lg font-bold text-[var(--sea-ink)]">{previewData.title}</div>
+                    <div className="text-xs text-[var(--sea-ink)] bg-white/40 p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono h-56 overflow-y-auto">
+                      {previewData.content}
                     </div>
                   </div>
                 </article>
@@ -166,26 +174,31 @@ function RefactorComponent() {
                   onClick={() => confirmMutation.mutate({
                     requestId: previewData.requestId,
                     sourcePath: selectedPath,
-                    note: previewData.note
+                    note: {
+                      title: previewData.title,
+                      content: previewData.content,
+                      tags: previewData.tags,
+                      links: previewData.links
+                    }
                   })}
                   disabled={confirmMutation.isPending}
-                  className="w-full py-4 bg-sea-ink text-bg-base rounded-3xl font-bold text-lg hover:bg-lagoon-deep hover:text-bg-base shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full py-3 bg-sea-ink text-bg-base rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-bg-base shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={20} /> Save Refactored Version</>}
+                  {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={16} /> Save Refactored Version</>}
                 </button>
               </div>
             </div>
           )}
 
           {previewMutation.isError && (
-            <div className="p-12 island-shell rounded-[3rem] text-center">
-              <AlertCircle className="text-red-500 mx-auto mb-4" size={48} />
-              <h3 className="text-xl font-bold text-red-700">Refactor Failed</h3>
-              <p className="text-red-600 mb-6">Something went wrong while refactoring the note.</p>
+            <div className="p-8 island-shell rounded-xl text-center bg-white/40">
+              <AlertCircle className="text-red-500 mx-auto mb-3" size={36} />
+              <h3 className="text-lg font-bold text-red-700">Refactor Failed</h3>
+              <p className="text-sm text-red-600 mb-4">Something went wrong while refactoring the note.</p>
               <button 
                 type="button"
                 onClick={() => handleRefactor(selectedPath)}
-                className="px-6 py-2 bg-sea-ink text-bg-base rounded-xl font-bold"
+                className="px-5 py-2 bg-sea-ink text-bg-base rounded-lg font-bold text-sm cursor-pointer"
               >
                 Retry
               </button>
