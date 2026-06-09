@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Save,
-  Search
+  Search,
+  ListChecks
 } from 'lucide-react'
 
 export const Route = createFileRoute('/refactor')({
@@ -28,6 +29,13 @@ function RefactorComponent() {
   const [previewData, setPreviewData] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [checkedSuggestions, setCheckedSuggestions] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (previewData) {
+      setCheckedSuggestions({})
+    }
+  }, [previewData])
 
   const { data: notes, isLoading: isLoadingNotes } = useQuery(
     orpc.listNotes.queryOptions()
@@ -173,6 +181,38 @@ function RefactorComponent() {
               </article>
 
               <div className="flex flex-col gap-5">
+                {previewData.improvements && previewData.improvements.length > 0 && (
+                  <div className="island-shell p-5 rounded-xl bg-white/40 border border-[var(--line)]">
+                    <h3 className="island-kicker mb-3 flex items-center gap-1.5 text-[var(--lagoon-deep)]">
+                      <ListChecks size={14} /> Quality Improvement Roadmap
+                    </h3>
+                    <ul className="space-y-2.5">
+                      {previewData.improvements.map((s: any) => {
+                        const isChecked = !!checkedSuggestions[s.id || s.actionLabel];
+                        return (
+                          <li key={s.id || s.actionLabel} className="text-xs">
+                            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => setCheckedSuggestions(prev => ({
+                                  ...prev,
+                                  [s.id || s.actionLabel]: !isChecked
+                                }))}
+                                className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-[var(--lagoon)] focus:ring-[var(--lagoon)] cursor-pointer shrink-0"
+                              />
+                              <div>
+                                <span className={`font-bold text-[var(--sea-ink)] ${isChecked ? 'line-through opacity-50' : ''}`}>{s.actionLabel}: </span>
+                                <span className={`text-[var(--sea-ink-soft)] ${isChecked ? 'line-through opacity-50' : ''}`}>{s.description}</span>
+                              </div>
+                            </label>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )}
+
                 <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-white/50 relative flex flex-col h-[28rem]">
                   <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
                     Refactored Preview
