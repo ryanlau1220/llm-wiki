@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { createLLMProvider } from "@llm-wiki/ai";
+import { createLogger } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
 import { confirmAskSave } from "./ask-confirm";
@@ -11,6 +12,9 @@ export async function refactorNotePreview(
   config: AppConfig,
   filePath: string
 ) {
+  const logger = createLogger("refactor");
+  logger.info("New refactor request", { filePath });
+
   const vaultParent = path.resolve(config.vaultPath, "..");
   const fullPath = path.resolve(vaultParent, filePath);
   
@@ -65,12 +69,15 @@ ${content}
 Provide the refactored version in JSON format.
 `.trim();
 
+  logger.debug("Generating LLM refactor...");
+  const startTime = Date.now();
   const llmResponse = await llmProvider.generate({
     prompt,
     systemInstruction,
     responseMimeType: "application/json",
     temperature: 0.1
   });
+  const duration = Date.now() - startTime;
 
   const rawText = llmResponse.text;
   let noteData: any = null;
@@ -91,6 +98,11 @@ Provide the refactored version in JSON format.
 
   if (noteData) {
     const requestId = crypto.randomUUID();
+    logger.info("Note refactored successfully", {
+      requestId,
+      durationMs: duration,
+      title: noteData.title
+    });
     return {
       requestId,
       sourcePath: filePath,
