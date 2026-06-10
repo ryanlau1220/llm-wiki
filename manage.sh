@@ -24,6 +24,7 @@ function show_help {
     echo "  dev        Start local development environment via Turbo"
     echo "  db-push    Synchronize Drizzle schema to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
+    echo "  verify-keys Verify all configured API keys & dynamic fallback chains"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -47,6 +48,10 @@ case $CMD in
     "verify-gcp")
         echo "☁️ Verifying GCP / Gemini Enterprise Agent Platform configuration..."
         bun run scripts/verify-gcp.ts
+        ;;
+    "verify-keys")
+        echo "🔑 Verifying all configured API keys & dynamic fallback chains..."
+        bun run scripts/verify-keys.ts
         ;;
     "test")
         echo "🧪 Running full test suite..."
