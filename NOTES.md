@@ -565,6 +565,16 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Tag Validation Error Fix**: Sanitized tag strings in `confirmAskSave` (`ask-confirm.ts`) by replacing spaces with hyphens and removing invalid characters. This ensures AI-generated tags (like `"TOO SHORT"` or `"LOW LINK DENSITY"`) satisfy the strict regex schema `/^[a-zA-Z0-9_-]{1,50}$/` on saving.
 - **Refactor Page Simplification**: Removed the tab switcher in `refactor.tsx`. Unified the landing layout into a single searchable notes list where notes needing refactoring are automatically sorted to the top. Quality scores and warning tags (e.g. `TOO SHORT`, `MISSING METADATA`) are displayed inline inside each list row, and clicking any note starts refactoring immediately, utilizing a row indicator chevron on the right side.
 
+### 2026-06-11 (Obsidian-Style Knowledge Graph & Preview Layout)
+- **D3 Force-Directed Simulation**: Added `d3-force` and `@types/d3-force` packages to `apps/web/package.json` to handle high-performance layout physics directly in React.
+- **Contract & API Endpoints**: Created the `getGraph` contract endpoint in `packages/types` and implemented its query handler in `apps/api` to return all documents (nodes) and resolved `links` (edges) directly from Postgres.
+- **Dynamic Ingestion metadata parsing**: Updated the ingestion pipeline (`ingest.ts`) to extract note category type (e.g. `concept`, `entity`, `source`) directly from frontmatter YAML metadata instead of fallback default `"note"`.
+- **Graph Visualization Component**: Developed `GraphView.tsx` with dynamic controls (refresh simulation, zoom/pan), node highlights, active path coloring modes (by category type or path-directory communities), and Legend drawer overlay.
+- **Client-Side Insights Analysis**: Implemented `graph-insights.ts` to compute graph topology features (e.g. isolated nodes, bridge nodes, community gaps, and cross-community surprising links).
+- **Obsidian 3-Column Vault Layout**: Updated the `/vault` route to allow toggling between the standard Detail View and the new force-directed Graph View. In Graph View, a three-column layout is rendered: Sidebar List (Search) -> Interactive Graph Canvas -> Active Note Markdown Preview.
+- **Stability and Lints**: Corrected Biome accessibility ignore comments (`useSemanticElements`) within the JSX returned tree, fixed test path mapping in `test-refactor.ts`, updated unit test scope to target workspace packages, and verified clean compilation checks and unit/integration test suites.
+
+
 
 
 

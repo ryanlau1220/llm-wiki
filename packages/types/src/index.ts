@@ -64,6 +64,21 @@ export const appContract = oc.router({
     qualityScore: z.number().nullable().optional(),
     qualityMetrics: z.any().optional(),
   }))),
+  getGraph: oc.input(z.void().optional()).output(z.object({
+    nodes: z.array(z.object({
+      id: z.string(),
+      title: z.string(),
+      path: z.string(),
+      type: z.string(),
+      is_ai_generated: z.boolean(),
+      qualityScore: z.number().nullable().optional(),
+    })),
+    edges: z.array(z.object({
+      source: z.string(),
+      target: z.string(),
+      label: z.string().optional(),
+    })),
+  })),
   getNote: oc.input(z.object({ id: z.string() })).output(z.object({
     id: z.string(),
     path: z.string(),
