@@ -17,7 +17,7 @@ function maskKey(key: string | undefined): string {
   return `${key.slice(0, 8)}...${key.slice(-6)}`;
 }
 
-async function runTest(name: string, action: () => Promise<any>): Promise<{ ok: boolean; message: string }> {
+async function runTest(_name: string, action: () => Promise<any>): Promise<{ ok: boolean; message: string }> {
   try {
     const start = Date.now();
     await action();

@@ -17,7 +17,7 @@ class MockLLMProvider implements LLMProvider {
     this.response = response;
   }
 
-  async generate(request: LLMRequest): Promise<LLMResponse> {
+  async generate(_request: LLMRequest): Promise<LLMResponse> {
     this.calls++;
     if (this.shouldFail) {
       throw new Error(`Provider ${this.name} failed deliberately`);
@@ -39,7 +39,7 @@ class MockEmbeddingProvider implements EmbeddingProvider {
     this.vectors = vectors;
   }
 
-  async embed(request: EmbeddingRequest): Promise<EmbeddingResult> {
+  async embed(_request: EmbeddingRequest): Promise<EmbeddingResult> {
     this.calls++;
     if (this.shouldFail) {
       throw new Error(`Provider ${this.name} failed deliberately`);

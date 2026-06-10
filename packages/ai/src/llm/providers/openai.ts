@@ -81,7 +81,7 @@ export class OpenAILLMProvider implements LLMProvider {
     };
 
     const choice = data.choices?.[0];
-    if (!choice || !choice.message) {
+    if (!choice?.message) {
       throw new Error("Invalid response structure received from OpenAI-compatible endpoint");
     }
 
