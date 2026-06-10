@@ -132,6 +132,11 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     ollama: {
       baseUrl: config.ollamaBaseUrl,
       model: config.ollamaEmbeddingModel
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.openaiEmbeddingModel
     }
   });
 
@@ -146,6 +151,11 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     ollama: {
       baseUrl: config.ollamaBaseUrl,
       model: config.ollamaLlmModel
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.openaiLlmModel
     }
   });
 

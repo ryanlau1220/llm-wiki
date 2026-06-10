@@ -109,6 +109,11 @@ export async function confirmAskSave(
       ollama: {
         baseUrl: config.ollamaBaseUrl,
         model: config.ollamaEmbeddingModel
+      },
+      openai: {
+        apiKey: config.openaiApiKey,
+        baseUrl: config.openaiBaseUrl,
+        model: config.openaiEmbeddingModel
       }
     });
 
@@ -122,6 +127,11 @@ export async function confirmAskSave(
       ollama: {
         baseUrl: config.ollamaBaseUrl,
         model: config.ollamaLlmModel
+      },
+      openai: {
+        apiKey: config.openaiApiKey,
+        baseUrl: config.openaiBaseUrl,
+        model: config.openaiLlmModel
       }
     });
 
@@ -243,6 +253,11 @@ async function hasSemanticDuplicate(
       projectId: config.gcpProjectId,
       location: config.gcpLocation,
       model: config.gcpEmbeddingModel
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.openaiEmbeddingModel
     }
   });
 

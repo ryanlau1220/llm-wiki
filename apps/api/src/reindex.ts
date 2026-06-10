@@ -49,6 +49,11 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
       projectId: config.gcpProjectId,
       location: config.gcpLocation,
       model: config.gcpEmbeddingModel
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.openaiEmbeddingModel
     }
   });
   
@@ -59,6 +64,11 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
       projectId: config.gcpProjectId,
       location: config.gcpLocation,
       model: config.gcpLlmModel
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.openaiLlmModel
     }
   });
 
