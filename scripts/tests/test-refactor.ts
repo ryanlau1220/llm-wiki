@@ -6,7 +6,7 @@ async function test() {
   
   const config = loadConfig();
   // Ensure we have a test note
-  const testNotePath = "messy-test.md";
+  const testNotePath = "human/messy-test.md";
   
   try {
     const result = await refactorNotePreview(config, testNotePath);
@@ -16,8 +16,8 @@ async function test() {
     } else {
       console.log("✅ Refactor Successful!");
       console.log("Request ID:", result.requestId);
-      console.log("Refactored Title:", result.refactored_note?.title);
-      console.log("Content Preview (first 100 chars):", result.refactored_note?.content?.slice(0, 100));
+      console.log("Refactored Title:", result.note?.title);
+      console.log("Content Preview (first 100 chars):", result.note?.content?.slice(0, 100));
     }
   } catch (error: any) {
     if (error.message?.includes("404") && error.message.toLowerCase().includes("model was not found")) {
