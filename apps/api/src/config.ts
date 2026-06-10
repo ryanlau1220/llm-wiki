@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type AppConfig = {
-  embeddingProvider: "gemini-geap" | "gemini" | "ollama";
+  embeddingProvider: "gemini-geap" | "gemini" | "ollama" | "openai" | "fallback";
   gcpProjectId?: string;
   gcpLocation?: string;
   gcpLlmModel?: string;
@@ -10,6 +10,10 @@ export type AppConfig = {
   ollamaBaseUrl?: string;
   ollamaEmbeddingModel?: string;
   ollamaLlmModel?: string;
+  openaiApiKey?: string;
+  openaiBaseUrl?: string;
+  openaiLlmModel?: string;
+  openaiEmbeddingModel?: string;
   jwtSecret: string;
   databaseUrl?: string;
   vaultPath: string;
@@ -38,7 +42,7 @@ export function loadConfig(): AppConfig {
   console.log("[Config] Resolved VAULT_PATH:", resolvedVaultPath);
 
   return {
-    embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? (gcpProjectId ? "gemini-geap" : "gemini"),
+    embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? "fallback",
     gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
     gcpLlmModel: process.env.GEMINI_GCP_LLM_MODEL,
@@ -46,6 +50,10 @@ export function loadConfig(): AppConfig {
     ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
     ollamaEmbeddingModel: process.env.OLLAMA_EMBEDDING_MODEL,
     ollamaLlmModel: process.env.OLLAMA_LLM_MODEL,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiBaseUrl: process.env.OPENAI_BASE_URL,
+    openaiLlmModel: process.env.OPENAI_LLM_MODEL,
+    openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL,
     jwtSecret: process.env.JWT_SECRET ?? "dev-secret-change-me",
     databaseUrl: process.env.DATABASE_URL,
     vaultPath: resolvedVaultPath,
