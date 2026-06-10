@@ -98,7 +98,7 @@ export async function ingestMarkdown(
       const baseValues = {
         path: input.vaultPath,
         title,
-        type: DEFAULT_DOCUMENT_TYPE,
+        type: (parsed.metadata.type as string) || DEFAULT_DOCUMENT_TYPE,
         content: parsed.content,
         content_hash: contentHash,
         source_kind: input.sourceKind,
