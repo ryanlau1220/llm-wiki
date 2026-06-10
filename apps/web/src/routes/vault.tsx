@@ -66,16 +66,6 @@ function VaultComponent() {
     enabled: !!selectedNoteId,
   })
 
-  const reindexMutation = useMutation(
-    orpc.reindex.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: orpc.listNotes.queryKey() })
-        if (selectedNoteId) {
-          queryClient.invalidateQueries({ queryKey: orpc.getNote.queryKey({ input: { id: selectedNoteId } }) })
-        }
-      }
-    })
-  )
 
   const reindexAllMutation = useMutation(
     orpc.reindexAll.mutationOptions({
@@ -123,7 +113,7 @@ function VaultComponent() {
               onClick={() => setViewMode("detail")}
               className={`px-3 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
                 viewMode === "detail" 
-                  ? "bg-surface text-sea-ink shadow-sm" 
+                  ? "bg-lagoon text-lagoon-text shadow-sm" 
                   : "text-sea-ink-soft hover:text-sea-ink"
               }`}
             >
@@ -134,7 +124,7 @@ function VaultComponent() {
               onClick={() => setViewMode("graph")}
               className={`px-3 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
                 viewMode === "graph" 
-                  ? "bg-surface text-sea-ink shadow-sm" 
+                  ? "bg-lagoon text-lagoon-text shadow-sm" 
                   : "text-sea-ink-soft hover:text-sea-ink"
               }`}
             >
@@ -382,12 +372,11 @@ function VaultComponent() {
 
                         <button
                           type="button"
-                          disabled={reindexMutation.isPending}
-                          onClick={() => reindexMutation.mutate({ path: activeNote.path })}
+                          onClick={() => setViewMode("graph")}
                           className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors cursor-pointer"
                         >
-                          <RefreshCw size={14} className={reindexMutation.isPending ? 'animate-spin' : ''} />
-                          {reindexMutation.isPending ? 'Reindexing...' : 'Reindex Note'}
+                          <Network size={14} />
+                          Open Graph View
                         </button>
                       </div>
                     </div>

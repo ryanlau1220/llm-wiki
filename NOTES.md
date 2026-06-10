@@ -574,6 +574,14 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 - **Obsidian 3-Column Vault Layout**: Updated the `/vault` route to allow toggling between the standard Detail View and the new force-directed Graph View. In Graph View, a three-column layout is rendered: Sidebar List (Search) -> Interactive Graph Canvas -> Active Note Markdown Preview.
 - **Stability and Lints**: Corrected Biome accessibility ignore comments (`useSemanticElements`) within the JSX returned tree, fixed test path mapping in `test-refactor.ts`, updated unit test scope to target workspace packages, and verified clean compilation checks and unit/integration test suites.
 
+### 2026-06-11 (Knowledge Graph Style Polish & Actions Refactor)
+- **Segment Control Contrast Upgrades**: Styled active states of toggle view select buttons (Detail View vs Graph View in `vault.tsx`, and Type vs Cluster in `GraphView.tsx`) using `bg-lagoon text-lagoon-text shadow-sm` to ensure extremely high contrast and visual clarity in both light and dark modes.
+- **Tailwind Class-Based Dark Mode Variant**: Configured `@custom-variant dark (&:where(.dark, .dark *));` in `styles.css` to allow Tailwind to successfully resolve `dark:` variants (like `dark:prose-invert`) based on root class state toggled by the theme manager.
+- **Theme-Aware Prose Styles**: Overrode default Tailwind Typography (`.prose`) variables inside `styles.css` using theme-aware semantic tokens (e.g. `--tw-prose-headings: var(--sea-ink)`). This automatically guarantees titles (H1, H2, etc.) inside markdown notes are legible and high contrast in both modes.
+- **Detail View Shortcut to Graph**: Replaced the redundant "Reindex Note" action in the Detail View column with an intuitive "Open Graph View" button. This switches the active view mode to Graph View instantly while preserving node selection.
+- **Linter Cleanup**: Deleted the unused `reindexMutation` variable in `vault.tsx` to maintain lint cleanliness.
+
+
 
 
 

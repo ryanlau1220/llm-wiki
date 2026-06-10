@@ -361,7 +361,7 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
               onClick={() => setColorMode("type")}
               className={`px-2.5 py-1 rounded-md transition-all font-bold cursor-pointer ${
                 colorMode === "type" 
-                  ? "bg-surface text-sea-ink shadow-sm" 
+                  ? "bg-lagoon text-lagoon-text shadow-sm" 
                   : "text-sea-ink-soft hover:text-sea-ink"
               }`}
             >
@@ -372,7 +372,7 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
               onClick={() => setColorMode("community")}
               className={`px-2.5 py-1 rounded-md transition-all font-bold cursor-pointer ${
                 colorMode === "community" 
-                  ? "bg-surface text-sea-ink shadow-sm" 
+                  ? "bg-lagoon text-lagoon-text shadow-sm" 
                   : "text-sea-ink-soft hover:text-sea-ink"
               }`}
             >
