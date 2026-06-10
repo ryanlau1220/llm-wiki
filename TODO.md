@@ -143,7 +143,8 @@
 ## Priority 12 - Bug Fixes & Refactor UI Simplification
 - [x] Fix Gemini native search grounding JSON mime type conflict (omit responseMimeType when webSearch is enabled)
 - [x] Sanitize note tags in confirmAskSave to satisfy strict alphanumeric/hyphen/underscore validation
-- [x] Simplify Note Refactor page layout, removing tab switcher and displaying a single unified notes list with warning tags
+- [x] Simplify Note Refactor page layout: remove tab switcher and consolidate into a single searchable list, displaying scores and warning tags inline, sorted with weak notes at the top, and triggering refactor directly on row click with a chevron right indicator
+
 
 
 

@@ -12,8 +12,7 @@ import {
   AlertCircle,
   Save,
   Search,
-  ListChecks,
-  AlertTriangle
+  ListChecks
 } from 'lucide-react'
 
 export const Route = createFileRoute('/refactor')({
@@ -109,116 +108,99 @@ function RefactorComponent() {
       )}
 
       {!selectedPath ? (
-        <div className="space-y-6">
-          {/* Needs Refactoring Section (shown only if weak notes exist) */}
-          {weakNotes && weakNotes.length > 0 && (
-            <section className="island-shell rounded-xl p-5 rise-in">
-              <h2 className="island-kicker mb-4 flex items-center gap-2">
-                <AlertTriangle size={12} className="text-amber-500" /> Notes Needing Refactoring
-              </h2>
+        <section className="island-shell rounded-xl p-5 overflow-hidden rise-in">
+          <div className="relative mb-6">
+            <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search notes to refactor..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-lg py-2.5 pl-11 pr-4 text-sm text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
+            />
+          </div>
 
-              {isLoadingWeakNotes && (
-                <div className="text-[var(--sea-ink-soft)] flex items-center gap-2 text-xs py-10 justify-center">
-                  <Loader2 className="animate-spin" size={18} />
-                  <span>Calculating note metrics...</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-1">
-                {weakNotes.map((note) => (
-                  <article
-                    key={note.id}
-                    className="p-4 rounded-xl bg-surface border border-[var(--line)] flex flex-col justify-between hover:shadow-sm transition-all"
-                  >
-                    <div className="mb-4">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <h3 className="font-bold text-sm text-[var(--sea-ink)] line-clamp-1">{note.title}</h3>
-                        <span className="text-[10px] font-bold bg-[var(--foam)] text-[var(--lagoon-deep)] px-2 py-0.5 rounded-full border border-[var(--line)] shrink-0">
-                          Score: {note.qualityScore?.toFixed(2) ?? 'n/a'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-[var(--sea-ink-soft)] font-mono truncate mb-3">{note.path}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {note.reasons.map((r: string) => (
-                          <span
-                            key={r}
-                            className="text-[9px] uppercase tracking-wider font-bold bg-[var(--surface-strong)] px-2 py-0.5 rounded border border-[var(--line)] text-[var(--sea-ink-soft)]"
-                          >
-                            {r.replace(/_/g, ' ')}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleRefactor(note.path)}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 bg-sea-ink text-bg-base hover:bg-lagoon-deep hover:text-bg-base rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <RotateCcw size={12} />
-                      Refactor Note
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Search/Select Note to Refactor Section */}
-          <section className="island-shell rounded-xl p-5 overflow-hidden rise-in">
-            <h2 className="island-kicker mb-4 flex items-center gap-2">
-              <Search size={12} /> Search All Notes
-            </h2>
-            <div className="relative mb-4">
-              <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search notes to refactor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-lg py-2.5 pl-11 pr-4 text-sm text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
-              />
+          {isLoadingNotes || isLoadingWeakNotes ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
             </div>
+          ) : (
+            <div className="max-h-[500px] overflow-y-auto pr-1 space-y-2">
+              {(() => {
+                const weakNoteMap = new Map(weakNotes?.map(w => [w.path, w.reasons]) || []);
+                const sortedNotes = filteredNotes ? [...filteredNotes].sort((a, b) => {
+                  const aWeak = weakNoteMap.has(a.path);
+                  const bWeak = weakNoteMap.has(b.path);
+                  if (aWeak && !bWeak) return -1;
+                  if (!aWeak && bWeak) return 1;
+                  return 0;
+                }) : [];
 
-            {isLoadingNotes ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
-              </div>
-            ) : (
-              <div className="max-h-[350px] overflow-y-auto pr-1 space-y-1.5">
-                {filteredNotes?.map((note) => {
-                  const isWeak = weakNotes?.some(w => w.path === note.path);
+                if (sortedNotes.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-sm text-[var(--sea-ink-soft)] italic">
+                      No notes found.
+                    </div>
+                  );
+                }
+
+                return sortedNotes.map((note) => {
+                  const reasons = weakNoteMap.get(note.path);
+                  const isWeak = !!reasons;
+
                   return (
                     <button
                       type="button"
                       key={note.id}
                       onClick={() => handleRefactor(note.path)}
-                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
+                      className="w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="p-1.5 bg-surface rounded-md shadow-sm shrink-0 border border-line">
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        <div className="p-2 bg-surface rounded-lg shadow-sm shrink-0 border border-line mt-0.5">
                           <FileText size={16} className="text-[var(--sea-ink-soft)]" />
                         </div>
-                        <div className="truncate">
-                          <div className="font-bold text-sm text-[var(--sea-ink)] truncate flex items-center gap-2">
-                            {note.title || note.path.split('/').pop()?.replace('.md', '')}
-                            {isWeak && (
-                              <span className="inline-flex items-center gap-0.5 text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100 font-medium">
-                                <AlertTriangle size={8} /> Needs Attention
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2.5">
+                            <h4 className="font-bold text-sm text-[var(--sea-ink)] truncate">
+                              {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                            </h4>
+                            {note.qualityScore !== null && note.qualityScore !== undefined && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                                isWeak
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/30'
+                                  : 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-450 dark:border-green-900/30'
+                              }`}>
+                                Score: {note.qualityScore.toFixed(2)}
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-[var(--sea-ink-soft)] truncate">{note.path}</div>
+
+                          <div className="text-[11px] text-[var(--sea-ink-soft)] font-mono truncate mt-0.5 mb-1">{note.path}</div>
+
+                          {isWeak && reasons && reasons.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {reasons.map((r: string) => (
+                                <span
+                                  key={r}
+                                  className="text-[9px] uppercase tracking-wider font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-450 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30"
+                                >
+                                  {r.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <ChevronRight size={16} className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-2" />
+
+                      <ChevronRight size={18} className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-4" />
                     </button>
                   );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+                });
+              })()}
+            </div>
+          )}
+        </section>
       ) : (
         <section className="rise-in">
           <div className="flex items-center gap-3 mb-6">

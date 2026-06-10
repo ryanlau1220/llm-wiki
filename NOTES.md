@@ -563,7 +563,8 @@ This file is to record all the notes, thoughts, and ideas that come up during th
 ### 2026-06-10 (Fixes: Grounding Structured Output Conflict, Tag Validation, Refactor Page Simplification)
 - **Native Grounding JSON Fix**: Fixed a conflict where the Gemini/Vertex API does not support `responseMimeType: "application/json"` (controlled generation) simultaneously with native `webSearch` (Google Search tool) grounding. Omitted `responseMimeType` in `gemini.ts` and `gemini-geap.ts` when `webSearch` is enabled, letting prompt rules and backend regex JSON extraction handle structured output parsing safely.
 - **Tag Validation Error Fix**: Sanitized tag strings in `confirmAskSave` (`ask-confirm.ts`) by replacing spaces with hyphens and removing invalid characters. This ensures AI-generated tags (like `"TOO SHORT"` or `"LOW LINK DENSITY"`) satisfy the strict regex schema `/^[a-zA-Z0-9_-]{1,50}$/` on saving.
-- **Refactor Page Simplification**: Removed the tab switcher in `refactor.tsx`. Unified the view to list notes needing refactoring at the top and all searchable notes below in a single streamlined interface.
+- **Refactor Page Simplification**: Removed the tab switcher in `refactor.tsx`. Unified the landing layout into a single searchable notes list where notes needing refactoring are automatically sorted to the top. Quality scores and warning tags (e.g. `TOO SHORT`, `MISSING METADATA`) are displayed inline inside each list row, and clicking any note starts refactoring immediately, utilizing a row indicator chevron on the right side.
+
 
 
 
