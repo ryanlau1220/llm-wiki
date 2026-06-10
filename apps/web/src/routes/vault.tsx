@@ -3,6 +3,9 @@ import { orpc } from '../lib/orpc'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { z } from 'zod'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { transformWikilinks, transformImageEmbeds } from '../lib/wikilink'
 import { 
   BookOpen, 
   Search, 
@@ -15,8 +18,11 @@ import {
   Loader2,
   CheckCircle,
   Copy,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  Network
 } from 'lucide-react'
+import { GraphView } from '../components/GraphView'
 
 export const Route = createFileRoute('/vault')({
   validateSearch: z.object({
@@ -33,6 +39,12 @@ function VaultComponent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(queryNoteId || null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'detail' | 'graph'>('detail')
+
+  const { data: graphData, isLoading: isLoadingGraph } = useQuery({
+    ...orpc.getGraph.queryOptions(),
+    enabled: viewMode === 'graph',
+  })
 
   const { data: notes, isLoading: isLoadingNotes } = useQuery(
     orpc.listNotes.queryOptions()
@@ -104,6 +116,32 @@ function VaultComponent() {
           <p className="text-sea-ink-soft text-base">Explore and manage notes stored in your local knowledge vault.</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Toggle Detail / Graph View */}
+          <div className="flex bg-foam border border-line rounded-lg p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("detail")}
+              className={`px-3 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
+                viewMode === "detail" 
+                  ? "bg-surface text-sea-ink shadow-sm" 
+                  : "text-sea-ink-soft hover:text-sea-ink"
+              }`}
+            >
+              Detail View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("graph")}
+              className={`px-3 py-1.5 rounded-md transition-all font-bold cursor-pointer ${
+                viewMode === "graph" 
+                  ? "bg-surface text-sea-ink shadow-sm" 
+                  : "text-sea-ink-soft hover:text-sea-ink"
+              }`}
+            >
+              Graph View
+            </button>
+          </div>
+
           {reindexAllMutation.isSuccess && (
             <span className="flex items-center gap-1.5 text-xs text-green-700 font-bold bg-green-50 px-3 py-1.5 rounded-lg border border-green-150 rise-in">
               <ShieldCheck size={14} /> Synced
@@ -121,215 +159,423 @@ function VaultComponent() {
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-5 min-h-0">
-        {/* Notes List Column */}
-        <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0">
-          <div className="relative mb-4 shrink-0">
-            <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search wiki pages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-foam border border-line rounded-lg py-2.5 pl-11 pr-4 text-sm text-sea-ink focus:outline-none focus:ring-2 focus:ring-lagoon shadow-inner"
-            />
-          </div>
+      <div className="flex-1 min-h-0">
+        {viewMode === "detail" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-full min-h-0">
+            {/* Notes List Column */}
+            <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0">
+              <div className="relative mb-4 shrink-0">
+                <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search wiki pages..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-foam border border-line rounded-lg py-2.5 pl-11 pr-4 text-sm text-sea-ink focus:outline-none focus:ring-2 focus:ring-lagoon shadow-inner"
+                />
+              </div>
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
-            {isLoadingNotes ? (
-              <div className="flex justify-center items-center py-20">
-                <Loader2 className="animate-spin text-lagoon-deep" size={28} />
-              </div>
-            ) : filteredNotes.length === 0 ? (
-              <div className="text-center py-20 text-sm text-sea-ink-soft italic">
-                No notes found matching search.
-              </div>
-            ) : (
-              filteredNotes.map((note) => {
-                const isActive = note.id === selectedNoteId
-                const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
-                
-                return (
-                  <button
-                    type="button"
-                    key={note.id}
-                    onClick={() => setSelectedNoteId(note.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
-                      isActive 
-                        ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
-                        : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
-                        {note.title || note.path.split('/').pop()?.replace('.md', '')}
-                      </div>
-                      <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
-                        {note.path}
-                      </div>
-                    </div>
+              <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
+                {isLoadingNotes ? (
+                  <div className="flex justify-center items-center py-20">
+                    <Loader2 className="animate-spin text-lagoon-deep" size={28} />
+                  </div>
+                ) : filteredNotes.length === 0 ? (
+                  <div className="text-center py-20 text-sm text-sea-ink-soft italic">
+                    No notes found matching search.
+                  </div>
+                ) : (
+                  filteredNotes.map((note) => {
+                    const isActive = note.id === selectedNoteId
+                    const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
                     
-                    <div className="flex items-center gap-1.5 shrink-0 ml-4">
-                      {isAI && (
-                        <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
-                          AI
-                        </span>
-                      )}
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
-                        {getScoreBadge(note.qualityScore)}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })
-            )}
-          </div>
-        </section>
-
-        {/* Note Detail Panel */}
-        <section className="lg:col-span-2 flex flex-col min-h-0">
-          {isLoadingActiveNote ? (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center">
-              <Loader2 className="animate-spin text-lagoon-deep mb-3" size={36} />
-              <p className="text-sm text-sea-ink-soft font-bold">Loading note content...</p>
-            </div>
-          ) : activeNote ? (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col min-h-0 relative overflow-hidden rise-in">
-              {/* Header Info */}
-              <div className="border-b border-line pb-4 mb-4 shrink-0">
-                <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
-                  <h2 className="display-title text-2xl font-bold text-sea-ink leading-tight">{activeNote.title}</h2>
-                  <div className="flex gap-2">
-                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${getScoreColor(activeNote.qualityScore)}`}>
-                      Quality: {getScoreBadge(activeNote.qualityScore)}
-                    </span>
-                    <span className="text-[10px] font-bold bg-foam border border-line text-sea-ink-soft px-2.5 py-1 rounded-full capitalize">
-                      {activeNote.type.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-sea-ink-soft">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <FileText size={14} className="shrink-0" />
-                    <span className="truncate font-mono">
-                      {activeNote.path}
-                    </span>
-                    <button 
-                      type="button" 
-                      onClick={() => handleCopyPath(activeNote.path)} 
-                      className="p-1 rounded hover:bg-foam text-sea-ink-soft shrink-0"
-                      title="Copy path"
-                    >
-                      {copiedPath === activeNote.path ? <CheckCircle size={12} className="text-green-600" /> : <Copy size={12} />}
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Calendar size={14} />
-                    <span>Updated {new Date(activeNote.updated_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
+                    return (
+                      <button
+                        type="button"
+                        key={note.id}
+                        onClick={() => setSelectedNoteId(note.id)}
+                        className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
+                          isActive 
+                            ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
+                            : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
+                            {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                          </div>
+                          <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
+                            {note.path}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                          {isAI && (
+                            <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
+                              AI
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
+                            {getScoreBadge(note.qualityScore)}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
               </div>
+            </section>
 
-              {/* Grid Content/Metadata split */}
-              <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
-                {/* Markdown content */}
-                <div className="xl:col-span-2 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner">
-                  <h3 className="island-kicker mb-2">Document Content</h3>
-                  <div className="flex-1 overflow-y-auto pr-1">
-                    <pre className="text-sm font-sans text-sea-ink leading-relaxed whitespace-pre-wrap select-text selection:bg-lagoon/20">
-                      {activeNote.content}
-                    </pre>
-                  </div>
+            {/* Note Detail Panel */}
+            <section className="lg:col-span-2 flex flex-col min-h-0">
+              {isLoadingActiveNote ? (
+                <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center">
+                  <Loader2 className="animate-spin text-lagoon-deep mb-3" size={36} />
+                  <p className="text-sm text-sea-ink-soft font-bold">Loading note content...</p>
                 </div>
+              ) : activeNote ? (
+                <div className="island-shell rounded-xl p-5 flex-1 flex flex-col min-h-0 relative overflow-hidden rise-in">
+                  {/* Header Info */}
+                  <div className="border-b border-line pb-4 mb-4 shrink-0">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+                      <h2 className="display-title text-2xl font-bold text-sea-ink leading-tight">{activeNote.title}</h2>
+                      <div className="flex gap-2">
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${getScoreColor(activeNote.qualityScore)}`}>
+                          Quality: {getScoreBadge(activeNote.qualityScore)}
+                        </span>
+                        <span className="text-[10px] font-bold bg-foam border border-line text-sea-ink-soft px-2.5 py-1 rounded-full capitalize">
+                          {activeNote.type.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
 
-                {/* Metadata / Details */}
-                <div className="xl:col-span-1 space-y-4 overflow-y-auto pr-1">
-                  <div className="bg-foam/80 rounded-xl border border-line p-4">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-3 flex items-center gap-1.5">
-                      <Info size={12} /> Quality Metrics
-                    </h4>
-                    {activeNote.qualityMetrics ? (
-                      <div className="space-y-3.5">
-                        <div>
-                          <div className="flex justify-between text-xs text-sea-ink-soft font-bold mb-1">
-                            <span>Link Density</span>
-                            <span>{(activeNote.qualityMetrics.link_density ?? 0).toFixed(2)}</span>
-                          </div>
-                          <div className="w-full bg-line h-1 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-lagoon h-full" 
-                              style={{ width: `${Math.min((activeNote.qualityMetrics.link_density ?? 0) * 100, 100)}%` }} 
-                              />
-                          </div>
-                        </div>
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-sea-ink-soft">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FileText size={14} className="shrink-0" />
+                        <span className="truncate font-mono">
+                          {activeNote.path}
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={() => handleCopyPath(activeNote.path)} 
+                          className="p-1 rounded hover:bg-foam text-sea-ink-soft shrink-0"
+                          title="Copy path"
+                        >
+                          {copiedPath === activeNote.path ? <CheckCircle size={12} className="text-green-600" /> : <Copy size={12} />}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Calendar size={14} />
+                        <span>Updated {new Date(activeNote.updated_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
 
-                        <div>
-                          <div className="flex justify-between text-xs text-sea-ink-soft font-bold mb-1">
-                            <span>Completeness</span>
-                            <span>{activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%'}</span>
-                          </div>
-                          <div className="w-full bg-line h-1 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-palm h-full" 
-                              style={{ width: activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%' }} 
-                              />
-                          </div>
-                        </div>
+                  {/* Grid Content/Metadata split */}
+                  <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
+                    {/* Markdown content */}
+                    <div className="xl:col-span-2 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner">
+                      <h3 className="island-kicker mb-2">Document Content</h3>
+                      <div className="flex-1 overflow-y-auto pr-1 prose prose-slate max-w-none text-sm text-sea-ink leading-relaxed font-sans select-text selection:bg-lagoon/20 dark:prose-invert">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ href, children, ...props }) => {
+                              const h = typeof href === 'string' ? href : '';
+                              const isWikilink = h.startsWith('#');
+                              return (
+                                <a
+                                  href={h || undefined}
+                                  onClick={(e) => {
+                                    if (isWikilink) {
+                                      e.preventDefault();
+                                      const targetSlug = decodeURIComponent(h.slice(1)).toLowerCase();
+                                      const found = notes?.find(n => 
+                                        n.title?.toLowerCase() === targetSlug || 
+                                        n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
+                                        n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
+                                      );
+                                      if (found) {
+                                        setSelectedNoteId(found.id);
+                                      }
+                                    }
+                                  }}
+                                  className={isWikilink ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
+                                  {...props}
+                                >
+                                  {children}
+                                </a>
+                              );
+                            }
+                          }}
+                        >
+                          {transformWikilinks(transformImageEmbeds(activeNote.content))}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
 
-                        {activeNote.qualityMetrics.reasons?.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-line">
-                            <span className="text-[9px] uppercase font-bold text-sea-ink-soft tracking-wider block mb-1.5">Quality Alerts</span>
-                            <div className="space-y-1">
-                              {activeNote.qualityMetrics.reasons.map((r: string) => (
-                                <div key={r} className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 font-medium">
-                                  <AlertTriangle size={10} className="shrink-0" />
-                                  <span className="truncate">{r.replace(/_/g, ' ')}</span>
-                                </div>
-                              ))}
+                    {/* Metadata / Details */}
+                    <div className="xl:col-span-1 space-y-4 overflow-y-auto pr-1">
+                      <div className="bg-foam/80 rounded-xl border border-line p-4">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-3 flex items-center gap-1.5">
+                          <Info size={12} /> Quality Metrics
+                        </h4>
+                        {activeNote.qualityMetrics ? (
+                          <div className="space-y-3.5">
+                            <div>
+                              <div className="flex justify-between text-xs text-sea-ink-soft font-bold mb-1">
+                                <span>Link Density</span>
+                                <span>{(activeNote.qualityMetrics.link_density ?? 0).toFixed(2)}</span>
+                              </div>
+                              <div className="w-full bg-line h-1 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-lagoon h-full" 
+                                  style={{ width: `${Math.min((activeNote.qualityMetrics.link_density ?? 0) * 100, 100)}%` }} 
+                                  />
+                              </div>
                             </div>
+
+                            <div>
+                              <div className="flex justify-between text-xs text-sea-ink-soft font-bold mb-1">
+                                <span>Completeness</span>
+                                <span>{activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%'}</span>
+                              </div>
+                              <div className="w-full bg-line h-1 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-palm h-full" 
+                                  style={{ width: activeNote.qualityMetrics.has_title && activeNote.qualityMetrics.has_tags ? '100%' : '50%' }} 
+                                  />
+                              </div>
+                            </div>
+
+                            {activeNote.qualityMetrics.reasons?.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-line">
+                                <span className="text-[9px] uppercase font-bold text-sea-ink-soft tracking-wider block mb-1.5">Quality Alerts</span>
+                                <div className="space-y-1">
+                                  {activeNote.qualityMetrics.reasons.map((r: string) => (
+                                    <div key={r} className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 font-medium">
+                                      <AlertTriangle size={10} className="shrink-0" />
+                                      <span className="truncate">{r.replace(/_/g, ' ')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
+                        ) : (
+                          <p className="text-[11px] text-sea-ink-soft italic">No metrics parsed.</p>
                         )}
                       </div>
-                    ) : (
-                      <p className="text-[11px] text-sea-ink-soft italic">No metrics parsed.</p>
-                    )}
+
+                      {/* Actions Box */}
+                      <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-1">Actions</h4>
+                        
+                        <button
+                          type="button"
+                          onClick={() => navigate({ to: '/refactor', search: { path: activeNote.path } })}
+                          className="w-full py-2 bg-sea-ink text-bg-base font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow-sm cursor-pointer"
+                        >
+                          <Sparkles size={14} />
+                          Refactor Note
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={reindexMutation.isPending}
+                          onClick={() => reindexMutation.mutate({ path: activeNote.path })}
+                          className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors cursor-pointer"
+                        >
+                          <RefreshCw size={14} className={reindexMutation.isPending ? 'animate-spin' : ''} />
+                          {reindexMutation.isPending ? 'Reindexing...' : 'Reindex Note'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center text-center">
+                  <BookOpen className="text-sea-ink-soft opacity-30 mb-3" size={48} />
+                  <h3 className="text-xl font-bold text-sea-ink mb-1">No Note Selected</h3>
+                  <p className="text-sm text-sea-ink-soft max-w-sm">Select a note from the sidebar list to inspect its contents, check quality scores, and perform actions.</p>
+                </div>
+              )}
+            </section>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 h-full min-h-0">
+            {/* Column 1: Notes List (width 1/4) */}
+            <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0">
+              <div className="relative mb-4 shrink-0">
+                <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search wiki pages..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-foam border border-line rounded-lg py-2.5 pl-11 pr-4 text-sm text-sea-ink focus:outline-none focus:ring-2 focus:ring-lagoon shadow-inner"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-1 space-y-1.5">
+                {isLoadingNotes ? (
+                  <div className="flex justify-center items-center py-20">
+                    <Loader2 className="animate-spin text-lagoon-deep" size={28} />
+                  </div>
+                ) : filteredNotes.length === 0 ? (
+                  <div className="text-center py-20 text-sm text-sea-ink-soft italic">
+                    No notes found matching search.
+                  </div>
+                ) : (
+                  filteredNotes.map((note) => {
+                    const isActive = note.id === selectedNoteId
+                    const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
+                    
+                    return (
+                      <button
+                        type="button"
+                        key={note.id}
+                        onClick={() => setSelectedNoteId(note.id)}
+                        className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
+                          isActive 
+                            ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
+                            : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
+                            {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                          </div>
+                          <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
+                            {note.path}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                          {isAI && (
+                            <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
+                              AI
+                            </span>
+                          )}
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
+                            {getScoreBadge(note.qualityScore)}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </section>
+
+            {/* Column 2: Graph Canvas (width 2/4) */}
+            <section className="lg:col-span-2 flex flex-col min-h-0">
+              {isLoadingGraph ? (
+                <div className="flex-1 flex flex-col justify-center items-center bg-surface border border-line rounded-2xl p-5 shadow-inner">
+                  <Loader2 className="animate-spin text-lagoon-deep mb-3" size={36} />
+                  <p className="text-sm text-sea-ink-soft font-bold">Building knowledge graph...</p>
+                </div>
+              ) : graphData ? (
+                <GraphView
+                  rawNodes={graphData.nodes}
+                  rawEdges={graphData.edges}
+                  selectedNoteId={selectedNoteId}
+                  onSelectNote={(id) => setSelectedNoteId(id)}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col justify-center items-center bg-surface border border-line rounded-2xl p-5 shadow-inner text-center">
+                  <Network className="text-sea-ink-soft opacity-30 mb-3" size={48} />
+                  <p className="text-sm text-sea-ink-soft font-bold">Failed to load graph.</p>
+                </div>
+              )}
+            </section>
+
+            {/* Column 3: Note Content Preview (width 1/4) */}
+            <section className="lg:col-span-1 flex flex-col min-h-0 bg-surface rounded-2xl border border-line p-4 shadow-inner">
+              {isLoadingActiveNote ? (
+                <div className="flex-1 flex flex-col justify-center items-center">
+                  <Loader2 className="animate-spin text-lagoon-deep mb-2" size={24} />
+                  <span className="text-xs text-sea-ink-soft">Loading preview...</span>
+                </div>
+              ) : activeNote ? (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <header className="border-b border-line pb-3 mb-3 shrink-0">
+                    <h3 className="font-bold text-base text-sea-ink line-clamp-2 leading-tight">
+                      {activeNote.title}
+                    </h3>
+                    <span className="text-[10px] bg-foam border border-line text-sea-ink-soft px-2 py-0.5 rounded-full capitalize inline-block mt-1 font-mono">
+                      {activeNote.type.replace('_', ' ')}
+                    </span>
+                  </header>
+
+                  <div className="flex-1 overflow-y-auto pr-1 prose prose-slate max-w-none text-xs text-sea-ink leading-relaxed font-sans select-text selection:bg-lagoon/20 dark:prose-invert">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ href, children, ...props }) => {
+                          const h = typeof href === 'string' ? href : '';
+                          const isWikilink = h.startsWith('#');
+                          return (
+                            <a
+                              href={h || undefined}
+                              onClick={(e) => {
+                                if (isWikilink) {
+                                  e.preventDefault();
+                                  const targetSlug = decodeURIComponent(h.slice(1)).toLowerCase();
+                                  const found = notes?.find(n => 
+                                    n.title?.toLowerCase() === targetSlug || 
+                                    n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
+                                    n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
+                                  );
+                                  if (found) {
+                                    setSelectedNoteId(found.id);
+                                  }
+                                }
+                              }}
+                              className={isWikilink ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
+                              {...props}
+                            >
+                              {children}
+                            </a>
+                          );
+                        }
+                      }}
+                    >
+                      {transformWikilinks(transformImageEmbeds(activeNote.content))}
+                    </ReactMarkdown>
                   </div>
 
-                  {/* Actions Box */}
-                  <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-sea-ink-soft mb-1">Actions</h4>
-                    
+                  <div className="mt-3 pt-3 border-t border-line shrink-0 flex gap-2">
                     <button
                       type="button"
                       onClick={() => navigate({ to: '/refactor', search: { path: activeNote.path } })}
-                      className="w-full py-2 bg-sea-ink text-bg-base font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow-sm cursor-pointer"
+                      className="flex-1 py-1.5 bg-sea-ink text-bg-base font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 hover:bg-lagoon-deep hover:text-white transition-colors cursor-pointer"
                     >
-                      <Sparkles size={14} />
-                      Refactor Note
+                      <Sparkles size={12} />
+                      Refactor
                     </button>
-
                     <button
                       type="button"
-                      disabled={reindexMutation.isPending}
-                      onClick={() => reindexMutation.mutate({ path: activeNote.path })}
-                      className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors cursor-pointer"
+                      onClick={() => setViewMode("detail")}
+                      className="px-2.5 py-1.5 bg-foam border border-line text-sea-ink-soft hover:text-sea-ink font-bold text-xs rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                      title="Open Detail View"
                     >
-                      <RefreshCw size={14} className={reindexMutation.isPending ? 'animate-spin' : ''} />
-                      {reindexMutation.isPending ? 'Reindexing...' : 'Reindex Note'}
+                      <Eye size={12} />
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center text-center">
-              <BookOpen className="text-sea-ink-soft opacity-30 mb-3" size={48} />
-              <h3 className="text-xl font-bold text-sea-ink mb-1">No Note Selected</h3>
-              <p className="text-sm text-sea-ink-soft max-w-sm">Select a note from the sidebar list to inspect its contents, check quality scores, and perform actions.</p>
-            </div>
-          )}
-        </section>
+              ) : (
+                <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
+                  <BookOpen className="text-sea-ink-soft opacity-30 mb-2" size={36} />
+                  <h4 className="text-sm font-bold text-sea-ink mb-1">No Selection</h4>
+                  <p className="text-xs text-sea-ink-soft max-w-xs leading-normal">
+                    Select a note in the graph or sidebar list to display its preview.
+                  </p>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
       </div>
     </div>
   )
