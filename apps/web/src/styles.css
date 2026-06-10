@@ -1,7 +1,8 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
-@import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -285,4 +286,24 @@ a {
     transform: translateY(0);
   }
 }
+
+.prose {
+  --tw-prose-body: var(--sea-ink);
+  --tw-prose-headings: var(--sea-ink);
+  --tw-prose-lead: var(--sea-ink-soft);
+  --tw-prose-links: var(--lagoon-deep);
+  --tw-prose-bold: var(--sea-ink);
+  --tw-prose-counters: var(--sea-ink-soft);
+  --tw-prose-bullets: var(--sea-ink-soft);
+  --tw-prose-hr: var(--line);
+  --tw-prose-quotes: var(--sea-ink);
+  --tw-prose-quote-borders: var(--line);
+  --tw-prose-captions: var(--sea-ink-soft);
+  --tw-prose-code: var(--sea-ink);
+  --tw-prose-pre-code: var(--sea-ink);
+  --tw-prose-pre-bg: var(--sand);
+  --tw-prose-th-borders: var(--line);
+  --tw-prose-td-borders: var(--line);
+}
+
 
