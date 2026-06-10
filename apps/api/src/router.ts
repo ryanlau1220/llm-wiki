@@ -189,6 +189,39 @@ export const router = os.router({
     }).from(documents);
     return results;
   }),
+  getGraph: os.getGraph.handler(async () => {
+    const { createDbClient, documents, links } = await import("@llm-wiki/db");
+    const { isNotNull } = await import("drizzle-orm");
+    const { db } = createDbClient(config.databaseUrl!);
+
+    const docResults = await db.select({ 
+      id: documents.id, 
+      title: documents.title,
+      path: documents.path, 
+      type: documents.type,
+      is_ai_generated: documents.is_ai_generated,
+      qualityScore: documents.quality_score,
+    }).from(documents);
+
+    const linkResults = await db.select({
+      source: links.source_document_id,
+      target: links.target_document_id,
+      label: links.target_label,
+    }).from(links).where(isNotNull(links.target_document_id));
+
+    const validDocIds = new Set(docResults.map(d => d.id));
+    const edges = linkResults.filter(l => 
+      l.source && 
+      l.target && 
+      validDocIds.has(l.source) && 
+      validDocIds.has(l.target)
+    ) as Array<{ source: string; target: string; label: string }>;
+
+    return {
+      nodes: docResults,
+      edges,
+    };
+  }),
   getNote: os.getNote.use(authMiddleware).handler(async ({ input }: any) => {
     const { createDbClient, documents } = await import("@llm-wiki/db");
     const { eq } = await import("drizzle-orm");
