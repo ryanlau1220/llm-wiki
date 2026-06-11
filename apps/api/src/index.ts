@@ -34,6 +34,18 @@ const app = new Elysia()
   .get("/", () => ({
     message: "LLM Wiki API is running (oRPC enabled)"
   }))
+  .get("/openapi.json", async () => {
+    const { generateOpenApiSpec } = await import("./openapi");
+    return generateOpenApiSpec();
+  })
+  .get("/docs", async () => {
+    const { scalarHtml } = await import("./openapi");
+    return new Response(scalarHtml, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8"
+      }
+    });
+  })
   .get("/events", ({ set }) => {
     set.headers["Content-Type"] = "text/event-stream";
     set.headers["Cache-Control"] = "no-cache";
