@@ -40,7 +40,7 @@ export function loadConfig(): AppConfig {
   console.log("[Config] DATABASE_URL found:", !!process.env.DATABASE_URL);
   console.log("[Config] GOOGLE_CLOUD_PROJECT found:", !!gcpProjectId);
 
-  const rawVaultPath = process.env.VAULT_PATH ?? "./vault/human";
+  const rawVaultPath = process.env.VAULT_PATH ?? "./vault";
   const resolvedVaultPath = path.isAbsolute(rawVaultPath) 
     ? rawVaultPath 
     : path.resolve(ROOT_DIR, rawVaultPath);

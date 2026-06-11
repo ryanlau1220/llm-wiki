@@ -33,7 +33,7 @@ if (config.databaseUrl) {
         ? dbPath 
         : path.resolve(dbPath);
       
-      config.vaultPath = path.join(resolved, "human");
+      config.vaultPath = resolved;
       console.log(`[Config] New VAULT_PATH resolved to: ${config.vaultPath}`);
     }
   } catch (error) {
