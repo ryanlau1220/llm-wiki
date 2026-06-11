@@ -28,7 +28,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Monorepo root is 3 levels up from apps/api/src/config.ts (src -> api -> apps -> root)
 const ROOT_DIR = path.resolve(__dirname, "../../..");
 
+let cachedConfig: AppConfig | null = null;
+
 export function loadConfig(): AppConfig {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
   const gcpProjectId = process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT;
 
   console.log("[Config] DATABASE_URL found:", !!process.env.DATABASE_URL);
@@ -39,9 +45,9 @@ export function loadConfig(): AppConfig {
     ? rawVaultPath 
     : path.resolve(ROOT_DIR, rawVaultPath);
 
-  console.log("[Config] Resolved VAULT_PATH:", resolvedVaultPath);
+  console.log("[Config] Default fallback VAULT_PATH:", resolvedVaultPath);
 
-  return {
+  cachedConfig = {
     embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? "fallback",
     gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
@@ -63,4 +69,6 @@ export function loadConfig(): AppConfig {
     semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? 200),
     tavilyApiKey: process.env.TAVILY_API_KEY
   };
+
+  return cachedConfig;
 }
