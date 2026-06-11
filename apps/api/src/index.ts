@@ -46,17 +46,14 @@ const app = new Elysia()
       }
     });
   })
-  .get("/events", ({ set }) => {
-    set.headers["Content-Type"] = "text/event-stream";
-    set.headers["Cache-Control"] = "no-cache";
-    set.headers.Connection = "keep-alive";
-
+  .get("/events", () => {
     let listener: ((data: any) => void) | null = null;
+    const encoder = new TextEncoder();
 
-    return new ReadableStream({
+    const stream = new ReadableStream({
       start(controller) {
         listener = (data: any) => {
-          controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
         sseEmitter.on("change", listener);
       },
@@ -64,6 +61,14 @@ const app = new Elysia()
         if (listener) {
           sseEmitter.off("change", listener);
         }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
       }
     });
   })
