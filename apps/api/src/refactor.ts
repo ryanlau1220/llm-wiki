@@ -1,12 +1,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import matter from "gray-matter";
 
-import { createLLMProvider } from "@llm-wiki/ai";
-import { createLogger } from "@llm-wiki/core";
+import { createLLMProvider, createEmbeddingProvider } from "@llm-wiki/ai";
+import { createLogger, ingestMarkdown } from "@llm-wiki/core";
+import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
-import { confirmAskSave } from "./ask-confirm";
+import { sseEmitter } from "./events";
 
 export async function refactorNotePreview(
   config: AppConfig,
@@ -130,17 +132,156 @@ Provide the refactored version in JSON format.
 
 export async function confirmRefactorSave(
   config: AppConfig,
-  requestId: string,
-  _sourcePath: string,
+  _requestId: string,
+  sourcePath: string,
   note: { title: string; content: string; links?: string[]; tags?: string[] }
 ) {
-  return confirmAskSave(
-    config,
-    requestId,
-    {
-      ...note,
-      tags: [...(note.tags || []), "refactored"]
-    },
-    { type: "ai_refactored", source: "refactor" }
-  );
+  const logger = createLogger("refactor");
+  logger.info("Confirm refactor save (in-place)", { sourcePath });
+
+  if (!config.databaseUrl) {
+    return { status: "rejected", error: "DATABASE_URL is required" };
+  }
+
+  const { db } = createDbClient(config.databaseUrl);
+
+  const absoluteSourcePath = path.resolve(config.vaultPath, sourcePath);
+  if (!absoluteSourcePath.startsWith(path.resolve(config.vaultPath))) {
+    return { status: "rejected", error: "Invalid source path: must be within vault" };
+  }
+
+  // 1. Read existing file for backup
+  let originalContent = "";
+  try {
+    originalContent = await fs.readFile(absoluteSourcePath, "utf8");
+  } catch (err: any) {
+    return { status: "rejected", error: `Failed to read original file: ${err.message}` };
+  }
+
+  // 2. Write backup to .llm-wiki/backups/
+  const backupDir = path.join(config.vaultPath, ".llm-wiki", "backups");
+  try {
+    await fs.mkdir(backupDir, { recursive: true });
+    const baseName = path.basename(absoluteSourcePath, ".md");
+    // Format timestamp: YYYYMMDD_HHMMSS
+    const timestamp = new Date().toISOString()
+      .replace(/[-:]/g, "")
+      .replace("T", "_")
+      .split(".")[0];
+    const backupFilePath = path.join(backupDir, `${baseName}.${timestamp}.md`);
+    await fs.writeFile(backupFilePath, originalContent, "utf8");
+    logger.info(`Pre-refactor backup created at: ${backupFilePath}`);
+  } catch (err: any) {
+    logger.error("Failed to create pre-refactor backup", err);
+    return { status: "rejected", error: `Failed to create backup safety net: ${err.message}` };
+  }
+
+  // 3. Parse original frontmatter and merge refactored status
+  let mergedMetadata: Record<string, any> = {};
+  try {
+    const parsedOriginal = matter(originalContent);
+    mergedMetadata = {
+      ...parsedOriginal.data,
+      ai_status: "refactored",
+      health_score: 0.95,
+      type: "ai_refactored",
+      source: "refactor",
+      updated_at: new Date().toISOString()
+    };
+  } catch {
+    mergedMetadata = {
+      ai_status: "refactored",
+      health_score: 0.95,
+      type: "ai_refactored",
+      source: "refactor",
+      created_at: new Date().toISOString()
+    };
+  }
+
+  // Sanitise tags if tags are specified
+  const sanitizedTags = (note.tags || [])
+    .map((tag) =>
+      tag
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9_-]/g, "")
+        .slice(0, 50)
+    )
+    .filter((tag) => tag.length > 0);
+  if (sanitizedTags.length) {
+    mergedMetadata.tags = sanitizedTags;
+  }
+
+  // Re-generate file contents with stringified frontmatter
+  const newFileContent = matter.stringify(note.content, mergedMetadata);
+
+  // 4. Overwrite original note in-place
+  try {
+    await fs.writeFile(absoluteSourcePath, newFileContent, "utf8");
+  } catch (err: any) {
+    return { status: "rejected", error: `Failed to write refactored note: ${err.message}` };
+  }
+
+  // 5. Ingest updated document immediately
+  try {
+    const embeddingProvider = createEmbeddingProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpEmbeddingModel
+      },
+      ollama: {
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaEmbeddingModel
+      },
+      openai: {
+        apiKey: config.openaiApiKey,
+        baseUrl: config.openaiBaseUrl,
+        model: config.openaiEmbeddingModel
+      }
+    });
+
+    const llmProvider = createLLMProvider({
+      provider: config.embeddingProvider as any,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpLlmModel
+      },
+      ollama: {
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaLlmModel
+      },
+      openai: {
+        apiKey: config.openaiApiKey,
+        baseUrl: config.openaiBaseUrl,
+        model: config.openaiLlmModel
+      }
+    });
+
+    await ingestMarkdown(
+      {
+        db,
+        options: {
+          embeddingProvider,
+          llmProvider,
+          embeddingVersion: config.embeddingVersion
+        }
+      },
+      {
+        vaultPath: sourcePath,
+        rawContent: newFileContent,
+        sourceKind: "ai",
+        isAiGenerated: true
+      }
+    );
+    sseEmitter.emit("change", { type: "note_changed", path: sourcePath });
+  } catch (ingestError: any) {
+    logger.error(`Failed to ingest refactored note: ${sourcePath}`, ingestError);
+  }
+
+  return {
+    status: "saved" as const,
+    path: absoluteSourcePath
+  };
 }
