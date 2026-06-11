@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { orpc } from '../lib/orpc'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { 
   Send, 
   Loader2, 
@@ -11,15 +11,22 @@ import {
   FileText,
   Link as LinkIcon,
   Tag as TagIcon,
-  ChevronRight
+  ChevronRight,
+  Search
 } from 'lucide-react'
+import { z } from 'zod'
 
 export const Route = createFileRoute('/generator')({
+  validateSearch: z.object({
+    mode: z.enum(['rag', 'general', 'synthesis']).optional(),
+    noteIds: z.string().optional(),
+  }),
   component: GeneratorComponent,
 })
 
 function GeneratorComponent() {
-  const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis'>('rag')
+  const { mode: queryMode, noteIds: queryNoteIds } = Route.useSearch()
+  const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis'>(queryMode || 'rag')
   const [queryText, setQueryText] = useState('')
   const [result, setResult] = useState<{
     mode: 'rag' | 'general' | 'synthesis';
@@ -28,6 +35,20 @@ function GeneratorComponent() {
   } | null>(null)
   
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>(() => {
+    return queryNoteIds ? queryNoteIds.split(',') : []
+  })
+  const [noteSearch, setNoteSearch] = useState('')
+
+  const { data: notes } = useQuery(
+    orpc.listNotes.queryOptions()
+  )
+
+  const filteredNotesList = notes?.filter(note => 
+    note.path.toLowerCase().includes(noteSearch.toLowerCase()) ||
+    note.title?.toLowerCase().includes(noteSearch.toLowerCase())
+  ) || []
 
   const askMutation = useMutation(
     orpc.askPreview.mutationOptions({
@@ -88,7 +109,7 @@ function GeneratorComponent() {
     if (!queryText.trim()) return
 
     if (activeMode === 'synthesis') {
-      synthesisMutation.mutate({ topic: queryText })
+      synthesisMutation.mutate({ topic: queryText, noteIds: selectedNoteIds })
     } else {
       askMutation.mutate({ query: queryText, mode: activeMode })
     }
@@ -179,6 +200,77 @@ function GeneratorComponent() {
               )}
             </button>
           </form>
+
+          {activeMode === 'synthesis' && (
+            <div className="w-full mt-6 text-left p-5 bg-[var(--surface-strong)] border border-[var(--line)] rounded-2xl shadow-sm space-y-4 max-w-2xl">
+              <div className="flex justify-between items-center border-b border-[var(--line)] pb-2">
+                <span className="text-xs font-black text-[var(--sea-ink)] uppercase tracking-wider">
+                  Select Source Notes ({selectedNoteIds.length} selected)
+                </span>
+                {selectedNoteIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNoteIds([])}
+                    className="text-[10px] text-red-600 hover:text-red-800 font-bold transition-colors cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Search Input */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-[var(--sea-ink-soft)]" size={14} />
+                <input
+                  type="text"
+                  placeholder="Type to filter notes list..."
+                  value={noteSearch}
+                  onChange={(e) => setNoteSearch(e.target.value)}
+                  className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-xl py-2 pl-9 pr-3 text-xs text-[var(--sea-ink)] focus:outline-none focus:ring-1 focus:ring-[var(--lagoon)] shadow-inner"
+                />
+              </div>
+
+              {/* Notes Checklist */}
+              <div className="max-h-48 overflow-y-auto space-y-1 pr-1 border border-[var(--line)] rounded-xl bg-[var(--surface)] p-2">
+                {filteredNotesList.length === 0 ? (
+                  <div className="text-[11px] text-[var(--sea-ink-soft)] italic text-center py-6">
+                    No notes found matching search.
+                  </div>
+                ) : (
+                  filteredNotesList.map((note) => {
+                    const isChecked = selectedNoteIds.includes(note.id)
+                    return (
+                      <label
+                        key={note.id}
+                        className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[var(--foam)] cursor-pointer text-xs transition-colors select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedNoteIds((prev) => {
+                              if (isChecked) {
+                                return prev.filter((id) => id !== note.id)
+                              } else {
+                                return [...prev, note.id]
+                              }
+                            })
+                          }}
+                          className="h-4 w-4 rounded border-[var(--line)] text-[var(--lagoon)] focus:ring-[var(--lagoon)] cursor-pointer"
+                        />
+                        <span className="font-bold truncate text-[var(--sea-ink)]">
+                          {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                        </span>
+                        <span className="text-[10px] text-[var(--sea-ink-soft)] truncate font-mono">
+                          ({note.path})
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6 rise-in">
