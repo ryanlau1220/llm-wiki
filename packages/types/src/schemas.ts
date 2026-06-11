@@ -38,6 +38,7 @@ export const reindexPayloadSchema = z.object({
 export const synthesisPreviewPayloadSchema = z.object({
   topic: z.string().min(1),
   topK: z.number().int().min(1).max(20).optional(),
+  noteIds: z.array(z.string()).optional(),
 });
 
 export const confirmSynthesisSavePayloadSchema = z.object({
