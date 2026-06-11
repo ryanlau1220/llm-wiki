@@ -105,6 +105,15 @@ export async function ingestMarkdown(
         ? calculateAggregateScore(parsed.qualityMetrics)
         : null;
 
+      const parsedHealth = typeof parsed.metadata.health_score === "number"
+        ? parsed.metadata.health_score
+        : typeof parsed.metadata.health_score === "string"
+        ? parseFloat(parsed.metadata.health_score)
+        : null;
+      const healthScore = parsedHealth !== null && !Number.isNaN(parsedHealth) ? parsedHealth : qualityScore;
+
+      const aiStatus = (parsed.metadata.ai_status as string) || (qualityScore !== null && qualityScore < 0.60 ? "messy" : "clean");
+
       const baseValues = {
         path: input.vaultPath,
         title,
@@ -115,6 +124,8 @@ export async function ingestMarkdown(
         is_ai_generated: input.isAiGenerated,
         quality_score: qualityScore,
         quality_metrics: parsed.qualityMetrics,
+        ai_status: aiStatus,
+        health_score: healthScore,
         updated_at: now()
       };
 
