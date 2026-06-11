@@ -95,6 +95,7 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate Node Size/Radius based on connections
   const getNodeRadius = useCallback((linkCount: number) => {
@@ -263,13 +264,26 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
     isDragging.current = false;
   };
 
-  // Scroll Zoom handler
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = 1.1;
-    const nextZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
-    setZoom(Math.max(0.15, Math.min(4, nextZoom)));
-  };
+  // Scroll Zoom handler (registered natively to bypass passive event listener constraints)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      const direction = e.deltaY < 0 ? 1 : -1;
+      setZoom((z) => {
+        const nextZoom = direction > 0 ? z * zoomFactor : z / zoomFactor;
+        return Math.max(0.15, Math.min(4, nextZoom));
+      });
+    };
+
+    container.addEventListener("wheel", handleWheelNative, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheelNative);
+    };
+  }, []);
 
   const handleZoomIn = () => setZoom(z => Math.min(4, z * 1.2));
   const handleZoomOut = () => setZoom(z => Math.max(0.15, z / 1.2));
@@ -411,12 +425,12 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
         {/* SVG Canvas Area */}
         {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG pan/zoom container */}
         <div 
+          ref={containerRef}
           className="flex-1 h-full cursor-grab active:cursor-grabbing relative select-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUpOrLeave}
           onMouseLeave={handleMouseUpOrLeave}
-          onWheel={handleWheel}
         >
           <svg
             ref={svgRef}
