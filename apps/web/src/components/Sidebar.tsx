@@ -17,13 +17,14 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 
 export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onClose: () => void }) {
   const isMobile = useMediaQuery('(max-width: 1024px)')
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebar_collapsed')
-      return saved ? JSON.parse(saved) : false
+  const [isCollapsed, setIsCollapsed] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar_collapsed')
+    if (saved) {
+      setIsCollapsed(JSON.parse(saved))
     }
-    return false
-  })
+  }, [])
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
