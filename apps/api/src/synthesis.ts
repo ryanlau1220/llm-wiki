@@ -6,34 +6,70 @@ import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
 
-export async function synthesisPreview(config: AppConfig, topic: string, topK?: number) {
+export async function synthesisPreview(config: AppConfig, topic: string, topK?: number, noteIds?: string[]) {
   const logger = createLogger("synthesis");
-  logger.info("New synthesis request", { topic, topK });
+  logger.info("New synthesis request", { topic, topK, noteIdsCount: noteIds?.length });
 
   if (!config.databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
 
   const { db } = createDbClient(config.databaseUrl);
+  const { inArray } = await import("drizzle-orm");
+  const { documents } = await import("@llm-wiki/db");
 
-  const embeddingProvider = createEmbeddingProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpEmbeddingModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiEmbeddingModel
+  let contextText = "";
+  let sources: Array<{ id: string; title: string; path: string }> = [];
+  let retrievalInfo = { chunkCount: 0, linkCount: 0 };
+
+  if (noteIds && noteIds.length > 0) {
+    const selectedNotes = await db
+      .select({ id: documents.id, title: documents.title, path: documents.path, content: documents.content })
+      .from(documents)
+      .where(inArray(documents.id, noteIds));
+
+    sources = selectedNotes.map(n => ({ id: n.id, title: n.title ?? "", path: n.path }));
+    contextText = selectedNotes
+      .map((n, i) => `[Source ${i + 1} (${n.title || n.path})]:\n${n.content}`)
+      .join("\n\n");
+    retrievalInfo = { chunkCount: selectedNotes.length, linkCount: 0 };
+  } else {
+    const embeddingProvider = createEmbeddingProvider({
+      provider: config.embeddingProvider,
+      geminiGeap: {
+        projectId: config.gcpProjectId,
+        location: config.gcpLocation,
+        model: config.gcpEmbeddingModel
+      },
+      openai: {
+        apiKey: config.openaiApiKey,
+        baseUrl: config.openaiBaseUrl,
+        model: config.openaiEmbeddingModel
+      }
+    });
+
+    const retrievalResults = await hybridRetrieve(
+      { db, embeddingProvider },
+      { query: topic, topK }
+    );
+
+    contextText = retrievalResults.chunks
+      .map((c, i) => `[Source ${i + 1}]:\n${c.text}`)
+      .join("\n\n");
+    retrievalInfo = {
+      chunkCount: retrievalResults.chunks.length,
+      linkCount: retrievalResults.links.length
+    };
+
+    const documentIds = [...new Set(retrievalResults.chunks.map((c) => c.documentId))];
+    if (documentIds.length > 0) {
+      sources = await db
+        .select({ id: documents.id, title: documents.title, path: documents.path })
+        .from(documents)
+        .where(inArray(documents.id, documentIds))
+        .then(rows => rows.map(r => ({ id: r.id, title: r.title ?? "", path: r.path })));
     }
-  });
-
-  const retrievalResults = await hybridRetrieve(
-    { db, embeddingProvider },
-    { query: topic, topK }
-  );
+  }
 
   const llmProvider = createLLMProvider({
     provider: config.embeddingProvider,
@@ -48,10 +84,6 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
       model: config.openaiLlmModel
     }
   });
-
-  const contextText = retrievalResults.chunks
-    .map((c, i) => `[Source ${i + 1}]:\n${c.text}`)
-    .join("\n\n");
 
   const systemInstruction = `
 You are an expert knowledge synthesizer for "LLM Wiki".
@@ -112,24 +144,11 @@ Synthesize a concise wiki note.
 
   if (noteData) {
     const requestId = crypto.randomUUID();
-    const documentIds = [...new Set(retrievalResults.chunks.map((c) => c.documentId))];
-    let sources: Array<{ id: string; title: string; path: string }> = [];
-    if (documentIds.length > 0) {
-      const { inArray } = await import("drizzle-orm");
-      const { documents } = await import("@llm-wiki/db");
-      sources = await db
-        .select({ id: documents.id, title: documents.title, path: documents.path })
-        .from(documents)
-        .where(inArray(documents.id, documentIds));
-    }
     return {
       requestId,
       note: noteData,
       sources,
-      retrieval: {
-        chunkCount: retrievalResults.chunks.length,
-        linkCount: retrievalResults.links.length
-      }
+      retrieval: retrievalInfo
     };
   }
 
