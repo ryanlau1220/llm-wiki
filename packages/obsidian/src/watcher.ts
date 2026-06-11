@@ -11,10 +11,18 @@ type PendingEvent = {
 export function startVaultWatcher(config: WatcherConfig): () => Promise<void> {
   const pendingByPath = new Map<string, PendingEvent>();
 
+  const usePolling = config.rootPath.includes("/mnt/");
+  if (usePolling) {
+    console.log(`[Watcher] Path "${config.rootPath}" is on a Windows mount. Forcing Chokidar polling mode.`);
+  }
+
   const watcher = chokidar.watch(config.rootPath, {
     ignored: config.ignoredGlobs ?? [],
     ignoreInitial: true,
     persistent: true,
+    usePolling,
+    interval: usePolling ? 1000 : undefined,
+    binaryInterval: usePolling ? 3000 : undefined,
     awaitWriteFinish: {
       stabilityThreshold: config.debounceMs,
       pollInterval: 100
