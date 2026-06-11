@@ -137,3 +137,9 @@ export const ingestionRuns = pgTable(
     createdAtIdx: index("ingestion_runs_created_at_idx").on(table.created_at)
   })
 );
+
+export const settings = pgTable("settings", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  value: text("value").notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
