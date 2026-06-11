@@ -184,7 +184,7 @@ function VaultComponent() {
                   ) : (
                     filteredNotes.map((note) => {
                       const isActive = note.id === selectedNoteId
-                      const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
+                      const isAI = note.isAiGenerated || note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
                       
                       const isSelectedForSynthesis = selectedForSynthesis.has(note.id)
                       return (
@@ -492,7 +492,7 @@ function VaultComponent() {
                   ) : (
                     filteredNotes.map((note) => {
                       const isActive = note.id === selectedNoteId
-                      const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
+                      const isAI = note.isAiGenerated || note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
                       const isSelectedForSynthesis = selectedForSynthesis.has(note.id)
                       
                       return (
@@ -742,7 +742,7 @@ function VaultComponent() {
                         ) : (
                           filteredNotes.map((note) => {
                             const isActive = note.id === selectedNoteId
-                            const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
+                            const isAI = note.isAiGenerated || note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
                             
                             return (
                               <button
@@ -787,8 +787,7 @@ function VaultComponent() {
                 </>
 
                 {/* Mobile Note Preview Bottom Sheet */}
-                <>
-                  {isMobilePreviewOpen && (
+                {isMobilePreviewOpen && (
                     <button
                       type="button"
                       aria-label="Close note preview bottom sheet"
@@ -903,7 +902,6 @@ function VaultComponent() {
                       )}
                     </div>
                   </div>
-                </>
               </>
             )}
           </div>
