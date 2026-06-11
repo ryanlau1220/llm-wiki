@@ -93,7 +93,7 @@ function SettingsComponent() {
                         value={vaultPath}
                         onChange={(e) => setVaultPath(e.target.value)}
                         className="w-full px-4 py-4 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] text-[var(--sea-ink)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] transition-all"
-                        placeholder="/path/to/your/Obsidian Vault"
+                        placeholder="/absolute/path/to/your/ObsidianVault"
                         required
                       />
                     </div>
@@ -143,22 +143,19 @@ function SettingsComponent() {
               
               <div className="space-y-4 text-sm text-[var(--sea-ink-soft)] leading-relaxed font-medium">
                 <p>
-                  To sync notes created on your mobile device (Android or iOS) with this local LLM Wiki companion engine:
+                  To sync notes created on your mobile device (Android or iOS) with this local LLM Wiki companion engine, you can use any directory-level synchronization tool:
                 </p>
-                <ol className="list-decimal list-inside space-y-2.5">
+                <ul className="list-disc list-inside space-y-2.5">
                   <li>
-                    Install <strong>Obsidian</strong> on your mobile device.
+                    <strong>Official Obsidian Sync:</strong> Secure, end-to-end encrypted native synchronization managed by Obsidian.
                   </li>
                   <li>
-                    Install the <strong>Remotely Save</strong> community plugin inside Obsidian on both your mobile device and your laptop.
+                    <strong>Local Directory Mirroring:</strong> Use tools like <strong>Syncthing</strong>, <strong>iCloud</strong>, or <strong>Git</strong> to replicate your vault directory directly.
                   </li>
                   <li>
-                    Configure <strong>Remotely Save</strong> on both devices to point to your <strong>OneDrive</strong> folder.
+                    <strong>Cloud Integration Plugins:</strong> Configure community plugins (such as *Remotely Save* or *Obsidian Git*) to sync via third-party providers.
                   </li>
-                  <li>
-                    When you edit notes on the go, they sync to OneDrive. The local OneDrive agent writes them to your laptop drive, where this watcher detects and imports them dynamically.
-                  </li>
-                </ol>
+                </ul>
               </div>
             </div>
           </div>
@@ -213,13 +210,13 @@ function SettingsComponent() {
               </h3>
               <ul className="text-xs text-[var(--sea-ink-soft)] space-y-2 list-disc list-inside font-medium leading-relaxed">
                 <li>
-                  Upon saving a new path, the backend runs a full synchronization check. This matches database note entries with markdown files, adding new files and pruning obsolete database entries.
+                  Saving a new path triggers an automatic vault synchronization check to align database entries with your local markdown files.
                 </li>
                 <li>
-                  The watcher automatically partitions files: users edit notes inside <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">human/</code>, while AI generated notes are stored inside <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">ai-generated/</code>.
+                  Your vault is structured into two main directories: <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">human/</code> for your personal notes, and <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">ai-generated/</code> for assistant-generated content.
                 </li>
                 <li>
-                  If you open this vault root path in Obsidian on Windows, you will see both directories inside the file sidebar.
+                  Opening the root vault folder in Obsidian allows you to navigate and edit both directories directly within your sidebar.
                 </li>
               </ul>
             </div>
