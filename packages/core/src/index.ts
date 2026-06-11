@@ -6,6 +6,7 @@ export * from "./retrieval/types";
 export * from "./logging";
 export * from "./linking/validator";
 export * from "./linking/placeholders";
+export * from "./linking/resolver";
 export * from "./discovery/provider";
 export * from "./intelligence/coherence";
 export * from "./maintenance/weak-notes";

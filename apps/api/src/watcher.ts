@@ -115,6 +115,15 @@ export async function syncVault(
     logger.error("Failed to clean up obsolete database records", error);
   }
 
+  // Resolve all vault links globally
+  try {
+    const { resolveAllLinks } = await import("@llm-wiki/core");
+    logger.info("Resolving all wiki links...");
+    await resolveAllLinks(db);
+  } catch (error) {
+    logger.error("Failed to resolve links during sync", error);
+  }
+
   logger.info("Startup vault synchronization completed.");
 }
 

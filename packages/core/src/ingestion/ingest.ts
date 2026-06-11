@@ -38,6 +38,16 @@ export async function deleteDocumentByPath(
   }
 
   await deps.db.transaction(async (tx: DbClient) => {
+    // Reset any links pointing to this document to unresolved status
+    await tx
+      .update(links)
+      .set({
+        target_document_id: null,
+        is_resolved: false,
+        updated_at: new Date()
+      })
+      .where(eq(links.target_document_id, existing[0].id));
+
     await tx.delete(links).where(eq(links.source_document_id, existing[0].id));
     await tx.delete(chunks).where(eq(chunks.document_id, existing[0].id));
     await tx.delete(documents).where(eq(documents.id, existing[0].id));
@@ -174,6 +184,10 @@ export async function ingestMarkdown(
       if (linkRows.length) {
         await tx.insert(links).values(linkRows);
       }
+
+      // Resolve links dynamically for this document
+      const { resolveLinksForDocument } = await import("../linking/resolver");
+      await resolveLinksForDocument(tx, documentId, title);
 
       await tx.insert(ingestionRuns).values({
         document_path: input.vaultPath,
