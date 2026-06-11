@@ -250,9 +250,36 @@ export const router = os.router({
   }),
   updateSettings: os.updateSettings.use(authMiddleware).handler(async ({ input }: any) => {
     const { vaultPath } = input;
-    const resolvedPath = path.isAbsolute(vaultPath) 
-      ? vaultPath 
-      : path.resolve(vaultPath);
+    let targetPath = vaultPath;
+
+    if (process.platform === "linux") {
+      let isWSL = false;
+      if (process.env.WSL_DISTRO_NAME) {
+        isWSL = true;
+      } else {
+        try {
+          const version = await fs.readFile("/proc/version", "utf8");
+          if (version.toLowerCase().includes("microsoft") || version.toLowerCase().includes("wsl")) {
+            isWSL = true;
+          }
+        } catch {}
+      }
+
+      if (isWSL) {
+        let normalized = targetPath.replace(/\\/g, "/");
+        const driveMatch = normalized.match(/^([a-zA-Z]):/);
+        if (driveMatch) {
+          const driveLetter = driveMatch[1].toLowerCase();
+          normalized = `/mnt/${driveLetter}${normalized.substring(2)}`;
+        }
+        targetPath = normalized;
+        console.log(`[Settings] Automatically translated Windows path to WSL mount: ${targetPath}`);
+      }
+    }
+
+    const resolvedPath = path.isAbsolute(targetPath) 
+      ? targetPath 
+      : path.resolve(targetPath);
 
     try {
       await fs.access(resolvedPath);

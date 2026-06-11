@@ -1,5 +1,6 @@
 import chokidar from "chokidar";
 import path from "node:path";
+import fs from "node:fs";
 
 import type { WatchEvent, WatcherConfig } from "./types";
 
@@ -8,12 +9,23 @@ type PendingEvent = {
   event: WatchEvent;
 };
 
+function detectWSL(): boolean {
+  if (process.platform !== "linux") return false;
+  if (process.env.WSL_DISTRO_NAME) return true;
+  try {
+    const version = fs.readFileSync("/proc/version", "utf8");
+    return version.toLowerCase().includes("microsoft") || version.toLowerCase().includes("wsl");
+  } catch {
+    return false;
+  }
+}
+
 export function startVaultWatcher(config: WatcherConfig): () => Promise<void> {
   const pendingByPath = new Map<string, PendingEvent>();
 
-  const usePolling = config.rootPath.includes("/mnt/");
+  const usePolling = detectWSL() && config.rootPath.includes("/mnt/");
   if (usePolling) {
-    console.log(`[Watcher] Path "${config.rootPath}" is on a Windows mount. Forcing Chokidar polling mode.`);
+    console.log(`[Watcher] Virtualized filesystem mount detected on "${config.rootPath}". Enabling optimized polling sync.`);
   }
 
   const watcher = chokidar.watch(config.rootPath, {
