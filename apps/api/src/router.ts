@@ -4,6 +4,8 @@ import { askPreview, confirmAskSave } from "./ask";
 import { reindexFile } from "./reindex";
 import { loadConfig } from "./config";
 import { promises as fs } from "node:fs";
+import path from "node:path";
+import { getWatcher, setWatcher } from "./watcher-manager";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -241,5 +243,121 @@ export const router = os.router({
       created_at: doc.created_at.toISOString(),
       updated_at: doc.updated_at.toISOString()
     };
-  })
+  }),
+  getSettings: os.getSettings.handler(async () => {
+    const parentPath = path.dirname(config.vaultPath);
+    return { vaultPath: parentPath };
+  }),
+  updateSettings: os.updateSettings.use(authMiddleware).handler(async ({ input }: any) => {
+    const { vaultPath } = input;
+    const resolvedPath = path.isAbsolute(vaultPath) 
+      ? vaultPath 
+      : path.resolve(vaultPath);
+
+    try {
+      await fs.access(resolvedPath);
+    } catch {
+      try {
+        await fs.mkdir(resolvedPath, { recursive: true });
+      } catch (err: any) {
+        return { success: false, error: `Directory does not exist and could not be created: ${err.message}` };
+      }
+    }
+
+    const humanRoot = path.join(resolvedPath, "human");
+    const aiRoot = path.join(resolvedPath, "ai-generated");
+
+    try {
+      await fs.mkdir(humanRoot, { recursive: true });
+      await fs.mkdir(aiRoot, { recursive: true });
+    } catch (err: any) {
+      return { success: false, error: `Failed to create subdirectories: ${err.message}` };
+    }
+
+    const { createDbClient, settings } = await import("@llm-wiki/db");
+    const { db } = createDbClient(config.databaseUrl!);
+
+    try {
+      await db
+        .insert(settings)
+        .values({
+          key: "vault_path",
+          value: resolvedPath,
+          updated_at: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: settings.key,
+          set: {
+            value: resolvedPath,
+            updated_at: new Date(),
+          },
+        });
+    } catch (err: any) {
+      return { success: false, error: `Failed to save settings: ${err.message}` };
+    }
+
+    config.vaultPath = humanRoot;
+    console.log(`[Config] Dynamically updated VAULT_PATH to: ${config.vaultPath}`);
+
+    const activeWatcher = getWatcher();
+    if (activeWatcher) {
+      console.log("[Watcher] Stopping active vault watcher...");
+      await activeWatcher.stop();
+    }
+
+    const { syncVault, startIngestionWatcher } = await import("./watcher");
+    const { createEmbeddingProvider, createLLMProvider } = await import("@llm-wiki/ai");
+
+    try {
+      const embeddingProvider = createEmbeddingProvider({
+        provider: config.embeddingProvider,
+        geminiGeap: {
+          projectId: config.gcpProjectId,
+          location: config.gcpLocation,
+          model: config.gcpEmbeddingModel
+        },
+        ollama: {
+          baseUrl: config.ollamaBaseUrl,
+          model: config.ollamaEmbeddingModel
+        },
+        openai: {
+          apiKey: config.openaiApiKey,
+          baseUrl: config.openaiBaseUrl,
+          model: config.openaiEmbeddingModel
+        }
+      });
+      const llmProvider = createLLMProvider({
+        provider: config.embeddingProvider as any,
+        geminiGeap: {
+          projectId: config.gcpProjectId,
+          location: config.gcpLocation,
+          model: config.gcpLlmModel
+        },
+        ollama: {
+          baseUrl: config.ollamaBaseUrl,
+          model: config.ollamaLlmModel
+        },
+        openai: {
+          apiKey: config.openaiApiKey,
+          baseUrl: config.openaiBaseUrl,
+          model: config.openaiLlmModel
+        }
+      });
+
+      console.log("[Sync] Triggering synchronization for the new vault path...");
+      await syncVault(config, db, embeddingProvider, llmProvider);
+
+      console.log("[Watcher] Restarting vault watcher on the new path...");
+      const newWatcher = await startIngestionWatcher(config);
+      setWatcher(newWatcher);
+
+      const { sseEmitter } = await import("./events");
+      sseEmitter.emit("change", { type: "note_changed", path: "*" });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error("[Settings] Error restarting watcher / syncing:", err);
+      return { success: false, error: `Settings updated, but sync or watcher failed: ${err.message}` };
+    }
+  }),
 });
