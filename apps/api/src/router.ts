@@ -70,7 +70,7 @@ export const router = os.router({
   }),
   synthesisPreview: os.synthesisPreview.use(authMiddleware).handler(async ({ input }: any) => {
     const { synthesisPreview } = await import("./synthesis");
-    return synthesisPreview(config, input.topic, input.topK);
+    return synthesisPreview(config, input.topic, input.topK, input.noteIds);
   }),
   confirmSynthesisSave: os.confirmSynthesisSave.use(authMiddleware).handler(async ({ input }: any) => {
     const { confirmAskSave } = await import("./ask-confirm");

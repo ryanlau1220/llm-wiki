@@ -45,6 +45,7 @@ function VaultComponent() {
   const isMobile = useMediaQuery('(max-width: 1024px)')
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
+  const [selectedForSynthesis, setSelectedForSynthesis] = useState<Set<string>>(new Set())
 
   const { data: graphData, isLoading: isLoadingGraph } = useQuery({
     ...orpc.getGraph.queryOptions(),
@@ -185,37 +186,61 @@ function VaultComponent() {
                       const isActive = note.id === selectedNoteId
                       const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
                       
+                      const isSelectedForSynthesis = selectedForSynthesis.has(note.id)
                       return (
-                        <button
-                          type="button"
+                        <div
                           key={note.id}
-                          onClick={() => setSelectedNoteId(note.id)}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
+                          className={`w-full flex items-center p-3 rounded-lg border transition-all text-left group ${
                             isActive 
                               ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
                               : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
                           }`}
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
-                              {note.title || note.path.split('/').pop()?.replace('.md', '')}
-                            </div>
-                            <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
-                              {note.path}
-                            </div>
+                          <div className="mr-3 flex items-center shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelectedForSynthesis}
+                              onChange={(e) => {
+                                setSelectedForSynthesis((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) {
+                                    next.add(note.id)
+                                  } else {
+                                    next.delete(note.id)
+                                  }
+                                  return next
+                                })
+                              }}
+                              className="h-4 w-4 rounded border-line text-lagoon focus:ring-lagoon cursor-pointer"
+                            />
                           </div>
                           
-                          <div className="flex items-center gap-1.5 shrink-0 ml-4">
-                            {isAI && (
-                              <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
-                                AI
+                          <button
+                            type="button"
+                            onClick={() => setSelectedNoteId(note.id)}
+                            className="flex-1 min-w-0 flex items-center justify-between text-left outline-none cursor-pointer"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-bold truncate text-sea-ink">
+                                {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                              </div>
+                              <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
+                                {note.path}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                              {isAI && (
+                                <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
+                                  AI
+                                </span>
+                              )}
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
+                                {getScoreBadge(note.qualityScore)}
                               </span>
-                            )}
-                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
-                              {getScoreBadge(note.qualityScore)}
-                            </span>
-                          </div>
-                        </button>
+                            </div>
+                          </button>
+                        </div>
                       )
                     })
                   )}
@@ -468,38 +493,62 @@ function VaultComponent() {
                     filteredNotes.map((note) => {
                       const isActive = note.id === selectedNoteId
                       const isAI = note.path.includes('ai-generated/') || (note.qualityMetrics?.is_ai)
+                      const isSelectedForSynthesis = selectedForSynthesis.has(note.id)
                       
                       return (
-                        <button
-                          type="button"
+                        <div
                           key={note.id}
-                          onClick={() => setSelectedNoteId(note.id)}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left group ${
+                          className={`w-full flex items-center p-3 rounded-lg border transition-all text-left group ${
                             isActive 
                               ? 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm scale-[1.01]' 
                               : 'bg-surface border-transparent hover:bg-foam/30 hover:border-line'
                           }`}
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className={`text-sm font-bold truncate ${isActive ? 'text-sea-ink' : 'text-sea-ink'}`}>
-                              {note.title || note.path.split('/').pop()?.replace('.md', '')}
-                            </div>
-                            <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
-                              {note.path}
-                            </div>
+                          <div className="mr-3 flex items-center shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelectedForSynthesis}
+                              onChange={(e) => {
+                                setSelectedForSynthesis((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) {
+                                    next.add(note.id)
+                                  } else {
+                                    next.delete(note.id)
+                                  }
+                                  return next
+                                })
+                              }}
+                              className="h-4 w-4 rounded border-line text-lagoon focus:ring-lagoon cursor-pointer"
+                            />
                           </div>
-                          
-                          <div className="flex items-center gap-1.5 shrink-0 ml-4">
-                            {isAI && (
-                              <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
-                                AI
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedNoteId(note.id)}
+                            className="flex-1 min-w-0 flex items-center justify-between text-left outline-none cursor-pointer"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-bold truncate text-sea-ink">
+                                {note.title || note.path.split('/').pop()?.replace('.md', '')}
+                              </div>
+                              <div className="text-[11px] truncate mt-0.5 text-sea-ink-soft">
+                                {note.path}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                              {isAI && (
+                                <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-lagoon/15 text-lagoon-deep">
+                                  AI
+                                </span>
+                              )}
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
+                                {getScoreBadge(note.qualityScore)}
                               </span>
-                            )}
-                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${getScoreColor(note.qualityScore)}`}>
-                              {getScoreBadge(note.qualityScore)}
-                            </span>
-                          </div>
-                        </button>
+                            </div>
+                          </button>
+                        </div>
                       )
                     })
                   )}
@@ -860,6 +909,33 @@ function VaultComponent() {
           </div>
         )}
       </div>
+
+      {selectedForSynthesis.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 px-5 py-3 bg-[var(--surface-strong)] border border-[var(--line)] rounded-2xl shadow-2xl rise-in">
+          <span className="text-xs font-bold text-[var(--sea-ink)]">
+            {selectedForSynthesis.size} notes selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedForSynthesis(new Set())}
+              className="px-3 py-1.5 bg-foam hover:bg-line text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)] font-bold text-xs rounded-xl transition-colors cursor-pointer border border-line"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const noteIds = Array.from(selectedForSynthesis).join(',')
+                navigate({ to: '/generator', search: { mode: 'synthesis', noteIds } })
+              }}
+              className="px-4 py-1.5 bg-[var(--lagoon)] hover:bg-[var(--lagoon-deep)] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+            >
+              Synthesize Selected
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
