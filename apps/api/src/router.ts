@@ -186,6 +186,9 @@ export const router = os.router({
       id: documents.id, 
       path: documents.path, 
       title: documents.title,
+      isAiGenerated: documents.is_ai_generated,
+      aiStatus: documents.ai_status,
+      healthScore: documents.health_score,
       qualityScore: documents.quality_score,
       qualityMetrics: documents.quality_metrics
     }).from(documents);
@@ -291,16 +294,6 @@ export const router = os.router({
       }
     }
 
-    const humanRoot = path.join(resolvedPath, "human");
-    const aiRoot = path.join(resolvedPath, "ai-generated");
-
-    try {
-      await fs.mkdir(humanRoot, { recursive: true });
-      await fs.mkdir(aiRoot, { recursive: true });
-    } catch (err: any) {
-      return { success: false, error: `Failed to create subdirectories: ${err.message}` };
-    }
-
     const { createDbClient, settings } = await import("@llm-wiki/db");
     const { db } = createDbClient(config.databaseUrl!);
 
@@ -323,7 +316,7 @@ export const router = os.router({
       return { success: false, error: `Failed to save settings: ${err.message}` };
     }
 
-    config.vaultPath = humanRoot;
+    config.vaultPath = resolvedPath;
     console.log(`[Config] Dynamically updated VAULT_PATH to: ${config.vaultPath}`);
 
     const activeWatcher = getWatcher();
