@@ -13,8 +13,10 @@ import { useEffect, useState } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import ThemeToggle from './ThemeToggle'
+import { useMediaQuery } from '../lib/useMediaQuery'
 
-export function Sidebar() {
+export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onClose: () => void }) {
+  const isMobile = useMediaQuery('(max-width: 1024px)')
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar_collapsed')
@@ -38,9 +40,9 @@ export function Sidebar() {
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--sidebar-width',
-      isCollapsed ? '64px' : '224px'
+      isMobile ? '0px' : (isCollapsed ? '64px' : '224px')
     )
-  }, [isCollapsed])
+  }, [isCollapsed, isMobile])
 
   const navItems = [
     { label: 'Dashboard', icon: Activity, to: '/' },
@@ -50,11 +52,25 @@ export function Sidebar() {
   ]
 
   return (
-    <aside 
-      className={`fixed left-0 top-0 h-screen bg-[var(--surface-strong)] border-r border-[var(--line)] transition-all duration-300 z-50 flex flex-col ${
-        isCollapsed ? 'w-16' : 'w-56'
-      }`}
-    >
+    <>
+      {/* Mobile Backdrop */}
+      {isMobile && isMobileOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar drawer"
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 transition-opacity duration-300 border-none outline-none cursor-default"
+          onClick={onClose}
+        />
+      )}
+      <aside 
+        className={`fixed left-0 top-0 h-screen bg-[var(--surface-strong)] border-r border-[var(--line)] transition-all duration-300 z-50 flex flex-col ${
+          isCollapsed ? 'lg:w-16 w-56' : 'w-56'
+        } ${
+          isMobile
+            ? isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+            : 'translate-x-0'
+        }`}
+      >
       <div className="p-4 flex items-center justify-between border-b border-[var(--line)]">
         {!isCollapsed && <span className="font-bold text-lg text-[var(--sea-ink)]">LLM Wiki</span>}
         <button 
@@ -78,14 +94,17 @@ export function Sidebar() {
             <li key={item.label}>
               <Link
                 to={item.to}
+                onClick={() => {
+                  if (isMobile) onClose()
+                }}
                 activeProps={{ className: 'bg-foam/80 border-line text-sea-ink font-semibold shadow-sm' }}
                 inactiveProps={{ className: 'text-sea-ink-soft hover:bg-foam/50 border-transparent' }}
                 className={`flex items-center gap-3 p-2 rounded-xl border transition-all duration-200 no-underline group ${
-                  isCollapsed ? 'justify-center' : ''
+                  isCollapsed ? 'lg:justify-center' : ''
                 }`}
               >
                 <item.icon size={18} className="shrink-0" />
-                {!isCollapsed && <span className="text-sm font-medium">{item.label}</span>}
+                {(isMobile || !isCollapsed) && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             </li>
           ))}
@@ -97,25 +116,33 @@ export function Sidebar() {
         
         <button 
           type="button" 
-          onClick={() => navigate({ to: '/generator' })}
+          onClick={() => {
+            navigate({ to: '/generator' })
+            if (isMobile) onClose()
+          }}
           className={`w-full flex items-center gap-3 p-2 rounded-xl bg-sea-ink text-sand hover:bg-lagoon-deep transition-colors shadow-sm text-sm ${
-            isCollapsed ? 'justify-center' : ''
+            isCollapsed ? 'lg:justify-center' : ''
           }`}
         >
           <PlusCircle size={18} />
-          {!isCollapsed && <span className="font-bold">New Note</span>}
+          {(isMobile || !isCollapsed) && <span className="font-bold">New Note</span>}
         </button>
         
         <button 
           type="button" 
-          onClick={() => logoutMutation.mutate(undefined)}
+          onClick={() => {
+            logoutMutation.mutate(undefined)
+            if (isMobile) onClose()
+          }}
           className={`w-full flex items-center gap-3 p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors border border-red-200 text-sm ${
-          isCollapsed ? 'justify-center' : ''
-        }`}>
+            isCollapsed ? 'lg:justify-center' : ''
+          }`}
+        >
           <LogOut size={18} />
-          {!isCollapsed && <span className="font-medium">Logout</span>}
+          {(isMobile || !isCollapsed) && <span className="font-medium">Logout</span>}
         </button>
       </div>
     </aside>
+    </>
   )
 }

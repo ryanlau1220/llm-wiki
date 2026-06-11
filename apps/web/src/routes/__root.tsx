@@ -1,9 +1,10 @@
 import { HeadContent, Scripts, createRootRouteWithContext, useLocation } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Sidebar } from '../components/Sidebar'
+import { Menu } from 'lucide-react'
 import appCss from '../styles.css?url'
 
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);if(mode==='auto'){root.removeAttribute('data-theme')}else{root.setAttribute('data-theme',mode)}root.style.colorScheme=resolved;}catch(e){}})();`
@@ -87,6 +88,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const { queryClient } = Route.useRouteContext()
   const { pathname } = useLocation()
   const isLoginPage = pathname === '/login'
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (isLoginPage) return
@@ -124,11 +126,30 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
         <QueryClientProvider client={queryClient}>
           <div className="flex">
-            {!isLoginPage && <Sidebar />}
+            {!isLoginPage && (
+              <Sidebar 
+                isMobileOpen={isMobileSidebarOpen} 
+                onClose={() => setIsMobileSidebarOpen(false)} 
+              />
+            )}
             <main 
-              className="flex-1 transition-all duration-300"
+              className="flex-1 transition-all duration-300 min-w-0"
               style={{ marginLeft: isLoginPage ? '0' : 'var(--sidebar-width, 256px)' }}
             >
+              {!isLoginPage && (
+                <header className="lg:hidden flex items-center justify-between p-4 bg-[var(--surface-strong)] border-b border-[var(--line)] sticky top-0 z-30 backdrop-blur-md">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="p-1.5 rounded-lg hover:bg-foam border border-line text-sea-ink cursor-pointer"
+                    aria-label="Open sidebar"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  <span className="font-extrabold text-base text-sea-ink">LLM Wiki</span>
+                  <div className="w-8" />
+                </header>
+              )}
               <div className="min-h-screen relative z-10">
                 {children}
               </div>
