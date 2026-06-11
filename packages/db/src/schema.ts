@@ -39,6 +39,8 @@ export const documents = pgTable(
     is_ai_generated: boolean("is_ai_generated").notNull().default(false),
     quality_score: doublePrecision("quality_score"),
     quality_metrics: jsonb("quality_metrics"),
+    ai_status: varchar("ai_status", { length: 20 }),
+    health_score: doublePrecision("health_score"),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
