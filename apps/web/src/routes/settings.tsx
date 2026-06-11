@@ -84,7 +84,7 @@ function SettingsComponent() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
                     <label htmlFor="vault-path" className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] ml-1">
-                      Local Absolute Path (WSL mount format)
+                      Local Absolute Path
                     </label>
                     <div className="relative">
                       <input
@@ -93,12 +93,12 @@ function SettingsComponent() {
                         value={vaultPath}
                         onChange={(e) => setVaultPath(e.target.value)}
                         className="w-full px-4 py-4 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] text-[var(--sea-ink)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] transition-all"
-                        placeholder="/mnt/d/OneDrive/Documents/Obsidian Vault"
+                        placeholder="/path/to/your/Obsidian Vault"
                         required
                       />
                     </div>
                     <p className="text-xs text-[var(--sea-ink-soft)] italic ml-1">
-                      Note: Since you are using WSL, Windows paths must be entered as mounts, e.g. <code className="bg-[var(--surface-strong)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">D:\Vault</code> becomes <code className="bg-[var(--surface-strong)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">/mnt/d/Vault</code>.
+                      Note: Specify the absolute path to your Obsidian vault directory. If you are running the application in a virtualized or containerized environment, ensure the path reflects the environment's mount structure.
                     </p>
                   </div>
 
@@ -147,13 +147,13 @@ function SettingsComponent() {
                 </p>
                 <ol className="list-decimal list-inside space-y-2.5">
                   <li>
-                    Install **Obsidian** on your mobile device.
+                    Install <strong>Obsidian</strong> on your mobile device.
                   </li>
                   <li>
-                    Install the **Remotely Save** community plugin inside Obsidian on both your mobile device and your laptop.
+                    Install the <strong>Remotely Save</strong> community plugin inside Obsidian on both your mobile device and your laptop.
                   </li>
                   <li>
-                    Configure **Remotely Save** on both devices to point to your **OneDrive** folder.
+                    Configure <strong>Remotely Save</strong> on both devices to point to your <strong>OneDrive</strong> folder.
                   </li>
                   <li>
                     When you edit notes on the go, they sync to OneDrive. The local OneDrive agent writes them to your laptop drive, where this watcher detects and imports them dynamically.
@@ -188,7 +188,7 @@ function SettingsComponent() {
                 <div className="flex justify-between items-center py-2 border-b border-[var(--line)]">
                   <span className="text-xs font-bold text-[var(--sea-ink-soft)] uppercase tracking-wider">File Watcher Mode</span>
                   <span className="text-xs font-bold text-[var(--sea-ink)] bg-foam px-2.5 py-1 rounded-full border border-[var(--line)]">
-                    {vaultPath.includes('/mnt/') ? 'Polling (1s)' : 'Native (inotify)'}
+                    {vaultPath.includes('/mnt/') ? 'Optimized Polling Sync' : 'Direct Event Monitor'}
                   </span>
                 </div>
 
