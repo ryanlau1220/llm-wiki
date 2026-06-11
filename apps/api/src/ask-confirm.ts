@@ -22,6 +22,8 @@ export type AskNoteInput = {
 export type NoteFrontmatter = {
   type: "ai_generated" | "ai_refactored" | "ai_synthesized";
   source: "ask" | "refactor" | "synthesis";
+  ai_status?: string;
+  health_score?: number;
 };
 
 export type AskConfirmResult = {
@@ -89,7 +91,7 @@ export async function confirmAskSave(
     await recordAudit(db, requestId, "create_note", "rejected", "duplicate_semantic");
     return { status: "rejected", error: "duplicate_semantic" };
   }
-  const vaultRoot = path.resolve(config.vaultPath, "..", "ai-generated");
+  const vaultRoot = path.resolve(config.vaultPath);
   const safeSlug = slugify(note.title ?? "note");
   await fs.mkdir(vaultRoot, { recursive: true });
   const filePath = await resolveUniquePath(vaultRoot, safeSlug);
@@ -135,7 +137,7 @@ export async function confirmAskSave(
       }
     });
 
-    const relativePath = path.relative(path.resolve(config.vaultPath, ".."), filePath).replace(/\\/g, "/");
+    const relativePath = path.relative(path.resolve(config.vaultPath), filePath).replace(/\\/g, "/");
 
     await ingestMarkdown(
       {
@@ -182,6 +184,8 @@ function buildNoteFile(note: AskNoteInput, frontmatter: NoteFrontmatter): string
   lines.push("---");
   lines.push(`type: ${frontmatter.type}`);
   lines.push(`source: ${frontmatter.source}`);
+  lines.push(`ai_status: ${frontmatter.ai_status ?? "clean"}`);
+  lines.push(`health_score: ${frontmatter.health_score ?? 1.0}`);
   lines.push(`created_at: ${new Date().toISOString()}`);
   if (note.tags?.length) {
     lines.push(`tags: [${note.tags.map((tag) => `"${tag}"`).join(", ")}]`);
