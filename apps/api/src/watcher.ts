@@ -43,15 +43,17 @@ export async function syncVault(
   const logger = createLogger("sync");
   logger.info("Starting startup vault synchronization...");
 
-  const humanRoot = path.resolve(config.vaultPath);
-  const aiRoot = path.resolve(config.vaultPath, "..", "ai-generated");
+  const vaultRoot = path.resolve(config.vaultPath);
 
-  // Ensure vault folders exist
-  await fs.mkdir(humanRoot, { recursive: true });
-  await fs.mkdir(aiRoot, { recursive: true });
+  // Ensure vault root folder exists
+  await fs.mkdir(vaultRoot, { recursive: true });
 
-  const humanFiles = await getMarkdownFiles(humanRoot);
-  const aiFiles = await getMarkdownFiles(aiRoot);
+  const allFiles = await getMarkdownFiles(vaultRoot);
+  const markdownFiles = allFiles.filter((filePath) => {
+    const relative = path.relative(vaultRoot, filePath);
+    // Ignore any path segment starting with a dot (like .obsidian or .llm-wiki)
+    return !relative.split(path.sep).some((part) => part.startsWith("."));
+  });
 
   const activePaths = new Set<string>();
 
@@ -64,41 +66,30 @@ export async function syncVault(
     }
   };
 
-  // Ingest human notes
-  for (const filePath of humanFiles) {
+  // Ingest notes from the vault root
+  for (const filePath of markdownFiles) {
     try {
-      const relative = path.relative(humanRoot, filePath);
-      const vaultPath = path.join("human", relative).replace(/\\/g, "/");
+      const relative = path.relative(vaultRoot, filePath);
+      const vaultPath = relative.replace(/\\/g, "/");
       activePaths.add(vaultPath);
 
       const rawContent = await fs.readFile(filePath, "utf8");
+      
+      const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
+      const parsed = parseMarkdownDocument(rawContent);
+      const isAiGenerated = parsed.metadata.is_ai_generated === true || 
+                            parsed.metadata.type === "ai_refactored" || 
+                            parsed.metadata.type === "ai_generated";
+      const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
+
       await ingestMarkdown(deps, {
         vaultPath,
         rawContent,
-        sourceKind: "human",
-        isAiGenerated: false
+        sourceKind,
+        isAiGenerated
       });
     } catch (error) {
-      logger.error(`Failed to ingest human note ${filePath}`, error);
-    }
-  }
-
-  // Ingest AI-generated notes
-  for (const filePath of aiFiles) {
-    try {
-      const relative = path.relative(aiRoot, filePath);
-      const vaultPath = path.join("ai-generated", relative).replace(/\\/g, "/");
-      activePaths.add(vaultPath);
-
-      const rawContent = await fs.readFile(filePath, "utf8");
-      await ingestMarkdown(deps, {
-        vaultPath,
-        rawContent,
-        sourceKind: "ai",
-        isAiGenerated: true
-      });
-    } catch (error) {
-      logger.error(`Failed to ingest AI note ${filePath}`, error);
+      logger.error(`Failed to ingest note ${filePath}`, error);
     }
   }
 
@@ -172,7 +163,7 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     }
   });
 
-  const rootPath = path.resolve(config.vaultPath, "..");
+  const rootPath = path.resolve(config.vaultPath);
 
   logger.info("Starting ingestion watcher", { rootPath, debounceMs: config.watcherDebounceMs });
 
@@ -186,21 +177,20 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     onEvent: async (event: WatchEvent) => {
       try {
         const relative = path.relative(rootPath, event.path);
-        if (relative.startsWith("..")) {
-          throw new Error(`Watcher event outside vault root: ${event.path}`);
-        }
-
-        const vaultPath = relative.replace(/\\/g, "/");
-        const parts = vaultPath.split("/");
-        const folder = parts[0];
-
-        if (folder !== "human" && folder !== "ai-generated") {
-          // Ignore files outside human/ and ai-generated/ folders (e.g. .obsidian config)
+        if (relative.startsWith("..") || relative.split(path.sep).some((part) => part.startsWith("."))) {
+          // Ignore any file events outside the vault or in hidden folders (.obsidian, .llm-wiki)
           return;
         }
 
-        const sourceKind = folder === "human" ? "human" : "ai";
-        const isAiGenerated = folder === "ai-generated";
+        const vaultPath = relative.replace(/\\/g, "/");
+
+        const rawContent = await fs.readFile(event.path, "utf8");
+        const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
+        const parsed = parseMarkdownDocument(rawContent);
+        const isAiGenerated = parsed.metadata.is_ai_generated === true || 
+                              parsed.metadata.type === "ai_refactored" || 
+                              parsed.metadata.type === "ai_generated";
+        const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
         logger.debug("Watcher event received", { event: event.event, path: vaultPath });
 
@@ -221,7 +211,6 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
           return;
         }
 
-        const rawContent = await fs.readFile(event.path, "utf8");
         await ingestMarkdown(
           {
             db,

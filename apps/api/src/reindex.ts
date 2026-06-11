@@ -21,26 +21,24 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
     throw new Error("DATABASE_URL is required to reindex");
   }
 
-  const rootPath = path.resolve(config.vaultPath, "..");
+  const rootPath = path.resolve(config.vaultPath);
   const normalizedRelative = path.normalize(relativePath).replace(/^\/+/, "");
   const filePath = path.resolve(rootPath, normalizedRelative);
   const relative = path.relative(rootPath, filePath);
 
-  if (relative.startsWith("..")) {
-    throw new Error("Reindex path must be inside vault root");
+  if (relative.startsWith("..") || relative.split(path.sep).some((part) => part.startsWith("."))) {
+    throw new Error("Reindex path must be inside vault root and cannot be in hidden folders");
   }
 
   const vaultPath = relative.replace(/\\/g, "/");
-  const parts = vaultPath.split("/");
-  const folder = parts[0];
-  if (folder !== "human" && folder !== "ai-generated") {
-    throw new Error(`Invalid vault path directory: ${folder}`);
-  }
-
-  const sourceKind = folder === "human" ? "human" : "ai";
-  const isAiGenerated = folder === "ai-generated";
-
   const rawContent = await fs.readFile(filePath, "utf8");
+
+  const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
+  const parsed = parseMarkdownDocument(rawContent);
+  const isAiGenerated = parsed.metadata.is_ai_generated === true || 
+                        parsed.metadata.type === "ai_refactored" || 
+                        parsed.metadata.type === "ai_generated";
+  const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
   const { db } = createDbClient(config.databaseUrl);
   const embeddingProvider = createEmbeddingProvider({
