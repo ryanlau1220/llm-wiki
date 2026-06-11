@@ -3,9 +3,18 @@ import { ingestMarkdown } from "./ingest";
 
 describe("Ingestion Flow", () => {
   test("ingestMarkdown should handle successful ingestion", async () => {
+    const mockDbChain = {
+      from: () => mockDbChain,
+      where: () => {
+        const res: any = [];
+        res.limit = () => [];
+        return res;
+      },
+    };
+
     const mockDb = {
       transaction: async (cb: any) => cb(mockDb),
-      select: mock(() => ({ from: () => ({ where: () => ({ limit: () => [] }) }) })),
+      select: mock(() => mockDbChain),
       insert: mock(() => ({ values: () => ({ returning: () => [{ id: "doc-1", version: 1 }] }) })),
       update: mock(() => ({ set: () => ({ where: () => {} }) })),
       delete: mock(() => ({ where: () => {} })),
