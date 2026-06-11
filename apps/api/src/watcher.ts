@@ -46,6 +46,10 @@ export async function syncVault(
   const humanRoot = path.resolve(config.vaultPath);
   const aiRoot = path.resolve(config.vaultPath, "..", "ai-generated");
 
+  // Ensure vault folders exist
+  await fs.mkdir(humanRoot, { recursive: true });
+  await fs.mkdir(aiRoot, { recursive: true });
+
   const humanFiles = await getMarkdownFiles(humanRoot);
   const aiFiles = await getMarkdownFiles(aiRoot);
 
