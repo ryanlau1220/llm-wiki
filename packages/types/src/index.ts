@@ -103,6 +103,18 @@ export const appContract = oc.router({
     success: z.boolean(),
     error: z.string().optional(),
   })),
+  browseDirectories: oc.input(z.object({
+    path: z.string().optional(),
+  })).output(z.object({
+    currentPath: z.string(),
+    parentPath: z.string().nullable(),
+    directories: z.array(z.string()),
+    shortcuts: z.array(z.object({
+      name: z.string(),
+      path: z.string(),
+    })).optional(),
+    error: z.string().optional(),
+  })),
 });
 
 export type AppRouter = typeof appContract;

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { orpc } from '../lib/orpc'
+import { orpc, orpcClient } from '../lib/orpc'
 import { useEffect, useState } from 'react'
-import { Folder, Save, RefreshCw, AlertCircle, HelpCircle, HardDrive, Smartphone } from 'lucide-react'
+import { Folder, Save, RefreshCw, AlertCircle, HelpCircle, HardDrive, Smartphone, FolderOpen, ChevronRight, ArrowUp, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 export const Route = createFileRoute('/settings')({
@@ -12,6 +12,57 @@ function SettingsComponent() {
   const queryClient = useQueryClient()
   const [vaultPath, setVaultPath] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  // Picker state
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const [pickerPath, setPickerPath] = useState('')
+  const [pickerDirs, setPickerDirs] = useState<string[]>([])
+  const [pickerParent, setPickerParent] = useState<string | null>(null)
+  const [pickerShortcuts, setPickerShortcuts] = useState<Array<{ name: string; path: string }>>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerError, setPickerError] = useState<string | null>(null)
+
+  const loadDirectory = async (targetPath: string) => {
+    setPickerLoading(true)
+    setPickerError(null)
+    try {
+      const res = await orpcClient.browseDirectories({ path: targetPath })
+      setPickerPath(res.currentPath)
+      setPickerParent(res.parentPath)
+      setPickerDirs(res.directories)
+      setPickerShortcuts(res.shortcuts || [])
+      if (res.error) {
+        setPickerError(res.error)
+      }
+    } catch (err: any) {
+      setPickerError(err.message || 'Failed to load directory')
+    } finally {
+      setPickerLoading(false)
+    }
+  }
+
+  const handleBrowseClick = () => {
+    setIsPickerOpen(true)
+    loadDirectory(vaultPath)
+  }
+
+  const handleFolderClick = (folderName: string) => {
+    const nextPath = pickerPath.endsWith('/') 
+      ? `${pickerPath}${folderName}`
+      : `${pickerPath}/${folderName}`
+    loadDirectory(nextPath)
+  }
+
+  const handleGoUp = () => {
+    if (pickerParent) {
+      loadDirectory(pickerParent)
+    }
+  }
+
+  const handleSelectPath = () => {
+    setVaultPath(pickerPath)
+    setIsPickerOpen(false)
+  }
 
   // Query current settings
   const { data: settingsData, isLoading: isSettingsLoading } = useQuery(
@@ -84,18 +135,27 @@ function SettingsComponent() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
                     <label htmlFor="vault-path" className="block text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)] ml-1">
-                      Local Absolute Path
+                      Local Path
                     </label>
-                    <div className="relative">
+                    <div className="flex gap-2">
                       <input
                         id="vault-path"
                         type="text"
                         value={vaultPath}
                         onChange={(e) => setVaultPath(e.target.value)}
-                        className="w-full px-4 py-4 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] text-[var(--sea-ink)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] transition-all"
+                        className="flex-grow px-4 py-4 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] text-[var(--sea-ink)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] transition-all"
                         placeholder="/absolute/path/to/your/ObsidianVault"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={handleBrowseClick}
+                        className="px-5 rounded-xl bg-[var(--surface-strong)] hover:bg-[var(--foam)] border border-[var(--line)] text-[var(--sea-ink)] hover:text-[var(--lagoon-deep)] font-bold flex items-center justify-center gap-2 transition-all cursor-pointer select-none shrink-0"
+                        title="Browse directories"
+                      >
+                        <FolderOpen size={18} />
+                        <span className="hidden sm:inline">Browse</span>
+                      </button>
                     </div>
                     <p className="text-xs text-[var(--sea-ink-soft)] italic ml-1">
                       Note: Specify the absolute path to your Obsidian vault directory. If you are running the application in a virtualized or containerized environment, ensure the path reflects the environment's mount structure.
@@ -226,6 +286,147 @@ function SettingsComponent() {
         </div>
 
       </div>
+
+      {isPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[var(--surface-strong)] border border-[var(--line)] w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden transition-all scale-in">
+            
+            {/* Modal Header */}
+            <div className="p-6 border-b border-[var(--line)] flex items-center justify-between shrink-0 bg-surface">
+              <div className="flex items-center gap-3">
+                <FolderOpen className="text-[var(--lagoon-deep)]" size={24} />
+                <h3 className="text-xl font-bold text-[var(--sea-ink)]">Select Vault Directory</h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsPickerOpen(false)}
+                className="p-2 rounded-lg text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)] hover:bg-[var(--foam)] transition-all cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Path Navigation bar */}
+            <div className="px-6 py-4 border-b border-[var(--line)] bg-[var(--foam)]/30 flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={handleGoUp}
+                disabled={!pickerParent || pickerLoading}
+                className="p-2.5 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] text-[var(--sea-ink)] hover:text-[var(--lagoon-deep)] hover:bg-[var(--foam)] transition-all disabled:opacity-40 disabled:hover:text-[var(--sea-ink)] disabled:hover:bg-[var(--surface-strong)] cursor-pointer disabled:cursor-not-allowed shrink-0"
+                title="Go up one level"
+              >
+                <ArrowUp size={16} />
+              </button>
+              
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  value={pickerPath}
+                  onChange={(e) => setPickerPath(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      loadDirectory(pickerPath);
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] text-[var(--sea-ink)] font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] transition-all"
+                  title="Current location path (press Enter to go)"
+                />
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => loadDirectory(pickerPath)}
+                disabled={pickerLoading}
+                className="px-4 py-2.5 rounded-xl bg-sea-ink text-bg-base hover:bg-sea-ink-soft font-bold text-xs transition-all cursor-pointer shrink-0"
+              >
+                Go
+              </button>
+            </div>
+
+            {/* Quick Access Shortcuts */}
+            {pickerShortcuts.length > 0 && (
+              <div className="px-6 py-3 border-b border-[var(--line)] bg-[var(--foam)]/10 flex flex-wrap items-center gap-2 shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--sea-ink-soft)] mr-1">
+                  Quick Access:
+                </span>
+                {pickerShortcuts.map((shortcut) => (
+                  <button
+                    type="button"
+                    key={shortcut.name}
+                    onClick={() => loadDirectory(shortcut.path)}
+                    className="px-3 py-1 rounded-lg text-xs font-bold bg-[var(--surface-strong)] hover:bg-[var(--foam)] border border-[var(--line)] text-[var(--sea-ink)] hover:text-[var(--lagoon-deep)] transition-all cursor-pointer select-none"
+                  >
+                    {shortcut.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Folder list container */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-2">
+              {pickerError && (
+                <div className="p-4 rounded-xl bg-red-50 text-red-800 border border-red-100 flex items-start gap-3 text-sm font-medium">
+                  <AlertCircle className="shrink-0 mt-0.5" size={18} />
+                  <div>
+                    <div className="font-bold">Error loading folder</div>
+                    <div className="text-xs opacity-90 mt-0.5">{pickerError}</div>
+                  </div>
+                </div>
+              )}
+
+              {pickerLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <RefreshCw className="animate-spin text-[var(--lagoon-deep)]" size={32} />
+                  <span className="text-xs text-[var(--sea-ink-soft)] font-medium">Reading folder contents...</span>
+                </div>
+              ) : pickerDirs.length === 0 ? (
+                <div className="text-center py-16 text-sm text-[var(--sea-ink-soft)] italic border border-dashed border-[var(--line)] rounded-2xl bg-[var(--foam)]/10">
+                  No subdirectories found in this folder.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {pickerDirs.map((dirName) => (
+                    <button
+                      type="button"
+                      key={dirName}
+                      onClick={() => handleFolderClick(dirName)}
+                      className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--surface-strong)] border border-[var(--line)] hover:border-[var(--lagoon)] hover:bg-[var(--foam)]/40 transition-all text-left group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Folder className="text-[var(--sea-ink-soft)] group-hover:text-[var(--lagoon-deep)] shrink-0 transition-colors" size={18} />
+                        <span className="font-semibold text-sm text-[var(--sea-ink)] truncate">{dirName}</span>
+                      </div>
+                      <ChevronRight className="text-[var(--sea-ink-soft)] opacity-0 group-hover:opacity-100 group-hover:text-[var(--lagoon-deep)] transition-all shrink-0" size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-[var(--line)] flex items-center justify-end gap-3 shrink-0 bg-surface">
+              <button
+                type="button"
+                onClick={() => setIsPickerOpen(false)}
+                className="py-3 px-5 rounded-xl border border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--foam)] font-bold text-sm transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectPath}
+                disabled={pickerLoading}
+                className="py-3 px-6 rounded-xl bg-sea-ink text-bg-base hover:bg-sea-ink-soft font-bold text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FolderOpen size={16} />
+                Select Current Folder
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

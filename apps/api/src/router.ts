@@ -5,6 +5,7 @@ import { reindexFile } from "./reindex";
 import { loadConfig } from "./config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import systemOs from "node:os";
 import { getWatcher, setWatcher } from "./watcher-manager";
 
 const config = loadConfig();
@@ -248,8 +249,7 @@ export const router = os.router({
     };
   }),
   getSettings: os.getSettings.handler(async () => {
-    const parentPath = path.dirname(config.vaultPath);
-    return { vaultPath: parentPath };
+    return { vaultPath: config.vaultPath };
   }),
   updateSettings: os.updateSettings.use(authMiddleware).handler(async ({ input }: any) => {
     const { vaultPath } = input;
@@ -378,6 +378,119 @@ export const router = os.router({
     } catch (err: any) {
       console.error("[Settings] Error restarting watcher / syncing:", err);
       return { success: false, error: `Settings updated, but sync or watcher failed: ${err.message}` };
+    }
+  }),
+  browseDirectories: os.browseDirectories.handler(async ({ input }: any) => {
+    const { createLogger } = await import("@llm-wiki/core");
+    const logger = createLogger("settings");
+
+    const targetPath = input?.path || config.vaultPath || systemOs.homedir() || "/";
+
+    // Build quick access shortcuts
+    const shortcuts: Array<{ name: string; path: string }> = [];
+
+    // 1. Home directory
+    const homeDir = systemOs.homedir();
+    if (homeDir) {
+      shortcuts.push({ name: "Home (~)", path: homeDir.replace(/\\/g, "/") });
+    }
+
+    // 2. Root directory
+    shortcuts.push({ name: "Root (/) ", path: "/" });
+
+    // 3. WSL / Linux drives (check /mnt)
+    if (process.platform === "linux") {
+      try {
+        const mntEntries = await fs.readdir("/mnt", { withFileTypes: true });
+        for (const entry of mntEntries) {
+          if (entry.isDirectory() && !entry.name.startsWith(".")) {
+            const name = entry.name;
+            if (name.length === 1 || name === "c" || name === "d" || name === "e" || name === "f") {
+              shortcuts.push({
+                name: `Windows (${name.toUpperCase()}:)`,
+                path: `/mnt/${name}`
+              });
+            } else {
+              shortcuts.push({
+                name: `Mount (${name})`,
+                path: `/mnt/${name}`
+              });
+            }
+          }
+        }
+      } catch {}
+    } else if (process.platform === "win32") {
+      // 4. Windows drives
+      for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+        const drivePath = `${letter}:\\`;
+        try {
+          await fs.access(drivePath);
+          shortcuts.push({
+            name: `Drive (${letter}:)`,
+            path: drivePath.replace(/\\/g, "/")
+          });
+        } catch {}
+      }
+    }
+
+    // Resolve targetPath to absolute path
+    let absolutePath = path.resolve(targetPath);
+
+    // If path is a file, get its directory
+    try {
+      const stat = await fs.stat(absolutePath);
+      if (!stat.isDirectory()) {
+        absolutePath = path.dirname(absolutePath);
+      }
+    } catch {
+      // If path doesn't exist, fall back to home dir or process cwd
+      absolutePath = path.resolve(systemOs.homedir() || process.cwd());
+    }
+
+    try {
+      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
+
+      // Filter only directories and non-hidden ones
+      const directories = entries
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+        .map((entry) => entry.name)
+        .sort((a, b) => a.localeCompare(b));
+
+      const parentPath = absolutePath === path.parse(absolutePath).root 
+        ? null 
+        : path.dirname(absolutePath);
+
+      return {
+        currentPath: absolutePath.replace(/\\/g, "/"),
+        parentPath: parentPath ? parentPath.replace(/\\/g, "/") : null,
+        directories,
+        shortcuts
+      };
+    } catch (err: any) {
+      logger.error(`Failed to browse path ${absolutePath}`, err);
+      const home = path.resolve(systemOs.homedir() || "/");
+      try {
+        const entries = await fs.readdir(home, { withFileTypes: true });
+        const directories = entries
+          .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+          .map((entry) => entry.name)
+          .sort((a, b) => a.localeCompare(b));
+        return {
+          currentPath: home.replace(/\\/g, "/"),
+          parentPath: null,
+          directories,
+          shortcuts,
+          error: err.message
+        };
+      } catch {
+        return {
+          currentPath: "/",
+          parentPath: null,
+          directories: [],
+          shortcuts,
+          error: err.message
+        };
+      }
     }
   }),
 });

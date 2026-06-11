@@ -17,11 +17,11 @@ export async function refactorNotePreview(
   const logger = createLogger("refactor");
   logger.info("New refactor request", { filePath });
 
-  const vaultParent = path.resolve(config.vaultPath, "..");
-  const fullPath = path.resolve(vaultParent, filePath);
+  const vaultRoot = path.resolve(config.vaultPath);
+  const fullPath = path.resolve(vaultRoot, filePath);
   
   // Safety check: ensure file is within vault root directory
-  if (!fullPath.startsWith(vaultParent)) {
+  if (!fullPath.startsWith(vaultRoot)) {
     throw new Error("Invalid file path: must be within vault directory");
   }
 
