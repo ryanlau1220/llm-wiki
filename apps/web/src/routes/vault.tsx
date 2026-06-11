@@ -694,7 +694,6 @@ function VaultComponent() {
                 </div>
 
                 {/* Mobile Search List Drawer */}
-                <>
                   {isMobileListOpen && (
                     <button
                       type="button"
@@ -784,7 +783,6 @@ function VaultComponent() {
                       </div>
                     </div>
                   </div>
-                </>
 
                 {/* Mobile Note Preview Bottom Sheet */}
                 {isMobilePreviewOpen && (
