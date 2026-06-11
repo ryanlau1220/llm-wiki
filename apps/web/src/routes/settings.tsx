@@ -213,10 +213,10 @@ function SettingsComponent() {
                   Saving a new path triggers an automatic vault synchronization check to align database entries with your local markdown files.
                 </li>
                 <li>
-                  Your vault is structured into two main directories: <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">human/</code> for your personal notes, and <code className="bg-[var(--foam)] px-1 py-0.5 rounded text-[var(--lagoon-deep)]">ai-generated/</code> for assistant-generated content.
+                  Your vault maintains a single, unified folder structure. Notes are saved directly where they belong, keeping your graph clean and preventing duplicate files.
                 </li>
                 <li>
-                  Opening the root vault folder in Obsidian allows you to navigate and edit both directories directly within your sidebar.
+                  Refactoring notes updates their content in-place while preserving all metadata, inbound links, and outbound links intact.
                 </li>
               </ul>
             </div>
