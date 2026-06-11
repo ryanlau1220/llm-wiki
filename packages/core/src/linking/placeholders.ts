@@ -12,7 +12,7 @@ export async function createPlaceholder(
   label: string,
   requestId: string
 ): Promise<string> {
-  const vaultRoot = path.resolve(config.vaultPath, "..", "ai-generated");
+  const vaultRoot = path.resolve(config.vaultPath);
   await fs.mkdir(vaultRoot, { recursive: true });
 
   const safeSlug = slugify(label);
