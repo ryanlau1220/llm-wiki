@@ -91,6 +91,15 @@ export const appContract = oc.router({
     created_at: z.string(),
     updated_at: z.string()
   })),
+  getSettings: oc.input(z.void().optional()).output(z.object({
+    vaultPath: z.string(),
+  })),
+  updateSettings: oc.input(z.object({
+    vaultPath: z.string().min(1),
+  })).output(z.object({
+    success: z.boolean(),
+    error: z.string().optional(),
+  })),
 });
 
 export type AppRouter = typeof appContract;

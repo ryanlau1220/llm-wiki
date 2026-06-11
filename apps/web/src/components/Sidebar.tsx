@@ -7,7 +7,8 @@ import {
   ChevronRight,
   PlusCircle,
   Sparkles,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { orpc } from '../lib/orpc'
@@ -50,6 +51,7 @@ export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onCl
     { label: 'AI Generator', icon: Sparkles, to: '/generator' },
     { label: 'Refactor Note', icon: RotateCcw, to: '/refactor' },
     { label: 'Wiki Pages', icon: BookOpen, to: '/vault' },
+    { label: 'Settings', icon: Settings, to: '/settings' },
   ]
 
   return (

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VaultRouteImport } from './routes/vault'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RefactorRouteImport } from './routes/refactor'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GeneratorRouteImport } from './routes/generator'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const VaultRoute = VaultRouteImport.update({
   id: '/vault',
   path: '/vault',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RefactorRoute = RefactorRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
+  '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
+  '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,28 @@ export interface FileRoutesById {
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
   '/refactor': typeof RefactorRoute
+  '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/generator' | '/login' | '/refactor' | '/vault'
+  fullPaths:
+    | '/'
+    | '/generator'
+    | '/login'
+    | '/refactor'
+    | '/settings'
+    | '/vault'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/generator' | '/login' | '/refactor' | '/vault'
-  id: '__root__' | '/' | '/generator' | '/login' | '/refactor' | '/vault'
+  to: '/' | '/generator' | '/login' | '/refactor' | '/settings' | '/vault'
+  id:
+    | '__root__'
+    | '/'
+    | '/generator'
+    | '/login'
+    | '/refactor'
+    | '/settings'
+    | '/vault'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +98,7 @@ export interface RootRouteChildren {
   GeneratorRoute: typeof GeneratorRoute
   LoginRoute: typeof LoginRoute
   RefactorRoute: typeof RefactorRoute
+  SettingsRoute: typeof SettingsRoute
   VaultRoute: typeof VaultRoute
 }
 
@@ -86,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/vault'
       fullPath: '/vault'
       preLoaderRoute: typeof VaultRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/refactor': {
@@ -124,6 +154,7 @@ const rootRouteChildren: RootRouteChildren = {
   GeneratorRoute: GeneratorRoute,
   LoginRoute: LoginRoute,
   RefactorRoute: RefactorRoute,
+  SettingsRoute: SettingsRoute,
   VaultRoute: VaultRoute,
 }
 export const routeTree = rootRouteImport
