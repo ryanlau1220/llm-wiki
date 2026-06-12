@@ -34,6 +34,57 @@ export const Route = createFileRoute('/vault')({
   component: VaultComponent,
 })
 
+interface MarkdownLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+  href?: string;
+  notes?: any[];
+  setSelectedNoteId: (id: string) => void;
+}
+
+function MarkdownLink({ href, children, notes, setSelectedNoteId, ...props }: MarkdownLinkProps) {
+  const h = typeof href === 'string' ? href : '';
+  const isLocal = h.startsWith('#') || (!h.includes('://') && h.length > 0);
+
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isLocal) {
+      let cleanTarget = decodeURIComponent(h);
+      if (cleanTarget.startsWith('#')) {
+        cleanTarget = cleanTarget.slice(1);
+      }
+      if (cleanTarget.startsWith('/')) {
+        cleanTarget = cleanTarget.slice(1);
+      }
+      
+      const targetSlug = cleanTarget.replace(/\.md$/, '').toLowerCase();
+      
+      const found = notes?.find(n => 
+        n.title?.toLowerCase() === targetSlug || 
+        n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
+        n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
+      );
+      
+      if (found) {
+        e.preventDefault();
+        setSelectedNoteId(found.id);
+      } else {
+        // Prevent browser navigation to non-existent local route
+        e.preventDefault();
+        console.warn(`Local note target not found in loaded notes: ${targetSlug}`);
+      }
+    }
+  };
+
+  return (
+    <a
+      href={h || undefined}
+      onClick={handleClick}
+      className={isLocal ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+}
+
 function VaultComponent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -329,33 +380,16 @@ function VaultComponent() {
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
-                              a: ({ href, children, ...props }) => {
-                                const h = typeof href === 'string' ? href : '';
-                                const isWikilink = h.startsWith('#');
-                                return (
-                                  <a
-                                    href={h || undefined}
-                                    onClick={(e) => {
-                                      if (isWikilink) {
-                                        e.preventDefault();
-                                        const targetSlug = decodeURIComponent(h.slice(1)).toLowerCase();
-                                        const found = notes?.find(n => 
-                                          n.title?.toLowerCase() === targetSlug || 
-                                          n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
-                                          n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
-                                        );
-                                        if (found) {
-                                          setSelectedNoteId(found.id);
-                                        }
-                                      }
-                                    }}
-                                    className={isWikilink ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
-                                    {...props}
-                                  >
-                                    {children}
-                                  </a>
-                                );
-                              }
+                              a: ({ href, children, ...props }) => (
+                                <MarkdownLink
+                                  href={href}
+                                  notes={notes}
+                                  setSelectedNoteId={setSelectedNoteId}
+                                  {...props}
+                                >
+                                  {children}
+                                </MarkdownLink>
+                              )
                             }}
                           >
                             {transformWikilinks(transformImageEmbeds(activeNote.content))}
@@ -606,33 +640,16 @@ function VaultComponent() {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          a: ({ href, children, ...props }) => {
-                            const h = typeof href === 'string' ? href : '';
-                            const isWikilink = h.startsWith('#');
-                            return (
-                              <a
-                                href={h || undefined}
-                                onClick={(e) => {
-                                  if (isWikilink) {
-                                    e.preventDefault();
-                                    const targetSlug = decodeURIComponent(h.slice(1)).toLowerCase();
-                                    const found = notes?.find(n => 
-                                      n.title?.toLowerCase() === targetSlug || 
-                                      n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
-                                      n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
-                                    );
-                                    if (found) {
-                                      setSelectedNoteId(found.id);
-                                    }
-                                  }
-                                }}
-                                className={isWikilink ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
-                                {...props}
-                              >
-                                {children}
-                              </a>
-                            );
-                          }
+                          a: ({ href, children, ...props }) => (
+                            <MarkdownLink
+                              href={href}
+                              notes={notes}
+                              setSelectedNoteId={setSelectedNoteId}
+                              {...props}
+                            >
+                              {children}
+                            </MarkdownLink>
+                          )
                         }}
                       >
                         {transformWikilinks(transformImageEmbeds(activeNote.content))}
@@ -830,33 +847,16 @@ function VaultComponent() {
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
-                                a: ({ href, children, ...props }) => {
-                                  const h = typeof href === 'string' ? href : '';
-                                  const isWikilink = h.startsWith('#');
-                                  return (
-                                    <a
-                                      href={h || undefined}
-                                      onClick={(e) => {
-                                        if (isWikilink) {
-                                          e.preventDefault();
-                                          const targetSlug = decodeURIComponent(h.slice(1)).toLowerCase();
-                                          const found = notes?.find(n => 
-                                            n.title?.toLowerCase() === targetSlug || 
-                                            n.path.toLowerCase().endsWith(`/${targetSlug}.md`) ||
-                                            n.path.toLowerCase().split('/').pop()?.replace('.md', '') === targetSlug
-                                          );
-                                          if (found) {
-                                            setSelectedNoteId(found.id);
-                                          }
-                                        }
-                                      }}
-                                      className={isWikilink ? "cursor-pointer text-[var(--lagoon-deep)] hover:underline font-bold" : "text-[var(--lagoon-deep)] hover:underline"}
-                                      {...props}
-                                    >
-                                      {children}
-                                    </a>
-                                  );
-                                }
+                                a: ({ href, children, ...props }) => (
+                                  <MarkdownLink
+                                    href={href}
+                                    notes={notes}
+                                    setSelectedNoteId={setSelectedNoteId}
+                                    {...props}
+                                  >
+                                    {children}
+                                  </MarkdownLink>
+                                )
                               }}
                             >
                               {transformWikilinks(transformImageEmbeds(activeNote.content))}
