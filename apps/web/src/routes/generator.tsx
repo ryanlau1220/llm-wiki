@@ -18,18 +18,19 @@ import { z } from 'zod'
 
 export const Route = createFileRoute('/generator')({
   validateSearch: z.object({
-    mode: z.enum(['rag', 'general', 'synthesis']).optional(),
+    mode: z.enum(['rag', 'general', 'synthesis', 'bootstrap']).optional(),
     noteIds: z.string().optional(),
+    title: z.string().optional(),
   }),
   component: GeneratorComponent,
 })
 
 function GeneratorComponent() {
-  const { mode: queryMode, noteIds: queryNoteIds } = Route.useSearch()
-  const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis'>(queryMode || 'rag')
-  const [queryText, setQueryText] = useState('')
+  const { mode: queryMode, noteIds: queryNoteIds, title: queryTitle } = Route.useSearch()
+  const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis' | 'bootstrap'>(queryMode || 'rag')
+  const [queryText, setQueryText] = useState(queryTitle || '')
   const [result, setResult] = useState<{
-    mode: 'rag' | 'general' | 'synthesis';
+    mode: 'rag' | 'general' | 'synthesis' | 'bootstrap';
     query: string;
     data: any;
   } | null>(null)
@@ -43,6 +44,10 @@ function GeneratorComponent() {
 
   const { data: notes } = useQuery(
     orpc.listNotes.queryOptions()
+  )
+
+  const { data: linkHealth, isLoading: linkHealthLoading } = useQuery(
+    orpc.getLinkHealth.queryOptions()
   )
 
   const filteredNotesList = notes?.filter(note => 
@@ -90,6 +95,33 @@ function GeneratorComponent() {
     })
   )
 
+  const bootstrapMutation = useMutation(
+    orpc.bootstrapPreview.mutationOptions({
+      onSuccess: (data) => {
+        setResult({
+          mode: 'bootstrap',
+          query: queryText,
+          data
+        })
+        setSaveStatus(null)
+      }
+    })
+  )
+
+  const bootstrapSaveMutation = useMutation(
+    orpc.confirmBootstrapSave.mutationOptions({
+      onSuccess: (data) => {
+        if (data.status === 'rejected') {
+          setSaveStatus({ type: 'error', message: `Save rejected: ${data.error?.replace(/_/g, ' ')}` })
+        } else {
+          setSaveStatus({ type: 'success', message: 'Bootstrap note successfully created and saved to your vault!' })
+          setResult(null)
+          setQueryText('')
+        }
+      }
+    })
+  )
+
   const synthesisSaveMutation = useMutation(
     orpc.confirmSynthesisSave.mutationOptions({
       onSuccess: (data) => {
@@ -110,6 +142,8 @@ function GeneratorComponent() {
 
     if (activeMode === 'synthesis') {
       synthesisMutation.mutate({ topic: queryText, noteIds: selectedNoteIds })
+    } else if (activeMode === 'bootstrap') {
+      bootstrapMutation.mutate({ title: queryText })
     } else {
       askMutation.mutate({ query: queryText, mode: activeMode })
     }
@@ -120,6 +154,12 @@ function GeneratorComponent() {
     if (result.mode === 'synthesis') {
       if (!result.data?.note) return
       synthesisSaveMutation.mutate({
+        requestId: result.data.requestId,
+        note: result.data.note
+      })
+    } else if (result.mode === 'bootstrap') {
+      if (!result.data?.note) return
+      bootstrapSaveMutation.mutate({
         requestId: result.data.requestId,
         note: result.data.note
       })
@@ -165,12 +205,16 @@ function GeneratorComponent() {
             <div className="shrink-0 pl-3 pr-2 border-r border-[var(--line)]">
               <select
                 value={activeMode}
-                onChange={(e) => setActiveMode(e.target.value as any)}
+                onChange={(e) => {
+                  setActiveMode(e.target.value as any)
+                  setQueryText('')
+                }}
                 className="bg-transparent text-xs font-bold text-[var(--sea-ink)] focus:outline-none cursor-pointer pr-2 py-2"
               >
                 <option value="rag">Ask Wiki (RAG)</option>
                 <option value="general">Ask AI (Web Search)</option>
                 <option value="synthesis">Synthesize Topic</option>
+                <option value="bootstrap">AI Bootstrapper (Unresolved Link)</option>
               </select>
             </div>
 
@@ -183,17 +227,19 @@ function GeneratorComponent() {
                   ? "Ask a question about your wiki content..." 
                   : activeMode === 'general' 
                   ? "Ask general knowledge or browse the web..." 
-                  : "Enter a topic to synthesize (e.g. 'Drizzle ORM')"
+                  : activeMode === 'synthesis'
+                  ? "Enter a topic to synthesize (e.g. 'Drizzle ORM')"
+                  : "Enter concept or select unresolved link below..."
               }
               className="flex-1 bg-transparent px-4 py-3 text-base text-[var(--sea-ink)] focus:outline-none placeholder:text-[var(--sea-ink-soft)]"
             />
 
             <button
               type="submit"
-              disabled={askMutation.isPending || synthesisMutation.isPending}
+              disabled={askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending}
               className="p-3 bg-sea-ink text-bg-base rounded-xl hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-all cursor-pointer shrink-0"
             >
-              {askMutation.isPending || synthesisMutation.isPending ? (
+              {askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending ? (
                 <Loader2 className="animate-spin" size={18} />
               ) : (
                 <Send size={18} />
@@ -271,6 +317,54 @@ function GeneratorComponent() {
               </div>
             </div>
           )}
+
+          {activeMode === 'bootstrap' && (
+            <div className="w-full mt-6 text-left p-5 bg-[var(--surface-strong)] border border-[var(--line)] rounded-2xl shadow-sm space-y-4 max-w-2xl">
+              <div className="border-b border-[var(--line)] pb-2 flex items-center justify-between">
+                <span className="text-xs font-black text-[var(--sea-ink)] uppercase tracking-wider">
+                  Unresolved Links in Vault
+                </span>
+                {linkHealth && linkHealth.length > 0 && (
+                  <span className="text-[10px] font-bold text-[var(--sea-ink-soft)] bg-[var(--line)] px-2 py-0.5 rounded-full">
+                    {linkHealth.length} missing note{linkHealth.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              
+              {linkHealthLoading ? (
+                <div className="flex items-center gap-2 text-xs text-[var(--sea-ink-soft)] py-6 justify-center">
+                  <Loader2 className="animate-spin" size={14} />
+                  <span>Loading unresolved links...</span>
+                </div>
+              ) : !linkHealth || linkHealth.length === 0 ? (
+                <p className="text-xs text-green-600 dark:text-green-400 font-bold text-center py-6">
+                  ✨ No unresolved links! Your vault is completely healthy.
+                </p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto gap-2 grid grid-cols-1 sm:grid-cols-2 p-2 bg-[var(--surface)] border border-[var(--line)] rounded-xl">
+                  {linkHealth.map((link) => (
+                    <button
+                      key={link.label}
+                      type="button"
+                      onClick={() => setQueryText(link.label)}
+                      className={`flex items-center justify-between p-2.5 rounded-lg border text-left text-xs transition-all cursor-pointer ${
+                        queryText === link.label
+                          ? 'bg-[var(--lagoon)] border-[var(--lagoon)] text-[var(--sea-ink)] font-bold shadow-sm'
+                          : 'bg-[var(--foam)] border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--line)]'
+                      }`}
+                    >
+                      <span className="truncate mr-2 font-bold">[[{link.label}]]</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                        queryText === link.label ? 'bg-white/30 text-[var(--sea-ink)]' : 'bg-[var(--line)] text-[var(--sea-ink-soft)]'
+                      }`}>
+                        {link.count} ref{link.count > 1 ? 's' : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6 rise-in">
@@ -292,12 +386,16 @@ function GeneratorComponent() {
               <div className="shrink-0 pl-3 pr-2 border-r border-[var(--line)]">
                 <select
                   value={activeMode}
-                  onChange={(e) => setActiveMode(e.target.value as any)}
+                  onChange={(e) => {
+                    setActiveMode(e.target.value as any)
+                    setQueryText('')
+                  }}
                   className="bg-transparent text-xs font-bold text-[var(--sea-ink)] focus:outline-none cursor-pointer pr-1 py-1"
                 >
                   <option value="rag">Ask Wiki (RAG)</option>
                   <option value="general">Ask AI (Web Search)</option>
                   <option value="synthesis">Synthesize Topic</option>
+                  <option value="bootstrap">AI Bootstrapper (Unresolved Link)</option>
                 </select>
               </div>
 
@@ -310,10 +408,10 @@ function GeneratorComponent() {
 
               <button
                 type="submit"
-                disabled={askMutation.isPending || synthesisMutation.isPending}
+                disabled={askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending}
                 className="p-2 mr-1 bg-sea-ink text-bg-base rounded-lg hover:bg-lagoon-deep hover:text-bg-base disabled:opacity-50 transition-colors cursor-pointer"
               >
-                {askMutation.isPending || synthesisMutation.isPending ? (
+                {askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending ? (
                   <Loader2 className="animate-spin" size={14} />
                 ) : (
                   <Send size={14} />
@@ -322,7 +420,7 @@ function GeneratorComponent() {
             </form>
           </div>
 
-          {(askMutation.isPending || synthesisMutation.isPending) && (
+          {(askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending) && (
             <div className="island-shell p-16 rounded-xl text-center flex flex-col items-center">
               <Loader2 className="animate-spin text-[var(--lagoon-deep)] mb-4" size={48} />
               <h3 className="text-xl font-bold text-[var(--sea-ink)] mb-1">Generating Response</h3>
@@ -330,16 +428,16 @@ function GeneratorComponent() {
             </div>
           )}
 
-          {!(askMutation.isPending || synthesisMutation.isPending) && result.data && (
+          {!(askMutation.isPending || synthesisMutation.isPending || bootstrapMutation.isPending) && result.data && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 rise-in">
-              {/* Left Column: AI Answer (or Proposed Note for Synthesis) */}
+              {/* Left Column: AI Answer (or Proposed Note for Synthesis/Bootstrap) */}
               <section className="island-shell rounded-xl p-5 flex flex-col min-h-[28rem]">
                 <h2 className="island-kicker mb-3 flex items-center gap-2">
-                  <CheckCircle2 size={12} /> {result.mode === 'synthesis' ? 'Synthesized Wiki Note' : 'AI Response'}
+                  <CheckCircle2 size={12} /> {result.mode === 'synthesis' ? 'Synthesized Wiki Note' : result.mode === 'bootstrap' ? 'Bootstrapped Wiki Note' : 'AI Response'}
                 </h2>
                 <div className="flex-1 overflow-y-auto pr-1">
                   <div className="prose prose-slate max-w-none text-sm text-[var(--sea-ink)] leading-relaxed whitespace-pre-wrap font-sans select-text">
-                    {result.mode === 'synthesis' ? result.data.note?.content : result.data.answer}
+                    {result.mode === 'synthesis' || result.mode === 'bootstrap' ? result.data.note?.content : result.data.answer}
                   </div>
                 </div>
               </section>
@@ -361,7 +459,7 @@ function GeneratorComponent() {
                       <div className="text-xl font-bold text-[var(--sea-ink)]">{result.data.note?.title}</div>
                     </div>
 
-                    {result.mode !== 'synthesis' && (
+                    {result.mode !== 'synthesis' && result.mode !== 'bootstrap' && (
                       <div>
                         <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1">Content Summary</span>
                         <div className="text-xs text-[var(--sea-ink-soft)] bg-surface p-3 rounded-lg border border-[var(--line)] font-mono whitespace-pre-wrap overflow-y-auto max-h-[12rem] select-text">
@@ -417,15 +515,15 @@ function GeneratorComponent() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={askSaveMutation.isPending || synthesisSaveMutation.isPending}
+                  disabled={askSaveMutation.isPending || synthesisSaveMutation.isPending || bootstrapSaveMutation.isPending}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-lagoon text-lagoon-text rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-lagoon-text shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
                 >
-                  {askSaveMutation.isPending || synthesisSaveMutation.isPending ? (
+                  {askSaveMutation.isPending || synthesisSaveMutation.isPending || bootstrapSaveMutation.isPending ? (
                     <Loader2 className="animate-spin" size={18} />
                   ) : (
                     <>
                       <Save size={16} />
-                      {result.mode === 'synthesis' ? 'Save Synthesized Note' : 'Save to Wiki'}
+                      {result.mode === 'synthesis' ? 'Save Synthesized Note' : result.mode === 'bootstrap' ? 'Save Bootstrapped Note' : 'Save to Wiki'}
                     </>
                   )}
                 </button>
