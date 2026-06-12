@@ -25,12 +25,15 @@ import type {
 
 // Node colors
 const NODE_TYPE_COLORS: Record<string, string> = {
-  entity: "#06b6d4",    // Cyan
-  concept: "#a855f7",   // Purple
-  source: "#f97316",    // Orange
-  overview: "#eab308",  // Yellow
-  note: "#10b981",      // Green / Lagoon-like
-  other: "#6b7280",     // Gray
+  entity: "#06b6d4",        // Cyan
+  concept: "#a855f7",       // Purple
+  source: "#f97316",        // Orange
+  overview: "#eab308",      // Yellow
+  note: "#10b981",          // Green / Lagoon-like
+  ai_refactored: "#3b82f6",  // Blue
+  ai_generated: "#6366f1",   // Indigo
+  ai_synthesized: "#ec4899", // Pink
+  other: "#6b7280",         // Gray
 };
 
 const COMMUNITY_COLORS = [
@@ -347,7 +350,10 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
   const legendCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const node of nodes) {
-      const key = colorMode === "community" ? `community-${node.community}` : node.type.toLowerCase();
+      let key = colorMode === "community" ? `community-${node.community}` : node.type.toLowerCase();
+      if (colorMode === "type" && !NODE_TYPE_COLORS[key]) {
+        key = "other";
+      }
       counts[key] = (counts[key] ?? 0) + 1;
     }
     return counts;
@@ -576,7 +582,11 @@ export function GraphView({ rawNodes, rawEdges, selectedNoteId, onSelectNote }: 
                   <div key={type} className="flex items-center justify-between gap-6 text-sea-ink-soft">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="capitalize">{type}</span>
+                      <span className="capitalize">
+                        {type.startsWith("ai_")
+                          ? `AI ${type.slice(3).replace(/_/g, " ")}`
+                          : type}
+                      </span>
                     </div>
                     <span className="font-bold">{count}</span>
                   </div>
