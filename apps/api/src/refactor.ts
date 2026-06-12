@@ -46,10 +46,11 @@ REFACTORING RULES:
    - ## Summary (A concise overview)
    - ## Key Concepts (Bullet points of main ideas)
    - ## Detailed Breakdown (The core content restructured for clarity)
-   - ## Related Concepts (Suggested wikilinks)
+   - ## Related Concepts (Suggested wikilinks formatted exactly as [[Concept Name]] list, e.g., [[Machine Learning]])
 3. Use clear, professional language.
 4. Output your response as a JSON object matching the schema below.
 5. IMPORTANT: NEVER use unescaped double quotes inside the "content" or "title" string values. If you need to emphasize something or use a quote within the text, use single quotes (') or markdown bolding (**text**) instead. Unescaped double quotes will break the JSON parsing and fail the task.
+6. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]). Never use standard HTML or Markdown link syntax like [Machine Learning](/Machine%20Learning) or [Machine Learning](Machine%20Learning.md) for internal vault links.
 
 JSON SCHEMA:
 {
