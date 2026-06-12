@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -32,6 +32,19 @@ function RefactorComponent() {
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const [checkedSuggestions, setCheckedSuggestions] = useState<Record<string, boolean>>({})
   const [diffViewMode, setDiffViewMode] = useState<'split' | 'raw'>('split')
+
+  const leftScrollRef = useRef<HTMLDivElement>(null)
+  const rightScrollRef = useRef<HTMLDivElement>(null)
+  const activeScrollRef = useRef<'left' | 'right' | null>(null)
+
+  const syncScroll = (source: 'left' | 'right') => {
+    if (activeScrollRef.current !== source) return
+    const sourceEl = source === 'left' ? leftScrollRef.current : rightScrollRef.current
+    const targetEl = source === 'left' ? rightScrollRef.current : leftScrollRef.current
+    if (sourceEl && targetEl) {
+      targetEl.scrollTop = sourceEl.scrollTop
+    }
+  }
 
   useEffect(() => {
     if (previewData) {
@@ -305,7 +318,14 @@ function RefactorComponent() {
                       <span>Original Content</span>
                       <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded">Removed</span>
                     </h3>
-                    <div className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-[var(--surface)] p-3 rounded-lg select-text">
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                    <div 
+                      ref={leftScrollRef}
+                      onMouseEnter={() => { activeScrollRef.current = 'left' }}
+                      onMouseLeave={() => { if (activeScrollRef.current === 'left') activeScrollRef.current = null }}
+                      onScroll={() => syncScroll('left')}
+                      className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-[var(--surface)] p-3 rounded-lg select-text"
+                    >
                       {alignedDiff.map((line, idx) => (
                         <div
                           // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
@@ -326,18 +346,22 @@ function RefactorComponent() {
                   </article>
 
                   {/* Right: Aligned Refactored */}
-                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[32rem]">
-                    <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
-                      Refactored Preview
-                    </div>
+                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong flex flex-col h-[32rem]">
                     <h3 className="island-kicker mb-4 flex items-center justify-between text-[var(--lagoon-deep)] shrink-0">
                       <span className="flex items-center gap-2"><CheckCircle2 size={12} /> AI Improvements</span>
-                      <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded mr-20">Added</span>
+                      <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded">Added</span>
                     </h3>
                     
                     <div className="flex-1 flex flex-col min-h-0 space-y-3">
                       <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
-                      <div className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-surface p-3 rounded-lg select-text">
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                      <div 
+                        ref={rightScrollRef}
+                        onMouseEnter={() => { activeScrollRef.current = 'right' }}
+                        onMouseLeave={() => { if (activeScrollRef.current === 'right') activeScrollRef.current = null }}
+                        onScroll={() => syncScroll('right')}
+                        className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-surface p-3 rounded-lg select-text"
+                      >
                         {alignedDiff.map((line, idx) => (
                           <div
                             // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
@@ -363,7 +387,14 @@ function RefactorComponent() {
                   {/* Left: Raw Original */}
                   <article className="island-shell p-5 rounded-xl flex flex-col h-[32rem]">
                     <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
-                    <div className="flex-1 overflow-y-auto pr-1">
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                    <div 
+                      ref={leftScrollRef}
+                      onMouseEnter={() => { activeScrollRef.current = 'left' }}
+                      onMouseLeave={() => { if (activeScrollRef.current === 'left') activeScrollRef.current = null }}
+                      onScroll={() => syncScroll('left')}
+                      className="flex-1 overflow-y-auto pr-1"
+                    >
                       <pre className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap font-mono select-text leading-relaxed p-3 border border-[var(--line)] bg-[var(--surface)] rounded-lg">
                         {previewData.originalContent}
                       </pre>
@@ -371,17 +402,21 @@ function RefactorComponent() {
                   </article>
 
                   {/* Right: Raw Refactored */}
-                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[32rem]">
-                    <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
-                      Refactored Preview
-                    </div>
+                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong flex flex-col h-[32rem]">
                     <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)] shrink-0">
                       <CheckCircle2 size={12} /> AI Improvements
                     </h3>
                     
                     <div className="flex-1 flex flex-col min-h-0 space-y-3">
                       <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
-                      <div className="flex-1 text-xs text-[var(--sea-ink)] bg-surface p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                      <div 
+                        ref={rightScrollRef}
+                        onMouseEnter={() => { activeScrollRef.current = 'right' }}
+                        onMouseLeave={() => { if (activeScrollRef.current === 'right') activeScrollRef.current = null }}
+                        onScroll={() => syncScroll('right')}
+                        className="flex-1 text-xs text-[var(--sea-ink)] bg-surface p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto"
+                      >
                         {previewData.note.content}
                       </div>
                     </div>
