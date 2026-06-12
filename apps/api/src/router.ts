@@ -405,6 +405,9 @@ export const router = os.router({
         for (const entry of mntEntries) {
           if (entry.isDirectory() && !entry.name.startsWith(".")) {
             const name = entry.name;
+            if (name === "wsl" || name === "wslg") {
+              continue;
+            }
             if (name.length === 1 || name === "c" || name === "d" || name === "e" || name === "f") {
               shortcuts.push({
                 name: `Windows (${name.toUpperCase()}:)`,
