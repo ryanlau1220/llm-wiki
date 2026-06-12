@@ -104,9 +104,21 @@ function RefactorComponent() {
     note.title?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
 
-  const alignedDiff = previewData 
-    ? computeAlignedDiff(previewData.originalContent, previewData.note.content) 
-    : []
+  const alignedDiff = (() => {
+    if (!previewData) return []
+    const diff = computeAlignedDiff(previewData.originalContent, previewData.note.content)
+    let origCounter = 0
+    let refCounter = 0
+    return diff.map(line => {
+      const originalLineNum = line.original.type !== 'empty' ? ++origCounter : null
+      const refactoredLineNum = line.refactored.type !== 'empty' ? ++refCounter : null
+      return {
+        ...line,
+        originalLineNum,
+        refactoredLineNum
+      }
+    })
+  })()
 
   return (
     <div className="p-5 max-w-6xl mx-auto">
@@ -235,7 +247,15 @@ function RefactorComponent() {
               >
                 <ChevronRight size={20} className="rotate-180" />
               </button>
-              <h2 className="text-xl font-bold text-[var(--sea-ink)]">Refactoring: {selectedPath.split('/').pop()}</h2>
+              <h2 className="text-xl font-bold text-[var(--sea-ink)] flex items-center gap-2 flex-wrap">
+                <span>Refactoring: {selectedPath.split('/').pop()}</span>
+                {previewData?.note.title && (
+                  <>
+                    <span className="text-[var(--sea-ink-soft)] font-light">→</span>
+                    <span className="text-[var(--lagoon-deep)] font-semibold">{previewData.note.title}</span>
+                  </>
+                )}
+              </h2>
             </div>
 
             {previewData && (
@@ -338,7 +358,7 @@ function RefactorComponent() {
                               : 'text-[var(--sea-ink-soft)]'
                           }`}
                         >
-                          <span className="w-6 shrink-0 opacity-40 select-none text-right pr-2 text-[10px]">{line.original.type === 'removed' ? '-' : line.original.type === 'empty' ? ' ' : idx + 1}</span>
+                          <span className="w-8 shrink-0 opacity-40 select-none text-right pr-2 text-[10px] font-mono">{line.originalLineNum ?? ''}</span>
                           <span className="whitespace-pre-wrap">{line.original.content}</span>
                         </div>
                       ))}
@@ -352,8 +372,7 @@ function RefactorComponent() {
                       <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded">Added</span>
                     </h3>
                     
-                    <div className="flex-1 flex flex-col min-h-0 space-y-3">
-                      <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
+                    <div className="flex-1 flex flex-col min-h-0">
                       {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
                       <div 
                         ref={rightScrollRef}
@@ -374,7 +393,7 @@ function RefactorComponent() {
                                 : 'text-[var(--sea-ink)]'
                             }`}
                           >
-                            <span className="w-6 shrink-0 opacity-40 select-none text-right pr-2 text-[10px]">{line.refactored.type === 'added' ? '+' : line.refactored.type === 'empty' ? ' ' : idx + 1}</span>
+                            <span className="w-8 shrink-0 opacity-40 select-none text-right pr-2 text-[10px] font-mono">{line.refactoredLineNum ?? ''}</span>
                             <span className="whitespace-pre-wrap">{line.refactored.content}</span>
                           </div>
                         ))}
@@ -407,8 +426,7 @@ function RefactorComponent() {
                       <CheckCircle2 size={12} /> AI Improvements
                     </h3>
                     
-                    <div className="flex-1 flex flex-col min-h-0 space-y-3">
-                      <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
+                    <div className="flex-1 flex flex-col min-h-0">
                       {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
                       <div 
                         ref={rightScrollRef}
