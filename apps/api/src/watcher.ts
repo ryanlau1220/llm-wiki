@@ -184,14 +184,6 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
 
         const vaultPath = relative.replace(/\\/g, "/");
 
-        const rawContent = await fs.readFile(event.path, "utf8");
-        const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
-        const parsed = parseMarkdownDocument(rawContent);
-        const isAiGenerated = parsed.metadata.is_ai_generated === true || 
-                              parsed.metadata.type === "ai_refactored" || 
-                              parsed.metadata.type === "ai_generated";
-        const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
-
         logger.debug("Watcher event received", { event: event.event, path: vaultPath });
 
         if (event.event === "unlink") {
@@ -210,6 +202,14 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
           sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
           return;
         }
+
+        const rawContent = await fs.readFile(event.path, "utf8");
+        const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
+        const parsed = parseMarkdownDocument(rawContent);
+        const isAiGenerated = parsed.metadata.is_ai_generated === true || 
+                              parsed.metadata.type === "ai_refactored" || 
+                              parsed.metadata.type === "ai_generated";
+        const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
         await ingestMarkdown(
           {
