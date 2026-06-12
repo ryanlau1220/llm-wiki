@@ -19,6 +19,7 @@ export const appContract = oc.router({
   confirmRefactorSave: oc.input(confirmRefactorSavePayloadSchema).output(z.any()),
   synthesisPreview: oc.input(synthesisPreviewPayloadSchema).output(z.any()),
   confirmSynthesisSave: oc.input(confirmSynthesisSavePayloadSchema).output(z.any()),
+  confirmBootstrapSave: oc.input(confirmSynthesisSavePayloadSchema).output(z.any()),
   getWeakNotes: oc.input(weakNotesPayloadSchema.optional()).output(z.array(z.object({
     id: z.string(),
     path: z.string(),
@@ -102,6 +103,17 @@ export const appContract = oc.router({
   })).output(z.object({
     success: z.boolean(),
     error: z.string().optional(),
+  })),
+  bootstrapPreview: oc.input(z.object({
+    title: z.string().min(1),
+  })).output(z.object({
+    requestId: z.string(),
+    note: z.object({
+      title: z.string(),
+      content: z.string(),
+      links: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+    }),
   })),
   browseDirectories: oc.input(z.object({
     path: z.string().optional(),
