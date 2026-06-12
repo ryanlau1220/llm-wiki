@@ -52,10 +52,9 @@ This is a placeholder note for [[${label}]].
 }
 
 function slugify(value: string): string {
+  // Retain casing and spaces, just remove characters invalid in filesystem filenames
   return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[/\\?%*:|"<>]/g, "")
     .trim()
-    .replace(/\s+/g, "-")
     .slice(0, 80) || "placeholder";
 }
