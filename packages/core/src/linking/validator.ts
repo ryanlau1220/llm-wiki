@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, isNull } from "drizzle-orm";
 import { type createDbClient, documents, links } from "@llm-wiki/db";
 
 export type LinkValidationResult = {
@@ -64,7 +64,7 @@ export async function getGlobalLinkHealth(
       sourceId: links.source_document_id
     })
     .from(links)
-    .where(eq(links.target_document_id, null as any)); // Type hack for null
+    .where(isNull(links.target_document_id));
 
   const statsMap = new Map<string, { label: string; count: number; sourceIds: Set<string> }>();
 

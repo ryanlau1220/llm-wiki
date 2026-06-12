@@ -109,7 +109,7 @@ function DashboardComponent() {
             <Link2 size={18} className="text-red-500" />
             <span className="text-xl font-bold text-[var(--sea-ink)]">{linkHealthLoading ? '...' : totalBrokenLinks}</span>
           </div>
-          <p className="text-[10px] font-bold uppercase text-[var(--sea-ink-soft)] tracking-wider">Broken Links</p>
+          <p className="text-[10px] font-bold uppercase text-[var(--sea-ink-soft)] tracking-wider">Unresolved Links</p>
         </div>
       </section>
 
