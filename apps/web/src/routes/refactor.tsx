@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { orpc } from '../lib/orpc'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
+import { computeAlignedDiff } from '../lib/diff'
 import { 
   RotateCcw, 
   FileText, 
@@ -30,6 +31,7 @@ function RefactorComponent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
   const [checkedSuggestions, setCheckedSuggestions] = useState<Record<string, boolean>>({})
+  const [diffViewMode, setDiffViewMode] = useState<'split' | 'raw'>('split')
 
   useEffect(() => {
     if (previewData) {
@@ -42,7 +44,7 @@ function RefactorComponent() {
   )
 
   const { data: weakNotes, isLoading: isLoadingWeakNotes } = useQuery(
-    orpc.getWeakNotes.queryOptions({ minQualityScore: 0.55, maxResults: 50 })
+    orpc.getWeakNotes.queryOptions({ input: { minQualityScore: 0.55, maxResults: 50 } })
   )
 
   const previewMutation = useMutation(
@@ -87,7 +89,11 @@ function RefactorComponent() {
   const filteredNotes = notes?.filter(note => 
     note.path.toLowerCase().includes(searchTerm.toLowerCase()) ||
     note.title?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  ) || []
+
+  const alignedDiff = previewData 
+    ? computeAlignedDiff(previewData.originalContent, previewData.note.content) 
+    : []
 
   return (
     <div className="p-5 max-w-6xl mx-auto">
@@ -227,23 +233,43 @@ function RefactorComponent() {
           )}
 
           {previewData && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <article className="island-shell p-5 rounded-xl flex flex-col h-[32rem]">
-                <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
-                <div className="flex-1 overflow-y-auto pr-1">
-                  <pre className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap font-mono select-text leading-relaxed">
-                    {previewData.originalContent}
-                  </pre>
+            <div className="flex flex-col gap-6">
+              {/* Diff controls & Roadmap */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="island-shell p-5 rounded-xl flex flex-col justify-center gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)]">Comparison Mode</h3>
+                  <div className="flex bg-[var(--surface-strong)] p-1 rounded-xl border border-[var(--line)]">
+                    <button
+                      type="button"
+                      onClick={() => setDiffViewMode('split')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                        diffViewMode === 'split'
+                          ? 'bg-sea-ink text-bg-base'
+                          : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
+                      }`}
+                    >
+                      Split Git Diff
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiffViewMode('raw')}
+                      className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                        diffViewMode === 'raw'
+                          ? 'bg-sea-ink text-bg-base'
+                          : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
+                      }`}
+                    >
+                      Side-by-Side Raw
+                    </button>
+                  </div>
                 </div>
-              </article>
 
-              <div className="flex flex-col gap-5">
                 {previewData.improvements && previewData.improvements.length > 0 && (
-                  <div className="island-shell p-5 rounded-xl">
+                  <div className="island-shell p-5 rounded-xl lg:col-span-2">
                     <h3 className="island-kicker mb-3 flex items-center gap-1.5 text-[var(--lagoon-deep)]">
                       <ListChecks size={14} /> Quality Improvement Roadmap
                     </h3>
-                    <ul className="space-y-2.5">
+                    <ul className="space-y-2.5 max-h-24 overflow-y-auto pr-1">
                       {previewData.improvements.map((s: any) => {
                         const isChecked = !!checkedSuggestions[s.id || s.actionLabel];
                         return (
@@ -269,41 +295,119 @@ function RefactorComponent() {
                     </ul>
                   </div>
                 )}
-
-                <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[28rem]">
-                  <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
-                    Refactored Preview
-                  </div>
-                  <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)] shrink-0">
-                    <CheckCircle2 size={12} /> AI Improvements
-                  </h3>
-                  
-                  <div className="flex-1 flex flex-col min-h-0 space-y-3">
-                    <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
-                    <div className="flex-1 text-xs text-[var(--sea-ink)] bg-surface p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
-                      {previewData.note.content}
-                    </div>
-                  </div>
-                </article>
-
-                <button
-                  type="button"
-                  onClick={() => confirmMutation.mutate({
-                    requestId: previewData.requestId,
-                    sourcePath: selectedPath,
-                    note: {
-                      title: previewData.note.title,
-                      content: previewData.note.content,
-                      tags: previewData.note.tags,
-                      links: previewData.note.links
-                    }
-                  })}
-                  disabled={confirmMutation.isPending}
-                  className="w-full py-3 bg-sea-ink text-bg-base rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-bg-base shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                >
-                  {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={16} /> Save Refactored Version</>}
-                </button>
               </div>
+
+              {/* Diffs Side-by-Side Grid */}
+              {diffViewMode === 'split' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: Aligned Original */}
+                  <article className="island-shell p-5 rounded-xl flex flex-col h-[32rem]">
+                    <h3 className="island-kicker mb-3 flex items-center justify-between">
+                      <span>Original Content</span>
+                      <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded">Removed</span>
+                    </h3>
+                    <div className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-[var(--surface)] p-3 rounded-lg select-text">
+                      {alignedDiff.map((line, idx) => (
+                        <div
+                          // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
+                          key={idx}
+                          className={`flex min-h-[1.5rem] px-1.5 rounded ${
+                            line.original.type === 'removed'
+                              ? 'bg-red-500/10 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-l-2 border-red-500 font-semibold'
+                              : line.original.type === 'empty'
+                              ? 'bg-slate-100/50 dark:bg-slate-900/20 opacity-30 select-none'
+                              : 'text-[var(--sea-ink-soft)]'
+                          }`}
+                        >
+                          <span className="w-6 shrink-0 opacity-40 select-none text-right pr-2 text-[10px]">{line.original.type === 'removed' ? '-' : line.original.type === 'empty' ? ' ' : idx + 1}</span>
+                          <span className="whitespace-pre-wrap">{line.original.content}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  {/* Right: Aligned Refactored */}
+                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[32rem]">
+                    <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
+                      Refactored Preview
+                    </div>
+                    <h3 className="island-kicker mb-4 flex items-center justify-between text-[var(--lagoon-deep)] shrink-0">
+                      <span className="flex items-center gap-2"><CheckCircle2 size={12} /> AI Improvements</span>
+                      <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-1.5 py-0.5 rounded mr-20">Added</span>
+                    </h3>
+                    
+                    <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                      <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
+                      <div className="flex-1 overflow-y-auto pr-1 font-mono text-[10px] sm:text-xs leading-relaxed border border-[var(--line)] bg-surface p-3 rounded-lg select-text">
+                        {alignedDiff.map((line, idx) => (
+                          <div
+                            // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
+                            key={idx}
+                            className={`flex min-h-[1.5rem] px-1.5 rounded ${
+                              line.refactored.type === 'added'
+                                ? 'bg-green-500/10 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-l-2 border-green-500 font-semibold'
+                                : line.refactored.type === 'empty'
+                                ? 'bg-slate-100/50 dark:bg-slate-900/20 opacity-30 select-none'
+                                : 'text-[var(--sea-ink)]'
+                            }`}
+                          >
+                            <span className="w-6 shrink-0 opacity-40 select-none text-right pr-2 text-[10px]">{line.refactored.type === 'added' ? '+' : line.refactored.type === 'empty' ? ' ' : idx + 1}</span>
+                            <span className="whitespace-pre-wrap">{line.refactored.content}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: Raw Original */}
+                  <article className="island-shell p-5 rounded-xl flex flex-col h-[32rem]">
+                    <h3 className="island-kicker mb-3 flex items-center gap-2">Original Content</h3>
+                    <div className="flex-1 overflow-y-auto pr-1">
+                      <pre className="text-xs text-[var(--sea-ink-soft)] whitespace-pre-wrap font-mono select-text leading-relaxed p-3 border border-[var(--line)] bg-[var(--surface)] rounded-lg">
+                        {previewData.originalContent}
+                      </pre>
+                    </div>
+                  </article>
+
+                  {/* Right: Raw Refactored */}
+                  <article className="island-shell p-5 rounded-xl border border-[var(--lagoon)] bg-surface-strong relative flex flex-col h-[32rem]">
+                    <div className="absolute top-0 right-0 p-2 bg-[var(--lagoon)] text-[9px] font-bold uppercase tracking-widest rounded-tr-xl rounded-bl-lg text-white">
+                      Refactored Preview
+                    </div>
+                    <h3 className="island-kicker mb-4 flex items-center gap-2 text-[var(--lagoon-deep)] shrink-0">
+                      <CheckCircle2 size={12} /> AI Improvements
+                    </h3>
+                    
+                    <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                      <div className="text-lg font-bold text-[var(--sea-ink)] shrink-0">{previewData.note.title}</div>
+                      <div className="flex-1 text-xs text-[var(--sea-ink)] bg-surface p-3 rounded-lg border border-[var(--line)] whitespace-pre-wrap font-mono overflow-y-auto">
+                        {previewData.note.content}
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              )}
+
+              {/* Save Button */}
+              <button
+                type="button"
+                onClick={() => confirmMutation.mutate({
+                  requestId: previewData.requestId,
+                  sourcePath: selectedPath!,
+                  note: {
+                    title: previewData.note.title,
+                    content: previewData.note.content,
+                    tags: previewData.note.tags,
+                    links: previewData.note.links
+                  }
+                })}
+                disabled={confirmMutation.isPending}
+                className="w-full py-3 bg-sea-ink text-bg-base rounded-lg font-bold text-base hover:bg-lagoon-deep hover:text-bg-base shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {confirmMutation.isPending ? <Loader2 className="animate-spin" /> : <><Save size={16} /> Save Refactored Version</>}
+              </button>
             </div>
           )}
 
