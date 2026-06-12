@@ -27,7 +27,7 @@ export async function resolveLinksForDocument(
     const targetDoc = await db
       .select({ id: documents.id })
       .from(documents)
-      .where(sql`lower(${documents.title}) = lower(${link.label})`)
+      .where(sql`lower(replace(${documents.title}, '-', ' ')) = lower(replace(${link.label}, '-', ' '))`)
       .limit(1);
 
     if (targetDoc.length > 0) {
@@ -48,7 +48,7 @@ export async function resolveLinksForDocument(
     .from(links)
     .where(
       and(
-        sql`lower(${links.target_label}) = lower(${title})`,
+        sql`lower(replace(${links.target_label}, '-', ' ')) = lower(replace(${title}, '-', ' '))`,
         isNull(links.target_document_id)
       )
     );
@@ -82,7 +82,7 @@ export async function resolveAllLinks(db: DbClient): Promise<void> {
     const targetDoc = await db
       .select({ id: documents.id })
       .from(documents)
-      .where(sql`lower(${documents.title}) = lower(${link.label})`)
+      .where(sql`lower(replace(${documents.title}, '-', ' ')) = lower(replace(${link.label}, '-', ' '))`)
       .limit(1);
 
     if (targetDoc.length > 0) {
