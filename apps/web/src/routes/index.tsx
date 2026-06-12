@@ -11,8 +11,7 @@ import {
   FileText,
   Link2,
   Award,
-  ExternalLink,
-  Plus
+  ExternalLink
 } from 'lucide-react'
 
 export const Route = createFileRoute('/')({
@@ -239,11 +238,11 @@ function DashboardComponent() {
                                 Unresolved Link: <code className="text-[var(--sea-ink)] font-mono text-[11px] bg-red-500/5 px-1 border-0">[[{link.label}]]</code>
                               </h4>
                               <p className="text-[11px] text-[var(--sea-ink-soft)] mb-2">
-                                Referenced in {link.sourcePaths.length} note{link.sourcePaths.length > 1 ? 's' : ''}. Fix in the referencing vault files or bootstrap the note:
+                                Referenced in {link.sourcePaths.length} note{link.sourcePaths.length > 1 ? 's' : ''}. Try using <Link to="/generator" search={{ mode: 'bootstrap', title: link.label } as any} className="text-[var(--lagoon-deep)] underline font-bold">Bootstrap Note</Link> to generate it, or fix in referencing files:
                               </p>
 
                               {/* Referencing files with Obsidian shortcut */}
-                              <div className="flex flex-wrap gap-1.5 mb-2.5">
+                              <div className="flex flex-wrap gap-1.5">
                                 {link.sourcePaths.map((p: string) => {
                                   const name = p.split('/').pop()?.replace('.md', '') || p
                                   return (
@@ -258,18 +257,6 @@ function DashboardComponent() {
                                     </a>
                                   )
                                 })}
-                              </div>
-
-                              {/* Quick Actions */}
-                              <div className="flex items-center">
-                                <Link
-                                  to="/generator"
-                                  search={{ mode: 'bootstrap', title: link.label } as any}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-sea-ink hover:bg-lagoon-deep text-bg-base hover:text-white font-bold text-[10px] rounded-md transition-all no-underline shadow-sm cursor-pointer"
-                                >
-                                  <Plus size={10} />
-                                  Bootstrap Note
-                                </Link>
                               </div>
                             </div>
                           </div>
