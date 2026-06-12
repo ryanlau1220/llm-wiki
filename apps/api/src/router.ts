@@ -84,6 +84,19 @@ export const router = os.router({
       { type: "ai_synthesized", source: "synthesis" }
     );
   }),
+  bootstrapPreview: os.bootstrapPreview.use(authMiddleware).handler(async ({ input }: any) => {
+    const { generateBootstrapPreview } = await import("./note-creator");
+    return generateBootstrapPreview(config, input.title);
+  }),
+  confirmBootstrapSave: os.confirmBootstrapSave.use(authMiddleware).handler(async ({ input }: any) => {
+    const { confirmAskSave } = await import("./ask-confirm");
+    return confirmAskSave(
+      config,
+      input.requestId,
+      input.note,
+      { type: "ai_generated", source: "synthesis" }
+    );
+  }),
   getWeakNotes: os.getWeakNotes.use(authMiddleware).handler(async ({ input }: any) => {
     const { createDbClient } = await import("@llm-wiki/db");
     const { getWeakNotes } = await import("@llm-wiki/core");
