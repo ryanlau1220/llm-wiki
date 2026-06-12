@@ -92,9 +92,10 @@ Your job is to synthesize a wiki-style note from the provided sources.
 RULES:
 1. Use ONLY the provided sources. If sources are insufficient, say so in the content.
 2. Produce a clean, structured markdown note.
-3. Suggest related wikilinks (labels only, no brackets).
+3. Suggest related concepts in the "links" JSON field (labels only, no brackets).
 4. Output valid JSON matching the schema below.
 5. IMPORTANT: NEVER use unescaped double quotes inside the "content" or "title" string values. If you need to emphasize something or use a quote within the text, use single quotes (') or markdown bolding (**text**) instead. Unescaped double quotes will break the JSON parsing and fail the task.
+6. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text, especially when discussing related concepts.
 
 JSON SCHEMA:
 {

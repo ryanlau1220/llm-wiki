@@ -105,8 +105,9 @@ RULES:
 1. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
 2. Provide a helpful, concise "answer".
 3. Provide a "suggested_note" that captures the core knowledge from this interaction.
-4. The "suggested_note" should be structured with a "title", "content" (markdown), and optional "links" (wikilinks format without brackets) and "tags".
+4. The "suggested_note" should be structured with a "title", "content" (markdown), and optional "links" (concepts list without brackets) and "tags".
 5. ALWAYS output valid JSON matching the schema below.
+6. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
 
 JSON SCHEMA:
 {
@@ -126,8 +127,9 @@ Your goal is to answer the user's question using general knowledge (and any prov
 RULES:
 1. Provide a helpful, comprehensive yet concise "answer" incorporating relevant facts.
 2. Provide a "suggested_note" that summarizes the core knowledge, concepts, or guidelines discussed so the user can save it as a structured wiki page.
-3. The "suggested_note" should be structured with a "title", "content" (markdown, without frontmatter), and optional "links" (wikilinks format without brackets) and "tags".
+3. The "suggested_note" should be structured with a "title", "content" (markdown, without frontmatter), and optional "links" (concepts list without brackets) and "tags".
 4. ALWAYS output valid JSON matching the schema below.
+5. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
 
 JSON SCHEMA:
 {

@@ -86,10 +86,15 @@ export async function confirmAskSave(
     return { status: "rejected", error: "duplicate_content" };
   }
 
-  const semanticDuplicate = await hasSemanticDuplicate(config, db, note.content ?? "");
-  if (semanticDuplicate) {
-    await recordAudit(db, requestId, "create_note", "rejected", "duplicate_semantic");
-    return { status: "rejected", error: "duplicate_semantic" };
+  // Synthesized notes are summaries of existing notes and will naturally have high semantic similarity
+  // to their source documents. Therefore, we bypass the semantic duplication check for them.
+  const isSynthesis = frontmatter.source === "synthesis";
+  if (!isSynthesis) {
+    const semanticDuplicate = await hasSemanticDuplicate(config, db, note.content ?? "");
+    if (semanticDuplicate) {
+      await recordAudit(db, requestId, "create_note", "rejected", "duplicate_semantic");
+      return { status: "rejected", error: "duplicate_semantic" };
+    }
   }
   const vaultRoot = path.resolve(config.vaultPath);
   const safeSlug = slugify(note.title ?? "note");
@@ -195,6 +200,22 @@ function buildNoteFile(note: AskNoteInput, frontmatter: NoteFrontmatter): string
   lines.push(`# ${note.title ?? ""}`);
   lines.push("");
   lines.push(note.content ?? "");
+
+  // Append related concepts as Obsidian wikilinks if they aren't already linked inside the content
+  if (note.links?.length && !note.content?.includes("[[")) {
+    // Check if the content already has a "Related Concepts" header
+    const hasRelatedHeader = /##\s+Related\s+Concepts/i.test(note.content ?? "");
+    if (!hasRelatedHeader) {
+      lines.push("");
+      lines.push("## Related Concepts");
+    } else {
+      lines.push("");
+    }
+    for (const link of note.links) {
+      lines.push(`* [[${link}]]`);
+    }
+  }
+
   return lines.join("\n");
 }
 
