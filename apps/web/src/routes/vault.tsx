@@ -21,7 +21,8 @@ import {
   ShieldCheck,
   Eye,
   Network,
-  ChevronLeft
+  ChevronLeft,
+  ExternalLink
 } from 'lucide-react'
 import { GraphView } from '../components/GraphView'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -106,6 +107,17 @@ function VaultComponent() {
   const { data: notes, isLoading: isLoadingNotes } = useQuery(
     orpc.listNotes.queryOptions()
   )
+
+  const { data: settings } = useQuery(
+    orpc.getSettings.queryOptions()
+  )
+
+  const getObsidianUri = (notePath: string) => {
+    if (!settings?.vaultPath) return ''
+    const vaultPathClean = settings.vaultPath.replace(/\\/g, '/')
+    const vaultName = vaultPathClean.split('/').filter(Boolean).pop() || 'vault'
+    return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(notePath)}`
+  }
 
   useEffect(() => {
     if (queryNoteId) {
@@ -471,6 +483,14 @@ function VaultComponent() {
                             <Network size={14} />
                             Open Graph View
                           </button>
+
+                          <a
+                            href={getObsidianUri(activeNote.path)}
+                            className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors shadow-sm text-center no-underline cursor-pointer"
+                          >
+                            <ExternalLink size={14} />
+                            Open in Obsidian
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -673,6 +693,13 @@ function VaultComponent() {
                       >
                         <Eye size={12} />
                       </button>
+                      <a
+                        href={getObsidianUri(activeNote.path)}
+                        className="px-2.5 py-1.5 bg-foam border border-line text-sea-ink-soft hover:text-sea-ink font-bold text-xs rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                        title="Open in Obsidian"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
                     </div>
                   </div>
                 ) : (
@@ -887,6 +914,14 @@ function VaultComponent() {
                               <Eye size={12} />
                               Detail View
                             </button>
+                            <a
+                              href={getObsidianUri(activeNote.path)}
+                              onClick={() => setIsMobilePreviewOpen(false)}
+                              className="px-2.5 py-1.5 bg-foam border border-line text-sea-ink-soft hover:text-sea-ink font-bold text-xs rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                              title="Open in Obsidian"
+                            >
+                              <ExternalLink size={12} />
+                            </a>
                           </div>
                         </div>
                       ) : (
