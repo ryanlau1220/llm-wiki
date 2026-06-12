@@ -209,19 +209,48 @@ function RefactorComponent() {
         </section>
       ) : (
         <section className="rise-in">
-          <div className="flex items-center gap-3 mb-6">
-            <button 
-              type="button"
-              onClick={() => { 
-                setSelectedPath(null); 
-                setPreviewData(null); 
-                navigate({ to: '/refactor', search: { path: undefined } })
-              }}
-              className="p-1.5 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors cursor-pointer"
-            >
-              <ChevronRight size={20} className="rotate-180" />
-            </button>
-            <h2 className="text-xl font-bold text-[var(--sea-ink)]">Refactoring: {selectedPath.split('/').pop()}</h2>
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <button 
+                type="button"
+                onClick={() => { 
+                  setSelectedPath(null); 
+                  setPreviewData(null); 
+                  navigate({ to: '/refactor', search: { path: undefined } })
+                }}
+                className="p-1.5 hover:bg-[var(--line)] rounded-full text-[var(--sea-ink-soft)] transition-colors cursor-pointer"
+              >
+                <ChevronRight size={20} className="rotate-180" />
+              </button>
+              <h2 className="text-xl font-bold text-[var(--sea-ink)]">Refactoring: {selectedPath.split('/').pop()}</h2>
+            </div>
+
+            {previewData && (
+              <div className="flex items-center bg-[var(--surface-strong)] p-1 rounded-xl border border-[var(--line)] w-64">
+                <button
+                  type="button"
+                  onClick={() => setDiffViewMode('split')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                    diffViewMode === 'split'
+                      ? 'bg-sea-ink text-bg-base'
+                      : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
+                  }`}
+                >
+                  Split Git Diff
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDiffViewMode('raw')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg cursor-pointer transition-all ${
+                    diffViewMode === 'raw'
+                      ? 'bg-sea-ink text-bg-base'
+                      : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
+                  }`}
+                >
+                  Side-by-Side Raw
+                </button>
+              </div>
+            )}
           </div>
 
           {previewMutation.isPending && (
@@ -234,41 +263,12 @@ function RefactorComponent() {
 
           {previewData && (
             <div className="flex flex-col gap-6">
-              {/* Diff controls & Roadmap */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="island-shell p-5 rounded-xl flex flex-col justify-center gap-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--sea-ink-soft)]">Comparison Mode</h3>
-                  <div className="flex bg-[var(--surface-strong)] p-1 rounded-xl border border-[var(--line)]">
-                    <button
-                      type="button"
-                      onClick={() => setDiffViewMode('split')}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                        diffViewMode === 'split'
-                          ? 'bg-sea-ink text-bg-base'
-                          : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
-                      }`}
-                    >
-                      Split Git Diff
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDiffViewMode('raw')}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${
-                        diffViewMode === 'raw'
-                          ? 'bg-sea-ink text-bg-base'
-                          : 'text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
-                      }`}
-                    >
-                      Side-by-Side Raw
-                    </button>
-                  </div>
-                </div>
-
-                {previewData.improvements && previewData.improvements.length > 0 && (
-                  <div className="island-shell p-5 rounded-xl lg:col-span-2">
-                    <h3 className="island-kicker mb-3 flex items-center gap-1.5 text-[var(--lagoon-deep)]">
-                      <ListChecks size={14} /> Quality Improvement Roadmap
-                    </h3>
+              {/* Roadmap */}
+              {previewData.improvements && previewData.improvements.length > 0 && (
+                <div className="island-shell p-5 rounded-xl">
+                  <h3 className="island-kicker mb-3 flex items-center gap-1.5 text-[var(--lagoon-deep)]">
+                    <ListChecks size={14} /> Quality Improvement Roadmap
+                  </h3>
                     <ul className="space-y-2.5 max-h-24 overflow-y-auto pr-1">
                       {previewData.improvements.map((s: any) => {
                         const isChecked = !!checkedSuggestions[s.id || s.actionLabel];
@@ -295,7 +295,6 @@ function RefactorComponent() {
                     </ul>
                   </div>
                 )}
-              </div>
 
               {/* Diffs Side-by-Side Grid */}
               {diffViewMode === 'split' ? (
