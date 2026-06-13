@@ -277,7 +277,7 @@ function VaultComponent() {
         {viewMode === "detail" ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-full min-h-0 relative">
             {/* Notes List Column */}
-            {(!isMobile || selectedNoteId === null) && (
+            {(!isMobile || selectedNoteId === null) && !showHistory && (
               <section className="lg:col-span-1 island-shell rounded-xl p-4 flex flex-col min-h-0 animate-fade-in">
                 <div className="relative mb-4 shrink-0">
                   <Search className="absolute left-4 top-3 text-sea-ink-soft" size={18} />
@@ -368,7 +368,7 @@ function VaultComponent() {
 
             {/* Note Detail Panel */}
             {(!isMobile || selectedNoteId !== null) && (
-              <section className="lg:col-span-2 flex flex-col min-h-0 animate-fade-in">
+              <section className={`${showHistory ? 'lg:col-span-3' : 'lg:col-span-2'} flex flex-col min-h-0 animate-fade-in`}>
                 {isLoadingActiveNote ? (
                   <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center relative">
                     {isMobile && (
