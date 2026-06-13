@@ -115,6 +115,26 @@ export const appContract = oc.router({
       tags: z.array(z.string()).optional(),
     }),
   })),
+  listBackups: oc.input(z.object({
+    path: z.string()
+  })).output(z.array(z.object({
+    filename: z.string(),
+    timestamp: z.string(),
+    formattedDate: z.string(),
+    sizeBytes: z.number()
+  }))),
+  getBackupContent: oc.input(z.object({
+    path: z.string(),
+    timestamp: z.string()
+  })).output(z.object({
+    content: z.string()
+  })),
+  restoreBackup: oc.input(z.object({
+    path: z.string(),
+    timestamp: z.string()
+  })).output(z.object({
+    success: z.boolean()
+  })),
   browseDirectories: oc.input(z.object({
     path: z.string().optional(),
   })).output(z.object({
