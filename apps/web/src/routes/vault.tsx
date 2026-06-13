@@ -484,7 +484,7 @@ function VaultComponent() {
                                     }`}
                                   >
                                     <span className={`text-xs font-bold ${isSelected ? 'text-[var(--lagoon-deep)]' : 'text-sea-ink'}`}>
-                                      {b.formattedDate}
+                                      {new Date(b.formattedDate).toLocaleString()}
                                     </span>
                                     <div className="flex items-center justify-between text-[10px] text-sea-ink-soft">
                                       <span className="font-mono">{b.timestamp}</span>
@@ -515,7 +515,12 @@ function VaultComponent() {
                               <div className="flex items-center justify-between border-b border-line pb-3 mb-3 shrink-0 font-sans">
                                 <div>
                                   <h4 className="text-xs font-black uppercase text-sea-ink-soft tracking-wider">Comparing Versions</h4>
-                                  <p className="text-[11px] text-sea-ink-soft font-mono">Current Content vs Backup ({selectedBackupTimestamp})</p>
+                                  <p className="text-[11px] text-sea-ink-soft font-mono">
+                                    Current Content vs Backup ({(() => {
+                                      const found = backups?.find(bk => bk.timestamp === selectedBackupTimestamp);
+                                      return found ? new Date(found.formattedDate).toLocaleString() : selectedBackupTimestamp;
+                                    })()})
+                                  </p>
                                 </div>
                                 <button
                                   type="button"
