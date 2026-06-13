@@ -7,9 +7,10 @@ export interface AlignedDiffLine {
  * Computes a line-by-line diff between original and refactored text and aligns them side-by-side.
  */
 export function computeAlignedDiff(oldText: string, newText: string): AlignedDiffLine[] {
-  // Normalize line endings and split
-  const oldLines = oldText.replace(/\r\n/g, "\n").split("\n");
-  const newLines = newText.replace(/\r\n/g, "\n").split("\n");
+  // Trim leading/trailing newlines (preserving indentation) and normalize line endings before splitting
+  const trimNewlines = (str: string) => str.replace(/^[\r\n]+/, "").replace(/[\r\n]+$/, "");
+  const oldLines = trimNewlines(oldText).replace(/\r\n/g, "\n").split("\n");
+  const newLines = trimNewlines(newText).replace(/\r\n/g, "\n").split("\n");
 
   const n = oldLines.length;
   const m = newLines.length;
@@ -21,7 +22,7 @@ export function computeAlignedDiff(oldText: string, newText: string): AlignedDif
 
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
-      if (oldLines[i - 1] === newLines[j - 1]) {
+      if (oldLines[i - 1].trimEnd() === newLines[j - 1].trimEnd()) {
         dp[i][j] = dp[i - 1][j - 1] + 1;
       } else {
         dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
@@ -35,7 +36,7 @@ export function computeAlignedDiff(oldText: string, newText: string): AlignedDif
 
   // Backtrack to find the diff alignment
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+    if (i > 0 && j > 0 && oldLines[i - 1].trimEnd() === newLines[j - 1].trimEnd()) {
       rawAligned.unshift({
         original: { type: "unchanged", content: oldLines[i - 1] },
         refactored: { type: "unchanged", content: newLines[j - 1] },
