@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Save,
   Search,
-  ListChecks
+  ListChecks,
+  History
 } from 'lucide-react'
 
 export const Route = createFileRoute('/refactor')({
@@ -259,7 +260,18 @@ function RefactorComponent() {
             </div>
 
             {previewData && (
-              <div className="flex items-center bg-[var(--surface-strong)] p-1 rounded-xl border border-[var(--line)] w-64">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: '/vault', search: { path: selectedPath, history: true } })}
+                  className="px-3.5 py-1.5 bg-foam border border-line text-sea-ink hover:bg-line text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="View Note Backups History"
+                >
+                  <History size={14} />
+                  Version History
+                </button>
+
+                <div className="flex items-center bg-[var(--surface-strong)] p-1 rounded-xl border border-[var(--line)] w-64">
                 <button
                   type="button"
                   onClick={() => setDiffViewMode('split')}
@@ -282,6 +294,7 @@ function RefactorComponent() {
                 >
                   Side-by-Side Raw
                 </button>
+              </div>
               </div>
             )}
           </div>
