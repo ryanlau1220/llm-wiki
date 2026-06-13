@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { orpc } from '../lib/orpc'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { z } from 'zod'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,15 +22,19 @@ import {
   Eye,
   Network,
   ChevronLeft,
-  ExternalLink
+  ExternalLink,
+  History,
+  RotateCcw
 } from 'lucide-react'
 import { GraphView } from '../components/GraphView'
 import { useMediaQuery } from '../lib/useMediaQuery'
+import { computeAlignedDiff } from '../lib/diff'
 
 export const Route = createFileRoute('/vault')({
   validateSearch: z.object({
     noteId: z.string().optional(),
     path: z.string().optional(),
+    history: z.boolean().optional(),
   }),
   component: VaultComponent,
 })
@@ -89,7 +93,7 @@ function MarkdownLink({ href, children, notes, setSelectedNoteId, ...props }: Ma
 function VaultComponent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { noteId: queryNoteId, path: queryPath } = Route.useSearch()
+  const { noteId: queryNoteId, path: queryPath, history: queryHistory } = Route.useSearch()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(queryNoteId || null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
@@ -98,6 +102,22 @@ function VaultComponent() {
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
   const [selectedForSynthesis, setSelectedForSynthesis] = useState<Set<string>>(new Set())
+
+  const [showHistory, setShowHistory] = useState(false)
+  const [selectedBackupTimestamp, setSelectedBackupTimestamp] = useState<string | null>(null)
+
+  const leftScrollRef = useRef<HTMLDivElement>(null)
+  const rightScrollRef = useRef<HTMLDivElement>(null)
+  const activeScrollRef = useRef<'left' | 'right' | null>(null)
+
+  const syncScroll = (source: 'left' | 'right') => {
+    if (activeScrollRef.current !== source) return
+    const sourceEl = source === 'left' ? leftScrollRef.current : rightScrollRef.current
+    const targetEl = source === 'left' ? rightScrollRef.current : leftScrollRef.current
+    if (sourceEl && targetEl) {
+      targetEl.scrollTop = sourceEl.scrollTop
+    }
+  }
 
   const { data: graphData, isLoading: isLoadingGraph } = useQuery({
     ...orpc.getGraph.queryOptions(),
@@ -135,6 +155,41 @@ function VaultComponent() {
     enabled: !!selectedNoteId,
   })
 
+  useEffect(() => {
+    if (selectedNoteId) {
+      // Reset selected backup when switching notes
+      setSelectedBackupTimestamp(null)
+    }
+    if (queryHistory) {
+      setShowHistory(true)
+    } else {
+      setShowHistory(false)
+    }
+    setSelectedBackupTimestamp(null)
+  }, [selectedNoteId, queryHistory])
+
+  const { data: backups, isLoading: isLoadingBackups } = useQuery({
+    ...orpc.listBackups.queryOptions({ input: { path: activeNote?.path ?? '' } }),
+    enabled: !!activeNote && showHistory,
+  })
+
+  const { data: backupContentData, isLoading: isLoadingBackupContent } = useQuery({
+    ...orpc.getBackupContent.queryOptions({ 
+      input: { path: activeNote?.path ?? '', timestamp: selectedBackupTimestamp ?? '' } 
+    }),
+    enabled: !!activeNote && !!selectedBackupTimestamp && showHistory,
+  })
+
+  const restoreBackupMutation = useMutation(
+    orpc.restoreBackup.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries()
+        setShowHistory(false)
+        setSelectedBackupTimestamp(null)
+        navigate({ to: '/vault', search: { noteId: selectedNoteId || undefined, path: undefined, history: undefined } })
+      }
+    })
+  )
 
   const reindexAllMutation = useMutation(
     orpc.reindexAll.mutationOptions({
@@ -384,8 +439,186 @@ function VaultComponent() {
                     </div>
 
                     {/* Grid Content/Metadata split */}
-                    <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
-                      {/* Markdown content */}
+                    {showHistory ? (
+                      <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4 overflow-hidden">
+                        {/* Left sidebar: backups list */}
+                        <div className="xl:col-span-1 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="island-kicker">Backup Versions</h3>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowHistory(false)
+                                setSelectedBackupTimestamp(null)
+                                navigate({ to: '/vault', search: { noteId: selectedNoteId || undefined, path: undefined, history: undefined } })
+                              }}
+                              className="text-xs text-[var(--lagoon-deep)] hover:underline font-bold cursor-pointer"
+                            >
+                              Back to Note
+                            </button>
+                          </div>
+                          
+                          {isLoadingBackups ? (
+                            <div className="flex-1 flex justify-center items-center">
+                              <Loader2 className="animate-spin text-lagoon-deep" size={24} />
+                            </div>
+                          ) : !backups || backups.length === 0 ? (
+                            <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
+                              <History className="text-sea-ink-soft opacity-30 mb-2" size={32} />
+                              <p className="text-xs text-sea-ink-soft italic">No backups found for this note.</p>
+                              <p className="text-[10px] text-sea-ink-soft/75 mt-1">Backups are automatically created whenever you run a Note Refactor.</p>
+                            </div>
+                          ) : (
+                            <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+                              {backups.map((b) => {
+                                const isSelected = selectedBackupTimestamp === b.timestamp;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={b.timestamp}
+                                    onClick={() => setSelectedBackupTimestamp(b.timestamp)}
+                                    className={`w-full p-3 rounded-xl border transition-all text-left flex flex-col gap-1 cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-[var(--foam)] border-[var(--lagoon)] shadow-sm'
+                                        : 'bg-surface border-line hover:bg-foam/40'
+                                    }`}
+                                  >
+                                    <span className={`text-xs font-bold ${isSelected ? 'text-[var(--lagoon-deep)]' : 'text-sea-ink'}`}>
+                                      {b.formattedDate}
+                                    </span>
+                                    <div className="flex items-center justify-between text-[10px] text-sea-ink-soft">
+                                      <span className="font-mono">{b.timestamp}</span>
+                                      <span>{(b.sizeBytes / 1024).toFixed(1)} KB</span>
+                                    </div>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right sidebar: diff panel */}
+                        <div className="xl:col-span-2 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner font-mono text-[10px] sm:text-xs leading-relaxed select-text overflow-hidden">
+                          {!selectedBackupTimestamp ? (
+                            <div className="flex-1 flex flex-col justify-center items-center text-center p-6">
+                              <History className="text-sea-ink-soft opacity-20 mb-3" size={48} />
+                              <h4 className="text-sm font-bold text-sea-ink mb-1">Select a Backup Version</h4>
+                              <p className="text-xs text-sea-ink-soft max-w-sm">Choose a point-in-time backup from the list on the left to see a side-by-side split comparison and restore it.</p>
+                            </div>
+                          ) : isLoadingBackupContent ? (
+                            <div className="flex-1 flex justify-center items-center font-sans">
+                              <Loader2 className="animate-spin text-lagoon-deep" size={28} />
+                            </div>
+                          ) : backupContentData ? (
+                            <div className="flex-1 flex flex-col min-h-0">
+                              {/* Preview Header */}
+                              <div className="flex items-center justify-between border-b border-line pb-3 mb-3 shrink-0 font-sans">
+                                <div>
+                                  <h4 className="text-xs font-black uppercase text-sea-ink-soft tracking-wider">Comparing Versions</h4>
+                                  <p className="text-[11px] text-sea-ink-soft font-mono">Current Content vs Backup ({selectedBackupTimestamp})</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={restoreBackupMutation.isPending}
+                                  onClick={() => restoreBackupMutation.mutate({
+                                    path: activeNote.path,
+                                    timestamp: selectedBackupTimestamp
+                                  })}
+                                  className="px-4 py-2 bg-sea-ink text-bg-base font-bold text-xs rounded-lg flex items-center gap-1.5 hover:bg-lagoon-deep hover:text-bg-base transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                                >
+                                  {restoreBackupMutation.isPending ? <Loader2 className="animate-spin" size={12} /> : <RotateCcw size={12} />}
+                                  Restore Version
+                                </button>
+                              </div>
+
+                              {/* Split Diff Container */}
+                              <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0 overflow-hidden select-text">
+                                {(() => {
+                                  const diff = computeAlignedDiff(activeNote.content, backupContentData.content);
+                                  let origCounter = 0;
+                                  let refCounter = 0;
+                                  const alignedDiff = diff.map(line => {
+                                    const originalLineNum = line.original.type !== 'empty' ? ++origCounter : null;
+                                    const refactoredLineNum = line.refactored.type !== 'empty' ? ++refCounter : null;
+                                    return {
+                                      ...line,
+                                      originalLineNum,
+                                      refactoredLineNum
+                                    };
+                                  });
+
+                                  return (
+                                    <>
+                                      {/* Left side: Current Content */}
+                                      <div className="flex flex-col min-h-0">
+                                        <div className="text-[9px] uppercase font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded mb-1.5 self-start font-sans">Current (Will Be Overwritten)</div>
+                                        {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                                        <div 
+                                          ref={leftScrollRef}
+                                          onMouseEnter={() => { activeScrollRef.current = 'left' }}
+                                          onMouseLeave={() => { if (activeScrollRef.current === 'left') activeScrollRef.current = null }}
+                                          onScroll={() => syncScroll('left')}
+                                          className="flex-1 overflow-y-auto border border-line bg-surface p-3 rounded-lg overflow-x-hidden font-mono text-[10px] sm:text-xs"
+                                        >
+                                          {alignedDiff.map((line, idx) => (
+                                            <div
+                                              // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
+                                              key={idx}
+                                              className={`flex min-h-[1.5rem] px-1.5 rounded ${
+                                                line.original.type === 'removed'
+                                                  ? 'bg-red-500/10 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-l-2 border-red-500 font-semibold'
+                                                  : line.original.type === 'empty'
+                                                  ? 'bg-slate-100/50 dark:bg-slate-900/20 opacity-30 select-none'
+                                                  : 'text-sea-ink-soft'
+                                              }`}
+                                            >
+                                              <span className="w-8 shrink-0 opacity-40 select-none text-right pr-2 text-[10px] font-mono">{line.originalLineNum ?? ''}</span>
+                                              <span className="whitespace-pre-wrap">{line.original.content}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Right side: Backup Content */}
+                                      <div className="flex flex-col min-h-0">
+                                        <div className="text-[9px] uppercase font-bold text-green-500 bg-green-500/10 px-2 py-1 rounded mb-1.5 self-start font-sans">Backup Version (Target)</div>
+                                        {/* biome-ignore lint/a11y/noStaticElementInteractions: sync scrolling */}
+                                        <div 
+                                          ref={rightScrollRef}
+                                          onMouseEnter={() => { activeScrollRef.current = 'right' }}
+                                          onMouseLeave={() => { if (activeScrollRef.current === 'right') activeScrollRef.current = null }}
+                                          onScroll={() => syncScroll('right')}
+                                          className="flex-1 overflow-y-auto border border-line bg-surface p-3 rounded-lg overflow-x-hidden font-mono text-[10px] sm:text-xs"
+                                        >
+                                          {alignedDiff.map((line, idx) => (
+                                            <div
+                                              // biome-ignore lint/suspicious/noArrayIndexKey: static aligned diff lines
+                                              key={idx}
+                                              className={`flex min-h-[1.5rem] px-1.5 rounded ${
+                                                line.refactored.type === 'added'
+                                                  ? 'bg-green-500/10 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-l-2 border-green-500 font-semibold'
+                                                  : line.refactored.type === 'empty'
+                                                  ? 'bg-slate-100/50 dark:bg-slate-900/20 opacity-30 select-none'
+                                                  : 'text-sea-ink'
+                                              }`}
+                                            >
+                                              <span className="w-8 shrink-0 opacity-40 select-none text-right pr-2 text-[10px] font-mono">{line.refactoredLineNum ?? ''}</span>
+                                              <span className="whitespace-pre-wrap">{line.refactored.content}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-5 min-h-0 mb-4">
+                        {/* Markdown content */}
                       <div className="xl:col-span-2 flex flex-col min-h-0 bg-surface rounded-xl border border-line p-4 shadow-inner">
                         <h3 className="island-kicker mb-2">Document Content</h3>
                         <div className="flex-1 overflow-y-auto pr-1 prose prose-slate max-w-none text-sm text-sea-ink leading-relaxed font-sans select-text selection:bg-lagoon/20 dark:prose-invert">
@@ -484,6 +717,19 @@ function VaultComponent() {
                             Open Graph View
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => setShowHistory(prev => !prev)}
+                            className={`w-full py-2 border font-bold text-sm rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                              showHistory
+                                ? 'bg-sea-ink text-bg-base border-sea-ink hover:bg-lagoon-deep'
+                                : 'bg-foam border-line text-sea-ink hover:bg-line'
+                            }`}
+                          >
+                            <History size={14} />
+                            Version History
+                          </button>
+
                           <a
                             href={getObsidianUri(activeNote.path)}
                             className="w-full py-2 bg-foam border border-line text-sea-ink font-bold text-sm rounded-lg flex items-center justify-center gap-2 hover:bg-line transition-colors shadow-sm text-center no-underline cursor-pointer"
@@ -494,6 +740,7 @@ function VaultComponent() {
                         </div>
                       </div>
                     </div>
+                    )}
                   </div>
                 ) : (
                   <div className="island-shell rounded-xl p-5 flex-1 flex flex-col justify-center items-center text-center relative">
