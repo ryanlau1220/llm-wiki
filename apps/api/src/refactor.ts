@@ -315,14 +315,14 @@ export async function listBackups(config: AppConfig, sourcePath: string) {
           const timestamp = match[1];
           const stats = await fs.stat(path.join(backupDir, file.name));
           
-          // timestamp format YYYYMMDD_HHMMSS
+          // timestamp format YYYYMMDD_HHMMSS (UTC)
           const year = timestamp.slice(0, 4);
           const month = timestamp.slice(4, 6);
           const day = timestamp.slice(6, 8);
           const hour = timestamp.slice(9, 11);
           const min = timestamp.slice(11, 13);
           const sec = timestamp.slice(13, 15);
-          const formattedDate = `${year}-${month}-${day} ${hour}:${min}:${sec}`;
+          const formattedDate = `${year}-${month}-${day}T${hour}:${min}:${sec}.000Z`;
 
           backups.push({
             filename: file.name,
