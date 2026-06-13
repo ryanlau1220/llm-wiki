@@ -71,6 +71,18 @@ export const router = os.router({
     const { confirmRefactorSave } = await import("./refactor");
     return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
   }),
+  listBackups: os.listBackups.use(authMiddleware).handler(async ({ input }: any) => {
+    const { listBackups } = await import("./refactor");
+    return listBackups(config, input.path);
+  }),
+  getBackupContent: os.getBackupContent.use(authMiddleware).handler(async ({ input }: any) => {
+    const { getBackupContent } = await import("./refactor");
+    return getBackupContent(config, input.path, input.timestamp);
+  }),
+  restoreBackup: os.restoreBackup.use(authMiddleware).handler(async ({ input }: any) => {
+    const { restoreBackup } = await import("./refactor");
+    return restoreBackup(config, input.path, input.timestamp);
+  }),
   synthesisPreview: os.synthesisPreview.use(authMiddleware).handler(async ({ input }: any) => {
     const { synthesisPreview } = await import("./synthesis");
     return synthesisPreview(config, input.topic, input.topK, input.noteIds);
