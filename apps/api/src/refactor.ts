@@ -164,8 +164,9 @@ export async function confirmRefactorSave(
     return { status: "rejected", error: `Failed to read original file: ${err.message}` };
   }
 
-  // 2. Write backup to .llm-wiki/backups/
-  const backupDir = path.join(config.vaultPath, ".llm-wiki", "backups");
+  // 2. Write backup to .llm-wiki/backups/ (replicating relative folder structure)
+  const relativeDir = path.dirname(sourcePath);
+  const backupDir = path.join(config.vaultPath, ".llm-wiki", "backups", relativeDir);
   try {
     await fs.mkdir(backupDir, { recursive: true });
     const baseName = path.basename(absoluteSourcePath, ".md");
@@ -290,4 +291,190 @@ export async function confirmRefactorSave(
     status: "saved" as const,
     path: absoluteSourcePath
   };
+}
+
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export async function listBackups(config: AppConfig, sourcePath: string) {
+  const logger = createLogger("history");
+  const relativeDir = path.dirname(sourcePath);
+  const baseName = path.basename(sourcePath, ".md");
+  const backupDir = path.join(config.vaultPath, ".llm-wiki", "backups", relativeDir);
+
+  try {
+    const files = await fs.readdir(backupDir, { withFileTypes: true });
+    const pattern = new RegExp(`^${escapeRegExp(baseName)}\\.(\\d{8}_\\d{6})\\.md$`);
+    const backups = [];
+
+    for (const file of files) {
+      if (file.isFile()) {
+        const match = file.name.match(pattern);
+        if (match) {
+          const timestamp = match[1];
+          const stats = await fs.stat(path.join(backupDir, file.name));
+          
+          // timestamp format YYYYMMDD_HHMMSS
+          const year = timestamp.slice(0, 4);
+          const month = timestamp.slice(4, 6);
+          const day = timestamp.slice(6, 8);
+          const hour = timestamp.slice(9, 11);
+          const min = timestamp.slice(11, 13);
+          const sec = timestamp.slice(13, 15);
+          const formattedDate = `${year}-${month}-${day} ${hour}:${min}:${sec}`;
+
+          backups.push({
+            filename: file.name,
+            timestamp,
+            formattedDate,
+            sizeBytes: stats.size
+          });
+        }
+      }
+    }
+
+    // Sort newest first
+    return backups.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  } catch (err: any) {
+    if (err.code === "ENOENT") {
+      return [];
+    }
+    logger.error("Failed to list backups", err);
+    throw err;
+  }
+}
+
+export async function getBackupContent(config: AppConfig, sourcePath: string, timestamp: string) {
+  const relativeDir = path.dirname(sourcePath);
+  const baseName = path.basename(sourcePath, ".md");
+  const backupFilePath = path.join(
+    config.vaultPath,
+    ".llm-wiki",
+    "backups",
+    relativeDir,
+    `${baseName}.${timestamp}.md`
+  );
+
+  const vaultRoot = path.resolve(config.vaultPath);
+  const resolvedBackupPath = path.resolve(backupFilePath);
+  if (!resolvedBackupPath.startsWith(vaultRoot)) {
+    throw new Error("Invalid file path: must be within vault directory");
+  }
+
+  const content = await fs.readFile(resolvedBackupPath, "utf8");
+  return { content };
+}
+
+export async function restoreBackup(config: AppConfig, sourcePath: string, timestamp: string) {
+  const logger = createLogger("history");
+  const relativeDir = path.dirname(sourcePath);
+  const baseName = path.basename(sourcePath, ".md");
+  const backupFilePath = path.join(
+    config.vaultPath,
+    ".llm-wiki",
+    "backups",
+    relativeDir,
+    `${baseName}.${timestamp}.md`
+  );
+
+  const absoluteSourcePath = path.resolve(config.vaultPath, sourcePath);
+  if (!absoluteSourcePath.startsWith(path.resolve(config.vaultPath))) {
+    throw new Error("Invalid source path: must be within vault");
+  }
+
+  // 1. Read the backup file content
+  const backupContent = await fs.readFile(backupFilePath, "utf8");
+
+  // 2. Read the current note file content (for safety backup)
+  let currentContent = "";
+  try {
+    currentContent = await fs.readFile(absoluteSourcePath, "utf8");
+  } catch (err: any) {
+    logger.warn("Could not read current note content for backup, overwriting anyway.", err);
+  }
+
+  // 3. Create a safety backup of the current content before overwriting
+  if (currentContent) {
+    try {
+      const currentTimestamp = new Date().toISOString()
+        .replace(/[-:]/g, "")
+        .replace("T", "_")
+        .split(".")[0];
+      const backupDir = path.join(config.vaultPath, ".llm-wiki", "backups", relativeDir);
+      await fs.mkdir(backupDir, { recursive: true });
+      const safetyBackupPath = path.join(backupDir, `${baseName}.${currentTimestamp}.md`);
+      await fs.writeFile(safetyBackupPath, currentContent, "utf8");
+      logger.info(`Safety backup created at: ${safetyBackupPath}`);
+    } catch (err: any) {
+      logger.error("Failed to create safety backup before restore", err);
+    }
+  }
+
+  // 4. Overwrite target note with backup content
+  await fs.writeFile(absoluteSourcePath, backupContent, "utf8");
+
+  // 5. Ingest updated document
+  if (config.databaseUrl) {
+    const { db } = createDbClient(config.databaseUrl);
+    try {
+      const embeddingProvider = createEmbeddingProvider({
+        provider: config.embeddingProvider,
+        geminiGeap: {
+          projectId: config.gcpProjectId,
+          location: config.gcpLocation,
+          model: config.gcpEmbeddingModel
+        },
+        ollama: {
+          baseUrl: config.ollamaBaseUrl,
+          model: config.ollamaEmbeddingModel
+        },
+        openai: {
+          apiKey: config.openaiApiKey,
+          baseUrl: config.openaiBaseUrl,
+          model: config.openaiEmbeddingModel
+        }
+      });
+
+      const llmProvider = createLLMProvider({
+        provider: config.embeddingProvider as any,
+        geminiGeap: {
+          projectId: config.gcpProjectId,
+          location: config.gcpLocation,
+          model: config.gcpLlmModel
+        },
+        ollama: {
+          baseUrl: config.ollamaBaseUrl,
+          model: config.ollamaLlmModel
+        },
+        openai: {
+          apiKey: config.openaiApiKey,
+          baseUrl: config.openaiBaseUrl,
+          model: config.openaiLlmModel
+        }
+      });
+
+      await ingestMarkdown(
+        {
+          db,
+          options: {
+            embeddingProvider,
+            llmProvider,
+            embeddingVersion: config.embeddingVersion
+          }
+        },
+        {
+          vaultPath: sourcePath,
+          rawContent: backupContent,
+          sourceKind: "ai",
+          isAiGenerated: true
+        }
+      );
+      sseEmitter.emit("change", { type: "note_changed", path: sourcePath });
+    } catch (ingestError: any) {
+      logger.error(`Failed to ingest restored note: ${sourcePath}`, ingestError);
+    }
+  }
+
+  return { success: true };
 }
