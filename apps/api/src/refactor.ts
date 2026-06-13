@@ -115,10 +115,15 @@ Provide the refactored version in JSON format.
       logger.error("Failed to suggest improvements for note", err);
     }
 
+    const trimNewlines = (str: string) => str.replace(/^[\r\n]+/, "").replace(/[\r\n]+$/, "");
+    if (noteData && typeof noteData.content === "string") {
+      noteData.content = trimNewlines(noteData.content);
+    }
+
     return {
       requestId,
       sourcePath: filePath,
-      originalContent: matter(content).content,
+      originalContent: trimNewlines(matter(content).content),
       improvements,
       note: noteData
     };
