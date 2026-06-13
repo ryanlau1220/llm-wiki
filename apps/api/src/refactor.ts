@@ -118,7 +118,7 @@ Provide the refactored version in JSON format.
     return {
       requestId,
       sourcePath: filePath,
-      originalContent: content,
+      originalContent: matter(content).content,
       improvements,
       note: noteData
     };
