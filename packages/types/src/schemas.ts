@@ -56,6 +56,56 @@ export const weakNotesPayloadSchema = z.object({
   maxResults: z.number().int().min(1).max(200).optional(),
 });
 
+const httpUrlSchema = z.string().url().max(4_000).refine(
+  (value) => /^https?:\/\//i.test(value),
+  "Only http(s) URLs are allowed"
+);
+
+export const researchSourceSchema = z.object({
+  title: z.string().trim().min(1).max(500),
+  url: httpUrlSchema,
+});
+
+export const RESEARCH_CAPTURE_STATUS = {
+  INBOX: "inbox",
+  APPROVED: "approved",
+  MERGED: "merged",
+  DISCARDED: "discarded",
+} as const;
+
+export const researchCaptureStatusSchema = z.enum([
+  RESEARCH_CAPTURE_STATUS.INBOX,
+  RESEARCH_CAPTURE_STATUS.APPROVED,
+  RESEARCH_CAPTURE_STATUS.MERGED,
+  RESEARCH_CAPTURE_STATUS.DISCARDED,
+]);
+export type ResearchCaptureStatus = z.infer<typeof researchCaptureStatusSchema>;
+
+/** Payload accepted only from a locally paired desktop extension. */
+export const extensionResearchCaptureSchema = z.object({
+  sourceUrl: httpUrlSchema,
+  sourceTitle: z.string().trim().min(1).max(500),
+  query: z.string().trim().max(10_000).optional(),
+  content: z.string().trim().min(1).max(100_000),
+  sources: z.array(researchSourceSchema).max(100).default([]),
+  capturedAt: z.string().datetime(),
+});
+
+export const approveResearchCaptureSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1).max(150).optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+});
+
+export const mergeResearchCaptureSchema = z.object({
+  id: z.string().uuid(),
+  targetDocumentId: z.string().uuid(),
+});
+
+export type ExtensionResearchCapture = z.infer<typeof extensionResearchCaptureSchema>;
+export type ApproveResearchCapture = z.infer<typeof approveResearchCaptureSchema>;
+export type MergeResearchCapture = z.infer<typeof mergeResearchCaptureSchema>;
+
 export const qualityMetricsSchema = z.object({
   linkDensity: z.number().min(0).max(1),
   completeness: z.number().min(0).max(1),

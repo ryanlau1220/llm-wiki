@@ -2,9 +2,10 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { AppRouter, ContractRouterClient } from "@llm-wiki/types";
+import { RPC_API_URL } from './api-config';
 
 const rpcLink = new RPCLink({
-  url: "http://localhost:3001/rpc",
+  url: RPC_API_URL,
   fetch: (url, init: any) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('llm_wiki_token') : null;
     const headers = new Headers(init?.headers);

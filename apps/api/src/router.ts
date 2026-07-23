@@ -7,6 +7,13 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import systemOs from "node:os";
 import { getWatcher, setWatcher } from "./watcher-manager";
+import {
+  approveResearchCapture,
+  createExtensionPairingCodeForDashboard,
+  discardResearchCapture,
+  listResearchCaptureInbox,
+  mergeResearchCapture,
+} from "./research-captures";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -520,5 +527,20 @@ export const router = os.router({
         };
       }
     }
+  }),
+  createExtensionPairingCode: os.createExtensionPairingCode.use(authMiddleware).handler(async () => {
+    return createExtensionPairingCodeForDashboard(config);
+  }),
+  listResearchCaptures: os.listResearchCaptures.use(authMiddleware).handler(async ({ input }: any) => {
+    return listResearchCaptureInbox(config, input?.status);
+  }),
+  approveResearchCapture: os.approveResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
+    return approveResearchCapture(config, input);
+  }),
+  mergeResearchCapture: os.mergeResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
+    return mergeResearchCapture(config, input);
+  }),
+  discardResearchCapture: os.discardResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
+    return discardResearchCapture(config, input.id);
   }),
 });

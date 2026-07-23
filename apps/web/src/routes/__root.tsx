@@ -16,6 +16,7 @@ interface MyRouterContext {
 
 import { orpc } from '../lib/orpc'
 import { redirect } from '@tanstack/react-router'
+import { EVENTS_API_URL } from '../lib/api-config'
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: async ({ context, location }) => {
@@ -94,7 +95,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     if (isLoginPage) return
 
     // Open connection to backend SSE events stream
-    const eventSource = new EventSource('http://localhost:3001/events')
+    const eventSource = new EventSource(EVENTS_API_URL)
 
     eventSource.onmessage = (event) => {
       try {
@@ -105,6 +106,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           queryClient.invalidateQueries({ queryKey: orpc.listNotes.queryKey() })
           // Invalidate single note details in case it was the active one
           queryClient.invalidateQueries({ queryKey: orpc.getNote.queryKey({ input: undefined as any }) })
+        } else if (data.type === 'research_capture_changed') {
+          queryClient.invalidateQueries({ queryKey: orpc.listResearchCaptures.queryKey() })
         }
       } catch (err) {
         console.error('[SSE] Failed to parse event:', err)
