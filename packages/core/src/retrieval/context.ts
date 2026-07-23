@@ -44,7 +44,7 @@ export function packRetrievalContext<Chunk extends ContextChunk>(
 
   return {
     chunks: selected,
-    text: selected.map(formatContextChunk).join("\n\n"),
+    text: selected.map((chunk, index) => formatContextChunk(chunk, index + 1)).join("\n\n"),
     characterCount,
   };
 }
