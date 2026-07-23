@@ -23,6 +23,11 @@ const researchCaptureSchema = z.object({
   query: z.string().nullable(),
   content: z.string(),
   sources: z.array(z.object({ title: z.string(), url: z.string() })),
+  duplicateCandidates: z.array(z.object({
+    captureId: z.string().uuid(),
+    title: z.string(),
+    path: z.string().nullable(),
+  })),
   status: researchCaptureStatusSchema,
   savedDocumentId: z.string().uuid().nullable(),
   savedPath: z.string().nullable(),

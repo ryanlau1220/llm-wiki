@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import {
   createDbClient,
@@ -56,7 +56,16 @@ function requireDatabase(config: AppConfig): string {
   return config.databaseUrl;
 }
 
-function formatCapture(capture: typeof researchCaptures.$inferSelect) {
+type DuplicateCandidate = {
+  captureId: string;
+  title: string;
+  path: string | null;
+};
+
+function formatCapture(
+  capture: typeof researchCaptures.$inferSelect,
+  duplicateCandidates: DuplicateCandidate[] = [],
+) {
   const sources = Array.isArray(capture.sources) ? capture.sources : [];
   return {
     id: capture.id,
@@ -77,6 +86,7 @@ function formatCapture(capture: typeof researchCaptures.$inferSelect) {
       }
       return [];
     }),
+    duplicateCandidates,
     status: capture.status as ResearchCaptureStatus,
     savedDocumentId: capture.saved_document_id,
     savedPath: capture.saved_path,
@@ -186,7 +196,32 @@ export async function listResearchCaptureInbox(
         .where(eq(researchCaptures.status, status))
         .orderBy(desc(researchCaptures.captured_at));
 
-  return results.map(formatCapture);
+  const sourceUrls = [...new Set(results.map((capture) => capture.source_url))];
+  const savedCaptures = sourceUrls.length
+    ? await db
+        .select({
+          id: researchCaptures.id,
+          sourceUrl: researchCaptures.source_url,
+          title: researchCaptures.source_title,
+          path: researchCaptures.saved_path,
+        })
+        .from(researchCaptures)
+        .where(and(
+          eq(researchCaptures.status, RESEARCH_CAPTURE_STATUS.APPROVED),
+          inArray(researchCaptures.source_url, sourceUrls),
+        ))
+    : [];
+  const duplicatesBySourceUrl = new Map<string, DuplicateCandidate[]>();
+  for (const savedCapture of savedCaptures) {
+    const duplicates = duplicatesBySourceUrl.get(savedCapture.sourceUrl) ?? [];
+    duplicates.push({ captureId: savedCapture.id, title: savedCapture.title, path: savedCapture.path });
+    duplicatesBySourceUrl.set(savedCapture.sourceUrl, duplicates);
+  }
+
+  return results.map((capture) => formatCapture(
+    capture,
+    (duplicatesBySourceUrl.get(capture.source_url) ?? []).filter((candidate) => candidate.captureId !== capture.id),
+  ));
 }
 
 function vaultRelativePath(vaultRoot: string, filePath: string): string {
