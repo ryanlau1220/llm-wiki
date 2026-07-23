@@ -18,6 +18,18 @@ Every commit must have one purpose and be independently understandable, reviewab
 
 Do not combine a broad feature implementation, refactor, generated output, documentation, and unrelated cleanup in one commit. A large file count or line count is a signal to revisit the split, not a reason to proceed. State the intended commit split before the first commit and validate each commit with the smallest relevant check.
 
+## Pull requests and integration
+
+For every feature, the agent owns implementation through integration into `dev`: create an isolated worktree where appropriate, run validation, perform a code-review pass, open the PR, resolve merge conflicts, merge to `dev`, fast-forward the primary workspace, and remove the completed worktree and feature branch.
+
+Code review is required before every PR merge. Review correctness, type safety, privacy/security, migration safety, test coverage, accidental unrelated changes, and compliance with the current task's acceptance criteria.
+
+Parallel work is allowed only when workers have explicit, non-overlapping file ownership. Database migrations, shared API contracts, and sequential retrieval-pipeline stages are single-writer work. Before merging a PR, update it against current `dev`; resolve conflicts in that feature worktree and rerun affected validation.
+
+The project owner takes over after merge to `dev`: manual verification, feedback, and approval for the subsequent `dev` to `main` promotion. Never delete the permanent `dev` branch when merging or cleaning up PRs.
+
+If an implementation, merge conflict, migration, validation failure, or external state requires a meaningful product decision or new authority, stop and ask the project owner for help rather than guessing.
+
 ## Test reporting
 
 Before requesting manual verification, report:
