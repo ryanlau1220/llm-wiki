@@ -11,6 +11,7 @@ import {
   Settings,
   Inbox,
   ListTree,
+  ListChecks,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { orpc } from '../lib/orpc'
@@ -53,6 +54,7 @@ export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onCl
     { label: 'AI Generator', icon: Sparkles, to: '/generator' },
     { label: 'Refactor Note', icon: RotateCcw, to: '/refactor' },
     { label: 'Research Inbox', icon: Inbox, to: '/research' },
+    { label: 'Organization Review', icon: ListChecks, to: '/organization' },
     { label: 'Retrieval Traces', icon: ListTree, to: '/retrieval' },
     { label: 'Wiki Pages', icon: BookOpen, to: '/vault' },
     { label: 'Settings', icon: Settings, to: '/settings' },
