@@ -68,7 +68,7 @@ function evaluateCase(
 
   for (const [index, item] of rankedItems.entries()) {
     const target = findMatchingTarget(item, evaluationCase.relevant);
-    const relevance = target?.relevance ?? 0;
+    const relevance = target ? target.relevance ?? 1 : 0;
     gainedRelevance.push(relevance);
 
     if (target) {

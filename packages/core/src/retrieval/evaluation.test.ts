@@ -69,6 +69,24 @@ describe("evaluateRetrieval", () => {
     expect(metrics.recallAtK).toBe(0.5);
   });
 
+  test("treats ungraded relevant targets as binary relevance for nDCG", () => {
+    const metrics = evaluateRetrieval(
+      [
+        {
+          id: "binary-target",
+          query: "How is the target retrieved?",
+          relevant: [{ documentPath: "research/target.md", chunkIndex: 0 }],
+        },
+      ],
+      new Map([
+        ["binary-target", [{ documentPath: "research/target.md", chunkIndex: 0 }]],
+      ]),
+      1,
+    );
+
+    expect(metrics.ndcgAtK).toBe(1);
+  });
+
   test("rejects invalid and ambiguous evaluation inputs", () => {
     expect(() => evaluateRetrieval([], new Map())).toThrow("At least one retrieval evaluation case");
     expect(() => evaluateRetrieval([{ ...CASES[0]!, id: "" }], new Map())).toThrow("case ID");
