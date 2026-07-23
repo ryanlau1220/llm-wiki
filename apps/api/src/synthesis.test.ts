@@ -34,6 +34,15 @@ const RETRIEVAL_CHUNKS = [
 ];
 
 describe("synthesis context packing", () => {
+  test("keeps an empty selected-note result empty", () => {
+    expect(packSelectedNoteSynthesisContext([])).toEqual({
+      chunks: [],
+      text: "",
+      characterCount: 0,
+      sourceManifest: "",
+    });
+  });
+
   test("preserves the requested selected-note order", () => {
     const orderedSources = orderSelectedSynthesisSources(
       [
