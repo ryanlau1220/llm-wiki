@@ -5,7 +5,7 @@ import { canonicalizeCaptureSources, canonicalizeCaptureUrl } from "./capture-ur
 describe("canonicalizeCaptureUrl", () => {
   test("removes Google tracking parameters but preserves the search query", () => {
     const sourceUrl =
-      "https://www.google.com/search?q=squash+merge&oq=squash+merge&sourceid=chrome&ved=abc&sxsrf=token#result";
+      "https://www.google.com/search?q=squash+merge&oq=squash+merge&sourceid=chrome&ved=abc&sxsrf=token&sca_esv=session&ei=request#result";
 
     expect(canonicalizeCaptureUrl(sourceUrl)).toBe("https://www.google.com/search?q=squash+merge");
   });
@@ -15,6 +15,12 @@ describe("canonicalizeCaptureUrl", () => {
       "https://example.com/article?topic=local-first&utm_source=newsletter&gclid=campaign";
 
     expect(canonicalizeCaptureUrl(sourceUrl)).toBe("https://example.com/article?topic=local-first");
+  });
+
+  test("preserves non-Google source parameters", () => {
+    const sourceUrl = "https://example.com/article?source=api&ref=related-content";
+
+    expect(canonicalizeCaptureUrl(sourceUrl)).toBe(sourceUrl);
   });
 });
 

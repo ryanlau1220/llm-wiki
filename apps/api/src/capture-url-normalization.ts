@@ -7,30 +7,40 @@ const TRACKING_PARAMETER_NAMES = new Set([
   "mc_cid",
   "mc_eid",
   "msclkid",
-  "oq",
-  "ref",
-  "source",
-  "sourceid",
-  "sxsrf",
   "ttclid",
-  "uact",
-  "ved",
   "wbraid",
   "yclid",
 ]);
 
 const TRACKING_PARAMETER_PREFIXES = ["_ga", "_gl", "ga_", "utm_"];
+const GOOGLE_SEARCH_PATH = "/search";
+const GOOGLE_SEARCH_TRACKING_PARAMETER_NAMES = new Set([
+  "ei",
+  "oq",
+  "sca_esv",
+  "source",
+  "sourceid",
+  "sclient",
+  "sxsrf",
+  "uact",
+  "ved",
+]);
 
 type CaptureSource = {
   title: string;
   url: string;
 };
 
-function isTrackingParameter(name: string): boolean {
+function isGoogleSearchUrl(url: URL): boolean {
+  return url.pathname === GOOGLE_SEARCH_PATH && /(^|\.)google\.[a-z.]+$/i.test(url.hostname);
+}
+
+function isTrackingParameter(url: URL, name: string): boolean {
   const normalizedName = name.toLowerCase();
   return (
     TRACKING_PARAMETER_NAMES.has(normalizedName) ||
-    TRACKING_PARAMETER_PREFIXES.some((prefix) => normalizedName.startsWith(prefix))
+    TRACKING_PARAMETER_PREFIXES.some((prefix) => normalizedName.startsWith(prefix)) ||
+    (isGoogleSearchUrl(url) && GOOGLE_SEARCH_TRACKING_PARAMETER_NAMES.has(normalizedName))
   );
 }
 
@@ -38,7 +48,7 @@ export function canonicalizeCaptureUrl(value: string): string {
   const url = new URL(value);
 
   for (const parameterName of Array.from(url.searchParams.keys())) {
-    if (isTrackingParameter(parameterName)) {
+    if (isTrackingParameter(url, parameterName)) {
       url.searchParams.delete(parameterName);
     }
   }
