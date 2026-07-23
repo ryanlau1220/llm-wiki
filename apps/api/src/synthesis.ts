@@ -12,8 +12,13 @@ import {
   type RetrievalChunk,
 } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
+import { synthesisModelResponseSchema } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
+import {
+  createInvalidModelResponse,
+  parseStructuredModelResponse,
+} from "./model-response";
 
 const DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT = 2_000;
 const SELECTED_NOTE_CHUNKS_PER_DOCUMENT = 2;
@@ -166,38 +171,23 @@ Synthesize a concise wiki note.
     temperature: 0.2
   });
 
-  const rawText = llmResponse.text;
-
-  let noteData: any = null;
-  try {
-    const parsed = JSON.parse(rawText);
-    noteData = parsed.note;
-  } catch (_error) {
-    try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        noteData = parsed.note;
-      }
-    } catch (_fallbackError) {
-      // Ignore fallback error
-    }
-  }
-
-  if (noteData) {
+  const parsed = parseStructuredModelResponse(llmResponse.text, synthesisModelResponseSchema);
+  if (parsed.success) {
     const requestId = crypto.randomUUID();
     return {
       requestId,
-      note: noteData,
+      note: parsed.data.note,
       sources,
       retrieval: retrievalInfo
     };
   }
 
-  return {
-    error: "Failed to generate structured synthesis",
-    rawResponse: rawText
-  };
+  logger.error("Failed to validate synthesis response", new Error(parsed.reason), {
+    responseLength: llmResponse.text.length,
+    reason: parsed.reason,
+  });
+
+  return createInvalidModelResponse();
 }
 
 export function packRetrievedSynthesisContext(

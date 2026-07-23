@@ -24,6 +24,13 @@ import {
   RESEARCH_CAPTURE_STATUS
 } from "./schemas";
 
+export {
+  askModelResponseSchema,
+  synthesisModelResponseSchema,
+  type AskModelResponse,
+  type SynthesisModelResponse,
+} from "./schemas";
+
 const researchCaptureSchema = z.object({
   id: z.string().uuid(),
   sourceUrl: z.string(),
