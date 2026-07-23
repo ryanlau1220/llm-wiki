@@ -48,6 +48,8 @@ function ResearchInbox() {
   const [filter, setFilter] = useState<InboxFilter>('inbox')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [noteTitle, setNoteTitle] = useState('')
+  const [tags, setTags] = useState('')
+  const [destinationFolder, setDestinationFolder] = useState('research')
   const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const [mergeTargetId, setMergeTargetId] = useState('')
@@ -61,6 +63,8 @@ function ResearchInbox() {
     if (selected) {
       setSelectedId(selected.id)
       setNoteTitle(selected.sourceTitle)
+      setTags('')
+      setDestinationFolder('research')
     } else {
       setSelectedId(null)
       setNoteTitle('')
@@ -162,8 +166,8 @@ function ResearchInbox() {
               <article className="mt-6 prose prose-sm max-w-none text-sea-ink prose-headings:text-sea-ink prose-a:text-lagoon-deep"><div className="island-kicker mb-2">Captured response</div><div className="whitespace-pre-wrap leading-7">{selected.content}</div></article>
               <div className="mt-7 pt-5 border-t border-line"><div className="island-kicker mb-2">Source trail</div><ul className="space-y-1.5 text-sm">{[{ title: selected.sourceTitle, url: selected.sourceUrl }, ...selected.sources].map((source, index) => <li key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5"><ExternalLink size={13} />{source.title}</a></li>)}</ul></div>
               {selected.status === 'inbox' && <div className="mt-7 p-4 rounded-xl bg-foam border border-line space-y-3">
-                <div className="flex flex-col lg:flex-row gap-2"><input value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} className="flex-1 rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" aria-label="New note title" />
-                  <button type="button" disabled={isReviewing || !noteTitle.trim()} onClick={() => approveMutation.mutate({ id: selected.id, title: noteTitle.trim() })} className="inline-flex justify-center items-center gap-2 rounded-lg bg-lagoon text-lagoon-text px-3 py-2 text-sm font-extrabold disabled:opacity-60"><FilePlus2 size={16} />Approve as note</button></div>
+                <div className="grid gap-2 lg:grid-cols-2"><input value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" aria-label="New note title" /><input value={tags} onChange={(event) => setTags(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" placeholder="Tags, comma separated" aria-label="Note tags" /><input value={destinationFolder} onChange={(event) => setDestinationFolder(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" placeholder="research" aria-label="Destination folder" /></div>
+                <div className="flex flex-col lg:flex-row gap-2"><button type="button" disabled={isReviewing || !noteTitle.trim() || !destinationFolder.trim()} onClick={() => approveMutation.mutate({ id: selected.id, title: noteTitle.trim(), tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean), destinationFolder: destinationFolder.trim() })} className="inline-flex justify-center items-center gap-2 rounded-lg bg-lagoon text-lagoon-text px-3 py-2 text-sm font-extrabold disabled:opacity-60"><FilePlus2 size={16} />Approve as note</button></div>
                 <div className="flex flex-col lg:flex-row gap-2"><select value={mergeTargetId} onChange={(event) => setMergeTargetId(event.target.value)} className="flex-1 rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink"><option value="">Merge into an existing note…</option>{notesQuery.data?.map((note) => <option key={note.id} value={note.id}>{note.title || note.path}</option>)}</select>
                   <button type="button" disabled={isReviewing || !mergeTargetId} onClick={() => mergeMutation.mutate({ id: selected.id, targetDocumentId: mergeTargetId })} className="inline-flex justify-center items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm font-extrabold text-sea-ink hover:bg-[var(--surface-strong)] disabled:opacity-60"><GitMerge size={16} />Merge</button>
                   <button type="button" disabled={isReviewing} onClick={() => { if (window.confirm('Discard this capture from the inbox?')) discardMutation.mutate({ id: selected.id }) }} className="inline-flex justify-center items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-60"><Trash2 size={16} />Discard</button></div>

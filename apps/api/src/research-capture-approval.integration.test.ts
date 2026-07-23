@@ -60,13 +60,19 @@ describeWithDatabase('research capture approval', () => {
     })
     createdCaptureIds.push(capture.id)
 
-    const result = await approveResearchCapture(testConfig, { id: capture.id, title: TEST_NOTE_TITLE }, {
+    const result = await approveResearchCapture(testConfig, {
+      id: capture.id,
+      title: TEST_NOTE_TITLE,
+      tags: ['git', 'local-first'],
+      destinationFolder: 'research/git',
+    }, {
       reindex: async (_config, relativePath) => ({ vaultPath: relativePath, status: 'created' }),
     })
 
     expect(result.status).toBe('approved')
     const note = await fs.readFile(path.join(temporaryVault, result.path), 'utf8')
     expect(note).toContain('source_kind: browser_capture')
+    expect(note).toContain('tags: ["git", "local-first"]')
     expect(note).toContain('[Primary \\[source\\]](https://example.com/answer)')
     expect(note).toContain('[Supporting \\[source\\]](https://example.com/supporting-source)')
 

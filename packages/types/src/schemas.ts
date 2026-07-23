@@ -95,6 +95,7 @@ export const approveResearchCaptureSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1).max(150).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  destinationFolder: z.string().trim().min(1).max(200).regex(/^[a-zA-Z0-9][a-zA-Z0-9 _-]*(\/[a-zA-Z0-9][a-zA-Z0-9 _-]*)*$/, 'Use a vault-relative folder path').optional(),
 });
 
 export const mergeResearchCaptureSchema = z.object({

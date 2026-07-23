@@ -24,6 +24,7 @@ import { sseEmitter } from "./events";
 import { reindexFile } from "./reindex";
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_RESEARCH_CAPTURE_FOLDER = "research";
 const DEFAULT_CAPTURE_DEPENDENCIES = {
   reindex: reindexFile,
 };
@@ -232,6 +233,16 @@ function vaultRelativePath(vaultRoot: string, filePath: string): string {
   return relative.replace(/\\/g, "/");
 }
 
+function captureDestinationPath(vaultRoot: string, destinationFolder: string | undefined): string {
+  const folder = destinationFolder ?? DEFAULT_RESEARCH_CAPTURE_FOLDER;
+  const destinationPath = path.resolve(vaultRoot, folder);
+  const relative = path.relative(vaultRoot, destinationPath);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Research capture destination must remain inside the vault");
+  }
+  return destinationPath;
+}
+
 function slugify(value: string): string {
   return value
     .replace(/[/\\?%*:|"<>]/g, "")
@@ -303,7 +314,7 @@ export async function approveResearchCapture(
 ) {
   const { db, capture } = await getInboxCapture(config, input.id);
   const vaultRoot = path.resolve(config.vaultPath);
-  const researchDir = path.resolve(vaultRoot, "research");
+  const researchDir = captureDestinationPath(vaultRoot, input.destinationFolder);
   const filePath = path.resolve(researchDir, `${capture.id}-${slugify(input.title || capture.source_title)}.md`);
   const relativePath = vaultRelativePath(vaultRoot, filePath);
   const sources = formatCapture(capture).sources;
