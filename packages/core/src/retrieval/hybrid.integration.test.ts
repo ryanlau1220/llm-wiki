@@ -35,10 +35,17 @@ describeWithDatabase("hybrid retrieval metadata filters", () => {
         fixtureChunk(
           includedDocument!.id,
           "Selective retrieval filtering keeps this intended document in the result set.",
+          0,
+        ),
+        fixtureChunk(
+          includedDocument!.id,
+          "Selective retrieval filtering also keeps a second intended chunk without diversity enabled.",
+          1,
         ),
         fixtureChunk(
           excludedDocument!.id,
           "Selective retrieval filtering must not return this excluded document.",
+          0,
         ),
       ]);
 
@@ -55,6 +62,7 @@ describeWithDatabase("hybrid retrieval metadata filters", () => {
     );
 
     expect(response.chunks).not.toHaveLength(0);
+    expect(response.chunks).toHaveLength(2);
     expect(response.chunks.every((chunk) => chunk.documentId === includedDocument!.id)).toBe(true);
     expect(response.chunks.every((chunk) => chunk.documentPath === FIXTURE_PATHS[0]!)).toBe(true);
   });
@@ -72,10 +80,10 @@ function fixtureDocument(path: string, title: string) {
   };
 }
 
-function fixtureChunk(documentId: string, text: string) {
+function fixtureChunk(documentId: string, text: string, chunkIndex: number) {
   return {
     document_id: documentId,
-    chunk_index: 0,
+    chunk_index: chunkIndex,
     text,
     embedding: vectorAt(0),
     embedding_model: "test-model",
