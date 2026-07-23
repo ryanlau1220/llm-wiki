@@ -26,7 +26,6 @@ export async function listOrganizationSuggestions(
       id: documents.id,
       path: documents.path,
       title: documents.title,
-      content: documents.content,
       qualityScore: documents.quality_score,
       qualityMetrics: documents.quality_metrics,
       healthScore: documents.health_score,
@@ -74,7 +73,6 @@ function toOrganizationNoteSignals(
     id: string;
     path: string;
     title: string;
-    content: string;
     qualityScore: number | null;
     qualityMetrics: unknown;
     healthScore: number | null;
@@ -92,7 +90,7 @@ function toOrganizationNoteSignals(
     title: note.title,
     qualityScore: unitIntervalOrNull(note.qualityScore),
     healthScore: unitIntervalOrNull(note.healthScore),
-    wordCount: metrics?.wordCount ?? countWords(note.content),
+    wordCount: metrics?.wordCount ?? null,
     completeness: metrics?.completeness ?? null,
     linkDensity: metrics?.linkDensity ?? null,
     unresolvedLinkCount: linkCounts?.unresolved ?? 0,
@@ -105,11 +103,6 @@ function unitIntervalOrNull(value: number | null): number | null {
     return null;
   }
   return value;
-}
-
-function countWords(content: string): number {
-  const trimmedContent = content.trim();
-  return trimmedContent ? trimmedContent.split(/\s+/).length : 0;
 }
 
 function daysSince(updatedAt: Date, now: Date): number {
