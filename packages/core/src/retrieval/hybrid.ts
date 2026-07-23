@@ -2,6 +2,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm/sql";
 
 import type { RetrievalDependencies, RetrievalRequest, RetrievalResponse } from "./types";
+import { rerankRetrievalChunks } from "./rerank";
 import { chunks, documents, links } from "@llm-wiki/db";
 
 const DEFAULT_TOP_K = 8;
@@ -10,6 +11,7 @@ const DEFAULT_FTS_CANDIDATES = 50;
 const DEFAULT_LINK_EXPANSION = 50;
 const FTS_CONFIGURATION = "simple";
 const RRF_RANK_OFFSET = 60;
+const MAX_RERANK_CANDIDATES = 50;
 
 export async function hybridRetrieve(
   deps: RetrievalDependencies,
@@ -79,7 +81,11 @@ export async function hybridRetrieve(
     source: "fts" as const,
   }));
 
-  const merged = fuseRankedResults(vectorScored, ftsScored, topK);
+  const rerankCandidateLimit = Math.max(topK, Math.min(vectorLimit + ftsLimit, MAX_RERANK_CANDIDATES));
+  const merged = rerankRetrievalChunks(
+    query,
+    fuseRankedResults(vectorScored, ftsScored, rerankCandidateLimit),
+  ).slice(0, topK);
 
   const documentIds = [...new Set(merged.map((item) => item.documentId))];
   if (!documentIds.length) {

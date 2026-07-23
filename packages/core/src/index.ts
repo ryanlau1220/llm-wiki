@@ -4,6 +4,7 @@ export * from "./ingestion/utils";
 export * from "./retrieval/hybrid";
 export * from "./retrieval/evaluation";
 export * from "./retrieval/context";
+export * from "./retrieval/rerank";
 export * from "./retrieval/trace";
 export * from "./retrieval/types";
 export * from "./logging";
