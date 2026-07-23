@@ -15,14 +15,24 @@ import {
   type ApproveResearchCapture,
   type ExtensionResearchCapture,
   type MergeResearchCapture,
+  RESEARCH_CAPTURE_STATUS,
+  type ResearchCaptureStatus,
 } from "@llm-wiki/types";
 import type { AppConfig } from "./config";
 import { sseEmitter } from "./events";
 import { reindexFile } from "./reindex";
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_CAPTURE_DEPENDENCIES = {
+  reindex: reindexFile,
+};
 
-export type ResearchCaptureStatus = "inbox" | "approved" | "merged" | "discarded";
+type ResearchCaptureDependencies = {
+  reindex: typeof reindexFile;
+};
+
+export class ExtensionPairingError extends Error {}
+export class ExtensionAuthenticationError extends Error {}
 
 export function hashSecret(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -106,7 +116,7 @@ export async function pairExtension(config: AppConfig, pairingCode: string, name
     )
     .returning({ id: extensionPairingCodes.id });
   if (!consumed.length) {
-    throw new Error("The pairing code is invalid, expired, or was already used");
+    throw new ExtensionPairingError("The pairing code is invalid, expired, or was already used");
   }
 
   const token = createDeviceToken();
@@ -134,7 +144,7 @@ export async function createResearchCapture(
     .limit(1);
 
   if (!device) {
-    throw new Error("This extension is not paired with LLM Wiki");
+    throw new ExtensionAuthenticationError("This extension is not paired with LLM Wiki");
   }
 
   const capturedAt = new Date(input.capturedAt);
@@ -162,7 +172,7 @@ export async function createResearchCapture(
 
 export async function listResearchCaptureInbox(
   config: AppConfig,
-  status: ResearchCaptureStatus | "all" = "inbox",
+  status: ResearchCaptureStatus | "all" = RESEARCH_CAPTURE_STATUS.INBOX,
 ) {
   const { db } = createDbClient(requireDatabase(config));
   const results = status === "all"
@@ -242,13 +252,17 @@ async function getInboxCapture(config: AppConfig, id: string) {
   const [capture] = await db
     .select()
     .from(researchCaptures)
-    .where(and(eq(researchCaptures.id, id), eq(researchCaptures.status, "inbox")))
+    .where(and(eq(researchCaptures.id, id), eq(researchCaptures.status, RESEARCH_CAPTURE_STATUS.INBOX)))
     .limit(1);
   if (!capture) throw new Error("Research capture is no longer in the inbox");
   return { db, capture };
 }
 
-export async function approveResearchCapture(config: AppConfig, input: ApproveResearchCapture) {
+export async function approveResearchCapture(
+  config: AppConfig,
+  input: ApproveResearchCapture,
+  dependencies: ResearchCaptureDependencies = DEFAULT_CAPTURE_DEPENDENCIES,
+) {
   const { db, capture } = await getInboxCapture(config, input.id);
   const vaultRoot = path.resolve(config.vaultPath);
   const researchDir = path.resolve(vaultRoot, "research");
@@ -269,7 +283,7 @@ export async function approveResearchCapture(config: AppConfig, input: ApproveRe
 
   await fs.mkdir(researchDir, { recursive: true });
   await fs.writeFile(filePath, content, "utf8");
-  const indexed = await reindexFile(config, relativePath);
+  const indexed = await dependencies.reindex(config, relativePath);
   if (indexed.status === "failed") {
     throw new Error(indexed.error || "The note was written but could not be indexed");
   }
@@ -277,7 +291,7 @@ export async function approveResearchCapture(config: AppConfig, input: ApproveRe
   await db
     .update(researchCaptures)
     .set({
-      status: "approved",
+      status: RESEARCH_CAPTURE_STATUS.APPROVED,
       reviewed_at: new Date(),
       saved_document_id: indexed.documentId ?? null,
       saved_path: relativePath,
@@ -286,10 +300,14 @@ export async function approveResearchCapture(config: AppConfig, input: ApproveRe
     .where(eq(researchCaptures.id, capture.id));
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
 
-  return { status: "approved" as const, path: relativePath, documentId: indexed.documentId ?? null };
+  return { status: RESEARCH_CAPTURE_STATUS.APPROVED, path: relativePath, documentId: indexed.documentId ?? null };
 }
 
-export async function mergeResearchCapture(config: AppConfig, input: MergeResearchCapture) {
+export async function mergeResearchCapture(
+  config: AppConfig,
+  input: MergeResearchCapture,
+  dependencies: ResearchCaptureDependencies = DEFAULT_CAPTURE_DEPENDENCIES,
+) {
   const { db, capture } = await getInboxCapture(config, input.id);
   const [target] = await db
     .select({ id: documents.id, path: documents.path })
@@ -321,7 +339,7 @@ export async function mergeResearchCapture(config: AppConfig, input: MergeResear
     .replace(/^# .*\n\n/, "");
   await fs.writeFile(targetPath, `${original.trimEnd()}\n\n---\n\n## Research capture: ${markdownLabel(capture.source_title)}\n\n${excerpt}\n`, "utf8");
 
-  const indexed = await reindexFile(config, relativePath);
+  const indexed = await dependencies.reindex(config, relativePath);
   if (indexed.status === "failed") {
     throw new Error(indexed.error || "The note was updated but could not be indexed");
   }
@@ -329,7 +347,7 @@ export async function mergeResearchCapture(config: AppConfig, input: MergeResear
   await db
     .update(researchCaptures)
     .set({
-      status: "merged",
+      status: RESEARCH_CAPTURE_STATUS.MERGED,
       reviewed_at: new Date(),
       saved_document_id: target.id,
       saved_path: relativePath,
@@ -338,15 +356,15 @@ export async function mergeResearchCapture(config: AppConfig, input: MergeResear
     .where(eq(researchCaptures.id, capture.id));
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
 
-  return { status: "merged" as const, path: relativePath, documentId: target.id };
+  return { status: RESEARCH_CAPTURE_STATUS.MERGED, path: relativePath, documentId: target.id };
 }
 
 export async function discardResearchCapture(config: AppConfig, id: string) {
   const { db, capture } = await getInboxCapture(config, id);
   await db
     .update(researchCaptures)
-    .set({ status: "discarded", reviewed_at: new Date(), updated_at: new Date() })
+    .set({ status: RESEARCH_CAPTURE_STATUS.DISCARDED, reviewed_at: new Date(), updated_at: new Date() })
     .where(eq(researchCaptures.id, capture.id));
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
-  return { status: "discarded" as const };
+  return { status: RESEARCH_CAPTURE_STATUS.DISCARDED };
 }

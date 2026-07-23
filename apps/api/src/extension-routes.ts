@@ -2,7 +2,19 @@ import { Elysia } from "elysia";
 
 import { extensionResearchCaptureSchema } from "@llm-wiki/types";
 import type { AppConfig } from "./config";
-import { createResearchCapture, pairExtension } from "./research-captures";
+import {
+  createResearchCapture,
+  ExtensionAuthenticationError,
+  ExtensionPairingError,
+  pairExtension,
+} from "./research-captures";
+
+const HTTP_STATUS = {
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  CREATED: 201,
+  INTERNAL_SERVER_ERROR: 500,
+} as const;
 
 function response(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -27,35 +39,41 @@ export function researchCaptureExtensionRoutes(config: AppConfig) {
       try {
         body = await request.json();
       } catch {
-        return response(400, { error: "Request body must be valid JSON" });
+        return response(HTTP_STATUS.BAD_REQUEST, { error: "Request body must be valid JSON" });
       }
       const parsed = parsePairingRequest(body);
-      if (!parsed) return response(400, { error: "Invalid pairing request" });
+      if (!parsed) return response(HTTP_STATUS.BAD_REQUEST, { error: "Invalid pairing request" });
 
       try {
         return await pairExtension(config, parsed.pairingCode, parsed.name);
       } catch (error) {
-        return response(401, { error: error instanceof Error ? error.message : "Unable to pair extension" });
+        if (error instanceof ExtensionPairingError) {
+          return response(HTTP_STATUS.UNAUTHORIZED, { error: error.message });
+        }
+        return response(HTTP_STATUS.INTERNAL_SERVER_ERROR, { error: "Unable to pair extension" });
       }
     })
     .post("/extension/captures", async ({ request }) => {
       const token = bearerToken(request);
-      if (!token) return response(401, { error: "A paired extension token is required" });
+      if (!token) return response(HTTP_STATUS.UNAUTHORIZED, { error: "A paired extension token is required" });
 
       let body: unknown;
       try {
         body = await request.json();
       } catch {
-        return response(400, { error: "Request body must be valid JSON" });
+        return response(HTTP_STATUS.BAD_REQUEST, { error: "Request body must be valid JSON" });
       }
       const parsed = extensionResearchCaptureSchema.safeParse(body);
-      if (!parsed.success) return response(400, { error: "Invalid research capture", details: parsed.error.flatten() });
+      if (!parsed.success) return response(HTTP_STATUS.BAD_REQUEST, { error: "Invalid research capture", details: parsed.error.flatten() });
 
       try {
         const capture = await createResearchCapture(config, token, parsed.data);
-        return response(201, capture);
+        return response(HTTP_STATUS.CREATED, capture);
       } catch (error) {
-        return response(401, { error: error instanceof Error ? error.message : "Unable to save research capture" });
+        if (error instanceof ExtensionAuthenticationError) {
+          return response(HTTP_STATUS.UNAUTHORIZED, { error: error.message });
+        }
+        return response(HTTP_STATUS.INTERNAL_SERVER_ERROR, { error: "Unable to save research capture" });
       }
     });
 }

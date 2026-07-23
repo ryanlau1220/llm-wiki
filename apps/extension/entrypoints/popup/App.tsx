@@ -13,6 +13,7 @@ type PageCapture = {
 }
 
 const DEFAULT_API_BASE = 'http://localhost:3001'
+const MAX_CAPTURE_CHARACTERS = 100_000
 
 function normalizeApiBase(value: string) {
   return value.trim().replace(/\/$/, '')
@@ -53,7 +54,7 @@ async function extractSelectedResearch(): Promise<PageCapture> {
   return {
     sourceUrl: tab.url,
     sourceTitle: tab.title?.trim() || new URL(tab.url).hostname,
-    content: data.selection.slice(0, 100_000),
+    content: data.selection.slice(0, MAX_CAPTURE_CHARACTERS),
     sources: data.sources ?? [],
   }
 }
