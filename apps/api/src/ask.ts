@@ -7,6 +7,7 @@ import {
   createLogger,
   hashRetrievalValue,
   hybridRetrieve,
+  packRetrievalContext,
   recordRetrievalEvidence,
   RETRIEVAL_OPERATION,
   RETRIEVAL_POLICY,
@@ -118,12 +119,13 @@ export async function askPreview(
       links: retrievalResults.links.length
     });
 
+    const contextPack = packRetrievalContext(retrievalResults.chunks);
     if (retrievalRunId) {
       try {
         tracedEvidenceCount = await recordRetrievalEvidence(
           db,
           retrievalRunId,
-          retrievalResults.chunks.map((chunk, index) => ({
+          contextPack.chunks.map((chunk, index) => ({
             documentId: chunk.documentId,
             documentPath: chunk.documentPath,
             chunkIndex: chunk.chunkIndex,
@@ -139,9 +141,7 @@ export async function askPreview(
       }
     }
 
-    contextText = retrievalResults.chunks
-      .map((chunk, index) => `[Context ${index + 1}]:\n${chunk.text}`)
-      .join("\n\n");
+    contextText = contextPack.text;
   } else {
     // General Knowledge / Web Search mode
     if (config.tavilyApiKey) {
