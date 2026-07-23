@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  packRetrievedSynthesisContext,
-  packSelectedNoteSynthesisContext,
-} from "./synthesis";
+import { packRetrievedSynthesisContext, packSelectedNoteSynthesisContext } from "./synthesis";
 
 const RETRIEVAL_CHUNKS = [
   {
@@ -46,17 +43,20 @@ describe("synthesis context packing", () => {
   });
 
   test("labels selected-note segments and keeps the manifest inside the hard budget", () => {
-    const context = packSelectedNoteSynthesisContext([
+    const context = packSelectedNoteSynthesisContext(
+      [
+        {
+          id: "selected-a",
+          title: "Long selected note",
+          path: "notes/selected-a.md",
+          content: "abcdefghijkl",
+        },
+      ],
       {
-        id: "selected-a",
-        title: "Long selected note",
-        path: "notes/selected-a.md",
-        content: "abcdefghijkl",
+        characterBudget: 1_000,
+        segmentCharacterLimit: 3,
       },
-    ], {
-      characterBudget: 1_000,
-      segmentCharacterLimit: 3,
-    });
+    );
 
     expect(context.chunks.map((chunk) => chunk.chunkIndex)).toEqual([0, 1]);
     expect(context.text).toContain("[Context 1 | notes/selected-a.md#0]");
@@ -67,17 +67,20 @@ describe("synthesis context packing", () => {
   });
 
   test("keeps source provenance visible when the budget cannot fit any selected segment", () => {
-    const context = packSelectedNoteSynthesisContext([
+    const context = packSelectedNoteSynthesisContext(
+      [
+        {
+          id: "selected-a",
+          title: "Selected note",
+          path: "notes/selected-a.md",
+          content: "source content that cannot fit beside the manifest",
+        },
+      ],
       {
-        id: "selected-a",
-        title: "Selected note",
-        path: "notes/selected-a.md",
-        content: "source content that cannot fit beside the manifest",
+        characterBudget: 220,
+        segmentCharacterLimit: 100,
       },
-    ], {
-      characterBudget: 220,
-      segmentCharacterLimit: 100,
-    });
+    );
 
     expect(context.chunks).toEqual([]);
     expect(context.text).toBe(context.sourceManifest);
@@ -86,13 +89,18 @@ describe("synthesis context packing", () => {
   });
 
   test("rejects a budget that cannot label every selected source", () => {
-    expect(() => packSelectedNoteSynthesisContext([
-      {
-        id: "selected-a",
-        title: "Selected note",
-        path: "notes/selected-a.md",
-        content: "content",
-      },
-    ], { characterBudget: 10 })).toThrow("label every selected source");
+    expect(() =>
+      packSelectedNoteSynthesisContext(
+        [
+          {
+            id: "selected-a",
+            title: "Selected note",
+            path: "notes/selected-a.md",
+            content: "content",
+          },
+        ],
+        { characterBudget: 10 },
+      ),
+    ).toThrow("label every selected source");
   });
 });
