@@ -7,6 +7,14 @@ export type RetrievalRequest = {
   vectorCandidateLimit?: number;
   ftsCandidateLimit?: number;
   linkExpansionLimit?: number;
+  filters?: RetrievalMetadataFilters;
+};
+
+export type RetrievalMetadataFilters = {
+  /** Restrict retrieval to explicit document UUIDs. */
+  documentIds?: string[];
+  /** Restrict retrieval to a vault-relative document path prefix. */
+  pathPrefix?: string;
 };
 
 export type RetrievalChunk = {
