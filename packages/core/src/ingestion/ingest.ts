@@ -76,15 +76,18 @@ export async function ingestMarkdown(
       .limit(1);
 
     if (existing.length && existing[0].content_hash === contentHash) {
-      return recordSkippedIngestion(
+      const skipped = await recordSkippedIngestion(
         deps,
         input.vaultPath,
         fileSizeBytes,
         contentHash,
         startTime,
         now,
-        existing[0],
       );
+
+      if (skipped) {
+        return skipped;
+      }
     }
 
     const prepared = await prepareDocumentForIngestion(deps, input, normalized, logger);
@@ -243,9 +246,18 @@ async function recordSkippedIngestion(
   contentHash: string,
   startTime: number,
   now: () => Date,
-  document: { id: string; version: number },
-): Promise<IngestionResult> {
-  await deps.db.transaction(async (tx: DbClient) => {
+): Promise<IngestionResult | undefined> {
+  return deps.db.transaction(async (tx: DbClient) => {
+    const existing = await tx
+      .select()
+      .from(documents)
+      .where(eq(documents.path, vaultPath))
+      .limit(1);
+
+    if (!existing.length || existing[0].content_hash !== contentHash) {
+      return undefined;
+    }
+
     await tx.insert(ingestionRuns).values({
       document_path: vaultPath,
       file_size_bytes: fileSizeBytes,
@@ -254,13 +266,12 @@ async function recordSkippedIngestion(
       duration_ms: Date.now() - startTime,
       created_at: now(),
     });
+    return {
+      status: "skipped",
+      documentId: existing[0].id,
+      version: existing[0].version,
+    };
   });
-
-  return {
-    status: "skipped",
-    documentId: document.id,
-    version: document.version,
-  };
 }
 
 async function prepareDocumentForIngestion(
