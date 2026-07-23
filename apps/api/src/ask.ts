@@ -1,9 +1,33 @@
 import crypto from "node:crypto";
-import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
-import { createLogger, hybridRetrieve } from "@llm-wiki/core";
-import { createDbClient } from "@llm-wiki/db";
+import { inArray } from "drizzle-orm";
+
+import { createEmbeddingProvider, createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
+import {
+  completeRetrievalRun,
+  createLogger,
+  hashRetrievalValue,
+  hybridRetrieve,
+  recordRetrievalEvidence,
+  RETRIEVAL_OPERATION,
+  RETRIEVAL_POLICY,
+  RETRIEVAL_RUN_STATUS,
+  startRetrievalRun,
+  type RetrievalResponse,
+} from "@llm-wiki/core";
+import { createDbClient, documents } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
+
+const ASK_PROMPT_VERSION = "ask-v1";
+const ASK_TRACE_POLICY_REASON = {
+  GENERAL_MODE: "explicit_general_mode",
+  RAG_MODE: "explicit_rag_mode",
+} as const;
+const ASK_TRACE_ERROR_CODE = {
+  INVALID_MODEL_RESPONSE: "invalid_model_response",
+  RETRIEVAL_FAILED: "retrieval_failed",
+  GENERATION_FAILED: "generation_failed",
+} as const;
 
 export async function askPreview(
   config: AppConfig,
@@ -12,17 +36,44 @@ export async function askPreview(
   mode: "rag" | "general" = "rag"
 ) {
   const logger = createLogger("ask");
-  logger.info("New knowledge request", { query, topK, mode });
+  logger.info("New knowledge request", {
+    queryHash: hashRetrievalValue(query),
+    queryLength: query.length,
+    topK,
+    mode,
+  });
 
   if (!config.databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
 
   const { db } = createDbClient(config.databaseUrl);
-  
+  const requestStartedAt = Date.now();
+  const tracePolicy = mode === "rag"
+    ? RETRIEVAL_POLICY.VAULT_HYBRID
+    : RETRIEVAL_POLICY.GENERAL_WEB;
+  const tracePolicyReason = mode === "rag"
+    ? ASK_TRACE_POLICY_REASON.RAG_MODE
+    : ASK_TRACE_POLICY_REASON.GENERAL_MODE;
+  let retrievalRunId: string | null = null;
+  try {
+    retrievalRunId = await startRetrievalRun(db, {
+      operation: RETRIEVAL_OPERATION.ASK,
+      query,
+      policy: tracePolicy,
+      policyReason: tracePolicyReason,
+      modelProvider: config.embeddingProvider,
+      modelName: resolveLlmModelName(config),
+      promptVersion: ASK_PROMPT_VERSION,
+    });
+  } catch (error) {
+    logger.error("Failed to start retrieval trace", error);
+  }
+
   let contextText = "";
   let webSearchEnabled = false;
-  let retrievalResults: any = { chunks: [], links: [] };
+  let retrievalResults: RetrievalResponse = { chunks: [], links: [] };
+  let tracedEvidenceCount = 0;
 
   if (mode === "rag") {
     const embeddingProvider = createEmbeddingProvider({
@@ -39,24 +90,57 @@ export async function askPreview(
       }
     });
 
-    retrievalResults = await hybridRetrieve(
-      {
-        db,
-        embeddingProvider
-      },
-      {
-        query,
-        topK
-      }
-    );
+    try {
+      retrievalResults = await hybridRetrieve(
+        {
+          db,
+          embeddingProvider
+        },
+        {
+          query,
+          topK
+        }
+      );
+    } catch (error) {
+      await completeAskTrace(db, retrievalRunId, {
+        status: RETRIEVAL_RUN_STATUS.FAILED,
+        candidateCount: 0,
+        selectedEvidenceCount: 0,
+        contextCharacterCount: 0,
+        durationMs: Date.now() - requestStartedAt,
+        errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED,
+      }, logger);
+      throw error;
+    }
 
-    logger.debug("Retrieval completed", { 
-      chunks: retrievalResults.chunks.length, 
-      links: retrievalResults.links.length 
+    logger.debug("Retrieval completed", {
+      chunks: retrievalResults.chunks.length,
+      links: retrievalResults.links.length
     });
 
-    contextText = (retrievalResults.chunks as any[])
-      .map((c: any, i: number) => `[Context ${i + 1}]:\n${c.text}`)
+    if (retrievalRunId) {
+      try {
+        tracedEvidenceCount = await recordRetrievalEvidence(
+          db,
+          retrievalRunId,
+          retrievalResults.chunks.map((chunk, index) => ({
+            documentId: chunk.documentId,
+            documentPath: chunk.documentPath,
+            chunkIndex: chunk.chunkIndex,
+            contentHash: hashRetrievalValue(chunk.text),
+            source: chunk.source,
+            score: chunk.score,
+            retrievalRank: index + 1,
+            selectionRank: index + 1,
+          })),
+        );
+      } catch (error) {
+        logger.error("Failed to record retrieval evidence", error, { retrievalRunId });
+      }
+    }
+
+    contextText = retrievalResults.chunks
+      .map((chunk, index) => `[Context ${index + 1}]:\n${chunk.text}`)
       .join("\n\n");
   } else {
     // General Knowledge / Web Search mode
@@ -161,53 +245,106 @@ Provide your answer and suggested note in JSON format.
 `.trim();
 
   logger.debug("Generating LLM answer...");
-  const startTime = Date.now();
-  const llmResponse = await llmProvider.generate({
-    prompt,
-    systemInstruction,
-    responseMimeType: "application/json",
-    temperature: 0.2,
-    webSearch: webSearchEnabled
-  } as any);
-  const duration = Date.now() - startTime;
-
+  const generationStartedAt = Date.now();
+  let llmResponse: LLMResponse;
   try {
-    const parsed = JSON.parse(llmResponse.text);
-    const requestId = crypto.randomUUID();
-
-    logger.info("Knowledge answer generated", { 
-      requestId, 
-      durationMs: duration,
-      title: parsed.suggested_note?.title 
+    llmResponse = await llmProvider.generate({
+      prompt,
+      systemInstruction,
+      responseMimeType: "application/json",
+      temperature: 0.2,
+      webSearch: webSearchEnabled
     });
-
-    const documentIds = [...new Set((retrievalResults.chunks || []).map((c: any) => c.documentId))];
-    let sources: Array<{ id: string; title: string; path: string }> = [];
-    if (documentIds.length > 0) {
-      const { inArray } = await import("drizzle-orm");
-      const { documents } = await import("@llm-wiki/db");
-      sources = await db
-        .select({ id: documents.id, title: documents.title, path: documents.path })
-        .from(documents)
-        .where(inArray(documents.id, documentIds as string[]));
-    }
-
-    return {
-      requestId,
-      answer: parsed.answer,
-      note: parsed.suggested_note,
-      sources,
-      retrieval: {
-        chunkCount: (retrievalResults.chunks || []).length,
-        linkCount: (retrievalResults.links || []).length
-      }
-    };
   } catch (error) {
-    logger.error("Failed to parse LLM response", error, { raw: llmResponse.text });
+    await completeAskTrace(db, retrievalRunId, {
+      status: RETRIEVAL_RUN_STATUS.FAILED,
+      candidateCount: retrievalResults.chunks.length,
+      selectedEvidenceCount: tracedEvidenceCount,
+      contextCharacterCount: contextText.length,
+      durationMs: Date.now() - requestStartedAt,
+      errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED,
+    }, logger);
+    throw error;
+  }
+  const duration = Date.now() - generationStartedAt;
+
+  let parsed: { answer: string; suggested_note: unknown };
+  try {
+    parsed = JSON.parse(llmResponse.text);
+  } catch (error) {
+    logger.error("Failed to parse LLM response", error, { responseLength: llmResponse.text.length });
+    await completeAskTrace(db, retrievalRunId, {
+      status: RETRIEVAL_RUN_STATUS.FAILED,
+      candidateCount: retrievalResults.chunks.length,
+      selectedEvidenceCount: tracedEvidenceCount,
+      contextCharacterCount: contextText.length,
+      durationMs: Date.now() - requestStartedAt,
+      errorCode: ASK_TRACE_ERROR_CODE.INVALID_MODEL_RESPONSE,
+    }, logger);
     return {
       error: "Failed to generate structured response",
       rawResponse: llmResponse.text
     };
+  }
+
+  const requestId = retrievalRunId ?? crypto.randomUUID();
+  logger.info("Knowledge answer generated", {
+    requestId,
+    durationMs: duration,
+    title: getSuggestedNoteTitle(parsed.suggested_note),
+  });
+
+  await completeAskTrace(db, retrievalRunId, {
+    status: RETRIEVAL_RUN_STATUS.SUCCEEDED,
+    candidateCount: retrievalResults.chunks.length,
+    selectedEvidenceCount: tracedEvidenceCount,
+    contextCharacterCount: contextText.length,
+    durationMs: Date.now() - requestStartedAt,
+  }, logger);
+
+  const documentIds = [...new Set(retrievalResults.chunks.map((chunk) => chunk.documentId))];
+  const sources = documentIds.length
+    ? await db
+      .select({ id: documents.id, title: documents.title, path: documents.path })
+      .from(documents)
+      .where(inArray(documents.id, documentIds))
+    : [];
+
+  return {
+    requestId,
+    answer: parsed.answer,
+    note: parsed.suggested_note,
+    sources,
+    retrieval: {
+      chunkCount: retrievalResults.chunks.length,
+      linkCount: retrievalResults.links.length
+    }
+  };
+}
+
+function resolveLlmModelName(config: AppConfig): string | undefined {
+  if (config.embeddingProvider === "openai") return config.openaiLlmModel;
+  if (config.embeddingProvider === "ollama") return config.ollamaLlmModel;
+  return config.gcpLlmModel;
+}
+
+function getSuggestedNoteTitle(suggestedNote: unknown): string | undefined {
+  if (!suggestedNote || typeof suggestedNote !== "object") return undefined;
+  const title = (suggestedNote as { title?: unknown }).title;
+  return typeof title === "string" ? title : undefined;
+}
+
+async function completeAskTrace(
+  db: ReturnType<typeof createDbClient>["db"],
+  retrievalRunId: string | null,
+  input: Parameters<typeof completeRetrievalRun>[2],
+  logger: ReturnType<typeof createLogger>,
+): Promise<void> {
+  if (!retrievalRunId) return;
+  try {
+    await completeRetrievalRun(db, retrievalRunId, input);
+  } catch (error) {
+    logger.error("Failed to complete retrieval trace", error, { retrievalRunId });
   }
 }
 

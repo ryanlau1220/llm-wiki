@@ -11,6 +11,8 @@ export type RetrievalRequest = {
 
 export type RetrievalChunk = {
   documentId: string;
+  documentPath: string;
+  chunkIndex: number;
   text: string;
   score: number;
   source: "vector" | "fts" | "hybrid";

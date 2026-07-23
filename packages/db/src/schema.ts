@@ -233,3 +233,67 @@ export const researchCaptureActivities = pgTable(
     captureCreatedAtIdx: index("research_capture_activities_capture_created_at_idx").on(table.capture_id, table.created_at),
   }),
 );
+
+/**
+ * Bounded, local-first observability for retrieval-backed AI requests. Raw
+ * queries, prompts, and assembled context are intentionally not persisted.
+ */
+export const retrievalRuns = pgTable(
+  "retrieval_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    operation: varchar("operation", { length: 40 }).notNull(),
+    query_hash: varchar("query_hash", { length: 64 }).notNull(),
+    query_length: integer("query_length").notNull(),
+    policy: varchar("policy", { length: 40 }).notNull(),
+    policy_reason: varchar("policy_reason", { length: 120 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull(),
+    candidate_count: integer("candidate_count").notNull().default(0),
+    selected_evidence_count: integer("selected_evidence_count").notNull().default(0),
+    context_character_count: integer("context_character_count").notNull().default(0),
+    model_provider: varchar("model_provider", { length: 80 }),
+    model_name: varchar("model_name", { length: 160 }),
+    prompt_version: varchar("prompt_version", { length: 40 }).notNull(),
+    duration_ms: integer("duration_ms"),
+    error_code: varchar("error_code", { length: 80 }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    statusCreatedAtIdx: index("retrieval_runs_status_created_at_idx").on(table.status, table.created_at),
+    operationCreatedAtIdx: index("retrieval_runs_operation_created_at_idx").on(table.operation, table.created_at),
+  }),
+);
+
+/**
+ * Candidate and selected evidence references for a retrieval run. Content is
+ * represented by its hash and stable vault location, never duplicated here.
+ */
+export const retrievalEvidence = pgTable(
+  "retrieval_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    retrieval_run_id: uuid("retrieval_run_id")
+      .notNull()
+      .references(() => retrievalRuns.id, { onDelete: "cascade" }),
+    document_id: uuid("document_id").notNull(),
+    document_path: varchar("document_path", { length: 400 }).notNull(),
+    chunk_index: integer("chunk_index").notNull(),
+    content_hash: varchar("content_hash", { length: 64 }).notNull(),
+    source: varchar("source", { length: 20 }).notNull(),
+    score: doublePrecision("score").notNull(),
+    retrieval_rank: integer("retrieval_rank").notNull(),
+    selection_rank: integer("selection_rank"),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    runRetrievalRankIdx: index("retrieval_evidence_run_retrieval_rank_idx").on(
+      table.retrieval_run_id,
+      table.retrieval_rank,
+    ),
+    runSelectionRankIdx: index("retrieval_evidence_run_selection_rank_idx").on(
+      table.retrieval_run_id,
+      table.selection_rank,
+    ),
+  }),
+);
