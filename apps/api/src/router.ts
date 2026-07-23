@@ -16,6 +16,7 @@ import {
   mergeResearchCapture,
   retryResearchCaptureIndex,
 } from "./research-captures";
+import { listRetrievalTracePage, pruneRetrievalTraceRuns } from "./retrieval-traces";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -550,5 +551,11 @@ export const router = os.router({
   }),
   listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
     return listResearchCaptureActivities(config, input.id);
+  }),
+  listRetrievalTraces: os.listRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
+    return listRetrievalTracePage(config, input);
+  }),
+  pruneRetrievalTraces: os.pruneRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
+    return pruneRetrievalTraceRuns(config, input);
   }),
 });

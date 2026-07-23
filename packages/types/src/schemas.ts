@@ -56,6 +56,59 @@ export const weakNotesPayloadSchema = z.object({
   maxResults: z.number().int().min(1).max(200).optional(),
 });
 
+const retrievalTraceEvidenceSchema = z.object({
+  documentId: z.string().uuid(),
+  documentPath: z.string(),
+  chunkIndex: z.number().int().nonnegative(),
+  source: z.enum(["vector", "fts", "hybrid"]),
+  score: z.number(),
+  retrievalRank: z.number().int().positive(),
+  selectionRank: z.number().int().positive().nullable(),
+});
+
+const retrievalTraceRunSchema = z.object({
+  id: z.string().uuid(),
+  operation: z.enum(["ask", "synthesis"]),
+  policy: z.enum(["vault_hybrid", "selected_notes", "general_web", "no_retrieval"]),
+  policyReason: z.string(),
+  status: z.enum(["started", "succeeded", "failed"]),
+  candidateCount: z.number().int().nonnegative(),
+  selectedEvidenceCount: z.number().int().nonnegative(),
+  contextCharacterCount: z.number().int().nonnegative(),
+  modelProvider: z.string().nullable(),
+  modelName: z.string().nullable(),
+  promptVersion: z.string(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  errorCode: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  evidence: z.array(retrievalTraceEvidenceSchema).optional(),
+});
+
+export const listRetrievalTracesSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  cursor: z.string().min(1).max(512).optional(),
+  includeEvidence: z.boolean().optional(),
+}).optional();
+
+export const pruneRetrievalTracesSchema = z.object({
+  olderThanDays: z.number().int().min(1).max(3_650),
+  limit: z.number().int().min(1).max(1_000),
+});
+
+export const retrievalTracePageSchema = z.object({
+  items: z.array(retrievalTraceRunSchema),
+  nextCursor: z.string().nullable(),
+});
+
+export const pruneRetrievalTracesResultSchema = z.object({
+  deletedCount: z.number().int().nonnegative(),
+  cutoff: z.string().datetime(),
+});
+
+export type ListRetrievalTracesInput = z.input<typeof listRetrievalTracesSchema>;
+export type PruneRetrievalTracesInput = z.infer<typeof pruneRetrievalTracesSchema>;
+
 const httpUrlSchema = z.string().url().max(4_000).refine(
   (value) => /^https?:\/\//i.test(value),
   "Only http(s) URLs are allowed"
