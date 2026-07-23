@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import {
   completeRetrievalRun,
   hashRetrievalValue,
+  pruneRetrievalRuns,
   recordRetrievalEvidence,
   RETRIEVAL_OPERATION,
   RETRIEVAL_POLICY,
@@ -20,6 +21,8 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const describeWithDatabase = DATABASE_URL ? describe : describe.skip;
 const TRACE_PROMPT_VERSION = "trace-api-integration-v1";
 const TRACE_QUERY = "A query that must never appear in trace read responses";
+const PRIVATE_CHUNK = "This private chunk must not be returned";
+const PRIVATE_CHUNK_HASH = hashRetrievalValue(PRIVATE_CHUNK);
 const FUTURE_TRACE_DATES = [
   new Date("2099-01-01T00:00:03.000Z"),
   new Date("2099-01-01T00:00:02.000Z"),
@@ -64,7 +67,7 @@ describeWithDatabase("retrieval trace API service", () => {
       documentId: crypto.randomUUID(),
       documentPath: "research/trace-api-test.md",
       chunkIndex: 0,
-      contentHash: hashRetrievalValue("This private chunk must not be returned"),
+      contentHash: PRIVATE_CHUNK_HASH,
       source: "hybrid",
       score: 0.9,
       retrievalRank: 1,
@@ -86,7 +89,8 @@ describeWithDatabase("retrieval trace API service", () => {
       selectionRank: 1,
     }]);
     expect(JSON.stringify(firstPage)).not.toContain(TRACE_QUERY);
-    expect(JSON.stringify(firstPage)).not.toContain("This private chunk must not be returned");
+    expect(JSON.stringify(firstPage)).not.toContain(PRIVATE_CHUNK);
+    expect(JSON.stringify(firstPage)).not.toContain(PRIVATE_CHUNK_HASH);
 
     const secondPage = await listRetrievalTracePage(config, {
       limit: 2,
@@ -95,4 +99,44 @@ describeWithDatabase("retrieval trace API service", () => {
     expect(secondPage.items.map((item) => item.id)).toContain(createdRunIds[2]!);
     expect(secondPage.items.every((item) => item.evidence === undefined)).toBe(true);
   });
+
+  test("deletes only the explicit bounded retention batch", async () => {
+    const { db } = createDbClient(DATABASE_URL!);
+    const oldRunId = await createCompletedTrace(db);
+    const retainedRunId = await createCompletedTrace(db);
+    runIds.push(oldRunId, retainedRunId);
+    const oldTraceDate = new Date("1970-01-01T00:00:00.000Z");
+    const retainedTraceDate = new Date("1970-01-02T12:00:00.000Z");
+    const retentionNow = new Date("1970-01-03T00:00:00.000Z");
+    await db.update(retrievalRuns).set({ created_at: oldTraceDate }).where(eq(retrievalRuns.id, oldRunId));
+    await db.update(retrievalRuns).set({ created_at: retainedTraceDate }).where(eq(retrievalRuns.id, retainedRunId));
+
+    const result = await pruneRetrievalRuns(db, { olderThanDays: 1, limit: 1 }, retentionNow);
+    const remainingRuns = await db.select({ id: retrievalRuns.id }).from(retrievalRuns)
+      .where(eq(retrievalRuns.id, retainedRunId));
+    const deletedRuns = await db.select({ id: retrievalRuns.id }).from(retrievalRuns)
+      .where(eq(retrievalRuns.id, oldRunId));
+
+    expect(result).toEqual({ deletedCount: 1, cutoff: "1970-01-02T00:00:00.000Z" });
+    expect(deletedRuns).toEqual([]);
+    expect(remainingRuns).toEqual([{ id: retainedRunId }]);
+  });
 });
+
+async function createCompletedTrace(db: ReturnType<typeof createDbClient>["db"]): Promise<string> {
+  const runId = await startRetrievalRun(db, {
+    operation: RETRIEVAL_OPERATION.ASK,
+    query: TRACE_QUERY,
+    policy: RETRIEVAL_POLICY.VAULT_HYBRID,
+    policyReason: "explicit_vault_mode",
+    promptVersion: TRACE_PROMPT_VERSION,
+  });
+  await completeRetrievalRun(db, runId, {
+    status: RETRIEVAL_RUN_STATUS.SUCCEEDED,
+    candidateCount: 0,
+    selectedEvidenceCount: 0,
+    contextCharacterCount: 0,
+    durationMs: 1,
+  });
+  return runId;
+}
