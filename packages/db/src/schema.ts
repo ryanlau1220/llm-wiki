@@ -201,6 +201,7 @@ export const researchCaptures = pgTable(
     sources: jsonb("sources").notNull().default([]),
     status: varchar("status", { length: 20 }).notNull().default("inbox"),
     review_note: text("review_note"),
+    index_error: text("index_error"),
     saved_document_id: uuid("saved_document_id").references(() => documents.id, {
       onDelete: "set null"
     }),
@@ -217,4 +218,18 @@ export const researchCaptures = pgTable(
     ),
     deviceIdx: index("research_captures_extension_device_id_idx").on(table.extension_device_id)
   })
+);
+
+export const researchCaptureActivities = pgTable(
+  "research_capture_activities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    capture_id: uuid("capture_id").notNull().references(() => researchCaptures.id, { onDelete: "cascade" }),
+    event_type: varchar("event_type", { length: 40 }).notNull(),
+    detail: jsonb("detail").notNull().default({}),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    captureCreatedAtIdx: index("research_capture_activities_capture_created_at_idx").on(table.capture_id, table.created_at),
+  }),
 );

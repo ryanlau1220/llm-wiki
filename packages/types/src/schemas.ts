@@ -73,6 +73,15 @@ export const RESEARCH_CAPTURE_STATUS = {
   DISCARDED: "discarded",
 } as const;
 
+export const RESEARCH_CAPTURE_ACTIVITY_EVENT = {
+  CAPTURED: "captured",
+  APPROVED: "approved",
+  MERGED: "merged",
+  DISCARDED: "discarded",
+  INDEXING_FAILED: "indexing_failed",
+  INDEXING_RETRIED: "indexing_retried",
+} as const;
+
 export const researchCaptureStatusSchema = z.enum([
   RESEARCH_CAPTURE_STATUS.INBOX,
   RESEARCH_CAPTURE_STATUS.APPROVED,
@@ -95,6 +104,7 @@ export const approveResearchCaptureSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1).max(150).optional(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  destinationFolder: z.string().trim().min(1).max(200).regex(/^[a-zA-Z0-9][a-zA-Z0-9 _-]*(\/[a-zA-Z0-9][a-zA-Z0-9 _-]*)*$/, 'Use a vault-relative folder path').optional(),
 });
 
 export const mergeResearchCaptureSchema = z.object({
@@ -102,9 +112,14 @@ export const mergeResearchCaptureSchema = z.object({
   targetDocumentId: z.string().uuid(),
 });
 
+export const retryResearchCaptureIndexSchema = z.object({
+  id: z.string().uuid(),
+});
+
 export type ExtensionResearchCapture = z.infer<typeof extensionResearchCaptureSchema>;
 export type ApproveResearchCapture = z.infer<typeof approveResearchCaptureSchema>;
 export type MergeResearchCapture = z.infer<typeof mergeResearchCaptureSchema>;
+export type RetryResearchCaptureIndex = z.infer<typeof retryResearchCaptureIndexSchema>;
 
 export const qualityMetricsSchema = z.object({
   linkDensity: z.number().min(0).max(1),

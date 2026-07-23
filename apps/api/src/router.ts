@@ -11,8 +11,10 @@ import {
   approveResearchCapture,
   createExtensionPairingCodeForDashboard,
   discardResearchCapture,
+  listResearchCaptureActivities,
   listResearchCaptureInbox,
   mergeResearchCapture,
+  retryResearchCaptureIndex,
 } from "./research-captures";
 
 const config = loadConfig();
@@ -542,5 +544,11 @@ export const router = os.router({
   }),
   discardResearchCapture: os.discardResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
     return discardResearchCapture(config, input.id);
+  }),
+  retryResearchCaptureIndex: os.retryResearchCaptureIndex.use(authMiddleware).handler(async ({ input }: any) => {
+    return retryResearchCaptureIndex(config, input);
+  }),
+  listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
+    return listResearchCaptureActivities(config, input.id);
   }),
 });

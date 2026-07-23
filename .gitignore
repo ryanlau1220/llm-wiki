@@ -13,3 +13,4 @@ build/
 .tanstack/
 *.d.ts
 references/
+*.md
