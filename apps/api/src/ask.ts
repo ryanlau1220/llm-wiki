@@ -17,8 +17,13 @@ import {
   type RetrievalResponse,
 } from "@llm-wiki/core";
 import { createDbClient, documents } from "@llm-wiki/db";
+import { askModelResponseSchema } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
+import {
+  createInvalidModelResponse,
+  parseStructuredModelResponse,
+} from "./model-response";
 
 const ASK_PROMPT_VERSION = "ask-v1";
 const ASK_TRACE_ERROR_CODE = {
@@ -296,11 +301,12 @@ Provide your answer and suggested note in JSON format.
   }
   const duration = Date.now() - generationStartedAt;
 
-  let parsed: { answer: string; suggested_note: unknown; citations?: unknown };
-  try {
-    parsed = JSON.parse(llmResponse.text);
-  } catch (error) {
-    logger.error("Failed to parse LLM response", error, { responseLength: llmResponse.text.length });
+  const parsed = parseStructuredModelResponse(llmResponse.text, askModelResponseSchema);
+  if (!parsed.success) {
+    logger.error("Failed to validate LLM response", new Error(parsed.reason), {
+      responseLength: llmResponse.text.length,
+      reason: parsed.reason,
+    });
     await completeAskTrace(db, retrievalRunId, {
       status: RETRIEVAL_RUN_STATUS.FAILED,
       candidateCount: retrievalResults.chunks.length,
@@ -309,17 +315,14 @@ Provide your answer and suggested note in JSON format.
       durationMs: Date.now() - requestStartedAt,
       errorCode: ASK_TRACE_ERROR_CODE.INVALID_MODEL_RESPONSE,
     }, logger);
-    return {
-      error: "Failed to generate structured response",
-      rawResponse: llmResponse.text
-    };
+    return createInvalidModelResponse();
   }
 
   const requestId = retrievalRunId ?? crypto.randomUUID();
   logger.info("Knowledge answer generated", {
     requestId,
     durationMs: duration,
-    title: getSuggestedNoteTitle(parsed.suggested_note),
+    title: parsed.data.suggested_note.title,
   });
 
   await completeAskTrace(db, retrievalRunId, {
@@ -338,7 +341,7 @@ Provide your answer and suggested note in JSON format.
       .where(inArray(documents.id, documentIds))
     : [];
   const sourceTitleById = new Map(sources.map((source) => [source.id, source.title]));
-  const citations = filterCitations(parsed.citations, packedCitationIds).map((citation) => {
+  const citations = filterCitations(parsed.data.citations, packedCitationIds).map((citation) => {
     const chunk = packedCitationChunks[citation - 1]!;
     return {
       id: citation,
@@ -351,8 +354,8 @@ Provide your answer and suggested note in JSON format.
 
   return {
     requestId,
-    answer: parsed.answer,
-    note: parsed.suggested_note,
+    answer: parsed.data.answer,
+    note: parsed.data.suggested_note,
     citations,
     sources,
     retrieval: {
@@ -365,10 +368,8 @@ Provide your answer and suggested note in JSON format.
   };
 }
 
-function filterCitations(citations: unknown, allowedCitationIds: Set<number>): number[] {
-  if (!Array.isArray(citations)) return [];
+function filterCitations(citations: number[], allowedCitationIds: Set<number>): number[] {
   return [...new Set(citations)]
-    .filter((citation): citation is number => Number.isInteger(citation))
     .filter((citation) => allowedCitationIds.has(citation));
 }
 
@@ -376,12 +377,6 @@ function resolveLlmModelName(config: AppConfig): string | undefined {
   if (config.embeddingProvider === "openai") return config.openaiLlmModel;
   if (config.embeddingProvider === "ollama") return config.ollamaLlmModel;
   return config.gcpLlmModel;
-}
-
-function getSuggestedNoteTitle(suggestedNote: unknown): string | undefined {
-  if (!suggestedNote || typeof suggestedNote !== "object") return undefined;
-  const title = (suggestedNote as { title?: unknown }).title;
-  return typeof title === "string" ? title : undefined;
 }
 
 async function completeAskTrace(
