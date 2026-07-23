@@ -19,6 +19,7 @@ import {
   type ResearchCaptureStatus,
 } from "@llm-wiki/types";
 import type { AppConfig } from "./config";
+import { canonicalizeCaptureSources, canonicalizeCaptureUrl } from "./capture-url-normalization";
 import { sseEmitter } from "./events";
 import { reindexFile } from "./reindex";
 
@@ -148,15 +149,17 @@ export async function createResearchCapture(
   }
 
   const capturedAt = new Date(input.capturedAt);
+  const sourceUrl = canonicalizeCaptureUrl(input.sourceUrl);
+  const sources = canonicalizeCaptureSources(input.sources);
   const [capture] = await db
     .insert(researchCaptures)
     .values({
       extension_device_id: device.id,
-      source_url: input.sourceUrl,
+      source_url: sourceUrl,
       source_title: input.sourceTitle,
       query: input.query || null,
       content: input.content,
-      sources: input.sources,
+      sources,
       captured_at: capturedAt,
     })
     .returning({ id: researchCaptures.id, status: researchCaptures.status });

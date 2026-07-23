@@ -54,11 +54,11 @@ describeWithDatabase('research capture extension routes', () => {
         Authorization: `Bearer ${device.token}`,
       },
       body: JSON.stringify({
-        sourceUrl: 'https://example.com/research',
+        sourceUrl: 'https://example.com/research?topic=local-first&utm_source=extension#section',
         sourceTitle: TEST_CAPTURE_TITLE,
         query: 'Does the extension preserve provenance?',
         content: 'Yes. The reviewed note preserves the capture URL and source links.',
-        sources: [{ title: 'Example source', url: 'https://example.com/source' }],
+        sources: [{ title: 'Example source', url: 'https://example.com/source?gclid=campaign' }],
         capturedAt: '2026-07-23T10:30:00.000Z',
       }),
     }))
@@ -68,10 +68,18 @@ describeWithDatabase('research capture extension routes', () => {
     expect(capture.status).toBe('inbox')
 
     const { db } = createDbClient(DATABASE_URL!)
-    const stored = await db.select({ title: researchCaptures.source_title })
+    const stored = await db.select({
+      title: researchCaptures.source_title,
+      sourceUrl: researchCaptures.source_url,
+      sources: researchCaptures.sources,
+    })
       .from(researchCaptures)
       .where(eq(researchCaptures.id, capture.id))
-    expect(stored).toEqual([{ title: TEST_CAPTURE_TITLE }])
+    expect(stored).toEqual([{
+      title: TEST_CAPTURE_TITLE,
+      sourceUrl: 'https://example.com/research?topic=local-first',
+      sources: [{ title: 'Example source', url: 'https://example.com/source' }],
+    }])
   })
 
   test('rejects an unpaired extension token', async () => {
