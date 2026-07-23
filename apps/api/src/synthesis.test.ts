@@ -104,6 +104,23 @@ describe("synthesis context packing", () => {
     expect(context.characterCount).toBeLessThanOrEqual(220);
   });
 
+  test("uses a manifest-only context when the budget exactly fits source labels", () => {
+    const source = {
+      id: "selected-a",
+      title: "Selected note",
+      path: "notes/selected-a.md",
+      content: "content",
+    };
+    const unrestrictedContext = packSelectedNoteSynthesisContext([source]);
+    const exactBudgetContext = packSelectedNoteSynthesisContext([source], {
+      characterBudget: unrestrictedContext.sourceManifest.length,
+    });
+
+    expect(exactBudgetContext.chunks).toEqual([]);
+    expect(exactBudgetContext.text).toBe(unrestrictedContext.sourceManifest);
+    expect(exactBudgetContext.characterCount).toBe(unrestrictedContext.sourceManifest.length);
+  });
+
   test("rejects a budget that cannot label every selected source", () => {
     expect(() =>
       packSelectedNoteSynthesisContext(
