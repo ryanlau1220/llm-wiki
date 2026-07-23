@@ -29,4 +29,20 @@ describe("packRetrievalContext", () => {
     expect(() => packRetrievalContext(CHUNKS, { characterBudget: 0 })).toThrow("budget");
     expect(() => packRetrievalContext(CHUNKS, { chunksPerDocument: 0 })).toThrow("per document");
   });
+
+  test("preserves extra metadata on structural context chunks", () => {
+    const chunks = [
+      {
+        documentId: "selected-note",
+        documentPath: "selected.md",
+        chunkIndex: 0,
+        text: "selected source",
+        segmentCount: 1,
+      },
+    ];
+
+    const pack = packRetrievalContext(chunks, { characterBudget: 1_000 });
+
+    expect(pack.chunks[0]?.segmentCount).toBe(1);
+  });
 });

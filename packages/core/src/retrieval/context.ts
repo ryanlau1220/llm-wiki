@@ -3,8 +3,13 @@ import type { RetrievalChunk } from "./types";
 export const DEFAULT_CONTEXT_CHARACTER_BUDGET = 12_000;
 export const DEFAULT_CHUNKS_PER_DOCUMENT = 2;
 
-export type ContextPack = {
-  chunks: RetrievalChunk[];
+export type ContextChunk = Pick<
+  RetrievalChunk,
+  "documentId" | "documentPath" | "chunkIndex" | "text"
+>;
+
+export type ContextPack<Chunk extends ContextChunk = ContextChunk> = {
+  chunks: Chunk[];
   text: string;
   characterCount: number;
 };
@@ -14,15 +19,15 @@ export type ContextPackOptions = {
   chunksPerDocument?: number;
 };
 
-export function packRetrievalContext(
-  chunks: RetrievalChunk[],
+export function packRetrievalContext<Chunk extends ContextChunk>(
+  chunks: Chunk[],
   options: ContextPackOptions = {},
-): ContextPack {
+): ContextPack<Chunk> {
   const characterBudget = options.characterBudget ?? DEFAULT_CONTEXT_CHARACTER_BUDGET;
   const chunksPerDocument = options.chunksPerDocument ?? DEFAULT_CHUNKS_PER_DOCUMENT;
   validateOptions(characterBudget, chunksPerDocument);
 
-  const selected: RetrievalChunk[] = [];
+  const selected: Chunk[] = [];
   const documentCounts = new Map<string, number>();
   let characterCount = 0;
 
@@ -39,12 +44,12 @@ export function packRetrievalContext(
 
   return {
     chunks: selected,
-    text: selected.map(formatContextChunk).join("\n\n"),
+    text: selected.map((chunk, index) => formatContextChunk(chunk, index + 1)).join("\n\n"),
     characterCount,
   };
 }
 
-function formatContextChunk(chunk: RetrievalChunk, index: number): string {
+function formatContextChunk(chunk: ContextChunk, index: number): string {
   return `[Context ${index} | ${chunk.documentPath}#${chunk.chunkIndex}]:\n${chunk.text}`;
 }
 
