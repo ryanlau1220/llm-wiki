@@ -229,14 +229,13 @@ export function packSelectedNoteSynthesisContext(
 
   const chunks = sources.flatMap((source) => createSelectedNoteContextChunks(source, segmentCharacterLimit));
   const sourceManifest = formatSelectedSourceManifest(sources, chunks);
-  const manifestSeparatorLength = chunks.length > 0 ? CONTEXT_BLOCK_SEPARATOR.length : 0;
-  const contentBudget = characterBudget - sourceManifest.length - manifestSeparatorLength;
-
-  if (contentBudget < 0) {
+  if (sourceManifest.length > characterBudget) {
     throw new Error("Synthesis context budget is too small to label every selected source");
   }
 
-  const contextPack = contentBudget === 0
+  const contentBudget = characterBudget - sourceManifest.length - CONTEXT_BLOCK_SEPARATOR.length;
+
+  const contextPack = contentBudget <= 0
     ? { chunks: [], text: "", characterCount: 0 }
     : packRetrievalContext(chunks, {
       characterBudget: contentBudget,
