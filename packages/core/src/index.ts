@@ -3,6 +3,7 @@ export * from "./ingestion/types";
 export * from "./ingestion/utils";
 export * from "./retrieval/hybrid";
 export * from "./retrieval/evaluation";
+export * from "./retrieval/golden";
 export * from "./retrieval/context";
 export * from "./retrieval/rerank";
 export * from "./retrieval/trace";
