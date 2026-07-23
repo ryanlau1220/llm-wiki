@@ -18,6 +18,8 @@ import {
   pruneRetrievalTracesSchema,
   retrievalTracePageSchema,
   pruneRetrievalTracesResultSchema,
+  listOrganizationSuggestionsSchema,
+  organizationSuggestionSchema,
   RESEARCH_CAPTURE_ACTIVITY_EVENT,
   RESEARCH_CAPTURE_STATUS
 } from "./schemas";
@@ -104,6 +106,9 @@ export const appContract = oc.router({
     count: z.number(),
     sourcePaths: z.array(z.string())
   }))),
+  listOrganizationSuggestions: oc
+    .input(listOrganizationSuggestionsSchema)
+    .output(z.array(organizationSuggestionSchema)),
   health: oc.input(z.void().optional()).output(z.any()),
   me: oc.input(z.void().optional()).output(z.object({
     id: z.string(),
