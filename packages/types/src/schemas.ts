@@ -182,3 +182,35 @@ export const qualityMetricsSchema = z.object({
 });
 
 export type QualityMetrics = z.infer<typeof qualityMetricsSchema>;
+
+export const organizationSuggestionTypeSchema = z.enum([
+  "add_links",
+  "complete_metadata",
+  "expand_note",
+  "review_duplicate",
+  "review_stale_note",
+]);
+
+/**
+ * A review-only recommendation derived from indexed metadata. It deliberately
+ * excludes note content, embeddings, and generated changes.
+ */
+export const organizationSuggestionSchema = z.object({
+  id: z.string().min(1),
+  type: organizationSuggestionTypeSchema,
+  noteId: z.string().uuid(),
+  notePath: z.string().min(1),
+  priority: z.number().min(0).max(1),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().min(1),
+  actionLabel: z.string().min(1),
+  candidateNoteIds: z.array(z.string().uuid()),
+  requiresApproval: z.literal(true),
+  reversible: z.literal(true),
+});
+
+export const listOrganizationSuggestionsSchema = z.object({
+  maxResults: z.number().int().min(1).max(200).optional(),
+}).optional();
+
+export type ListOrganizationSuggestionsInput = z.input<typeof listOrganizationSuggestionsSchema>;
