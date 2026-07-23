@@ -9,8 +9,25 @@ import {
   reindexPayloadSchema,
   synthesisPreviewPayloadSchema,
   confirmSynthesisSavePayloadSchema,
-  weakNotesPayloadSchema
+  weakNotesPayloadSchema,
+  approveResearchCaptureSchema,
+  mergeResearchCaptureSchema
 } from "./schemas";
+
+const researchCaptureSchema = z.object({
+  id: z.string().uuid(),
+  sourceUrl: z.string(),
+  sourceTitle: z.string(),
+  query: z.string().nullable(),
+  content: z.string(),
+  sources: z.array(z.object({ title: z.string(), url: z.string() })),
+  status: z.enum(["inbox", "approved", "merged", "discarded"]),
+  savedDocumentId: z.string().uuid().nullable(),
+  savedPath: z.string().nullable(),
+  capturedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
 
 export const appContract = oc.router({
   askPreview: oc.input(askPreviewPayloadSchema).output(z.any()),
@@ -146,6 +163,26 @@ export const appContract = oc.router({
       path: z.string(),
     })).optional(),
     error: z.string().optional(),
+  })),
+  createExtensionPairingCode: oc.input(z.void().optional()).output(z.object({
+    code: z.string(),
+    expiresAt: z.string(),
+  })),
+  listResearchCaptures: oc.input(z.object({
+    status: z.enum(["inbox", "approved", "merged", "discarded", "all"]).optional(),
+  }).optional()).output(z.array(researchCaptureSchema)),
+  approveResearchCapture: oc.input(approveResearchCaptureSchema).output(z.object({
+    status: z.literal("approved"),
+    path: z.string(),
+    documentId: z.string().uuid().nullable(),
+  })),
+  mergeResearchCapture: oc.input(mergeResearchCaptureSchema).output(z.object({
+    status: z.literal("merged"),
+    path: z.string(),
+    documentId: z.string().uuid(),
+  })),
+  discardResearchCapture: oc.input(z.object({ id: z.string().uuid() })).output(z.object({
+    status: z.literal("discarded"),
   })),
 });
 
