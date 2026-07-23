@@ -55,17 +55,21 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
   let retrievalInfo = { chunkCount: 0, linkCount: 0 };
 
   if (noteIds && noteIds.length > 0) {
+    const requestedNoteIds = [...new Set(noteIds)];
     const selectedNotes = await db
       .select({ id: documents.id, title: documents.title, path: documents.path, content: documents.content })
       .from(documents)
-      .where(inArray(documents.id, noteIds));
+      .where(inArray(documents.id, requestedNoteIds));
 
-    const selectedSources = selectedNotes.map((note) => ({
-      id: note.id,
-      title: note.title ?? "",
-      path: note.path,
-      content: note.content,
-    }));
+    const selectedSources = orderSelectedSynthesisSources(
+      selectedNotes.map((note) => ({
+        id: note.id,
+        title: note.title ?? "",
+        path: note.path,
+        content: note.content,
+      })),
+      requestedNoteIds,
+    );
     const contextPack = packSelectedNoteSynthesisContext(selectedSources);
 
     sources = selectedSources.map(({ content: _content, ...source }) => source);
@@ -201,6 +205,17 @@ export function packRetrievedSynthesisContext(
   options: ContextPackOptions = {},
 ): ContextPack<RetrievalChunk> {
   return packRetrievalContext(chunks, options);
+}
+
+export function orderSelectedSynthesisSources(
+  sources: SelectedSynthesisSource[],
+  requestedNoteIds: string[],
+): SelectedSynthesisSource[] {
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  return requestedNoteIds.flatMap((noteId) => {
+    const source = sourceById.get(noteId);
+    return source ? [source] : [];
+  });
 }
 
 export function packSelectedNoteSynthesisContext(
