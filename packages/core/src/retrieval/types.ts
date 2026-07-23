@@ -8,6 +8,7 @@ export type RetrievalRequest = {
   ftsCandidateLimit?: number;
   linkExpansionLimit?: number;
   filters?: RetrievalMetadataFilters;
+  diversity?: RetrievalDiversityOptions;
 };
 
 export type RetrievalMetadataFilters = {
@@ -15,6 +16,13 @@ export type RetrievalMetadataFilters = {
   documentIds?: string[];
   /** Restrict retrieval to a vault-relative document path prefix. */
   pathPrefix?: string;
+};
+
+export type RetrievalDiversityOptions = {
+  /** Cap retained chunks from a single document after reranking. */
+  maxChunksPerDocument?: number;
+  /** Suppress chunks whose token-set Jaccard similarity meets this threshold. */
+  nearDuplicateSimilarity?: number;
 };
 
 export type RetrievalChunk = {

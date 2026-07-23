@@ -5,6 +5,7 @@ import { rerankRetrievalChunks } from "./rerank";
 import type {
   RetrievalChunk,
   RetrievalDependencies,
+  RetrievalDiversityOptions,
   RetrievalRequest,
   RetrievalResponse,
 } from "./types";
@@ -25,11 +26,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 type NormalizedRetrievalMetadataFilters = {
   documentIds?: string[];
   pathPrefix?: string;
-};
-
-type RetrievalDiversityOptions = {
-  maxChunksPerDocument?: number;
-  nearDuplicateSimilarity?: number;
 };
 
 export async function hybridRetrieve(
@@ -110,10 +106,13 @@ export async function hybridRetrieve(
     topK,
     Math.min(vectorLimit + ftsLimit, MAX_RERANK_CANDIDATES),
   );
-  const merged = selectDiverseRetrievalChunks(
-    rerankRetrievalChunks(query, fuseRankedResults(vectorScored, ftsScored, rerankCandidateLimit)),
-    topK,
+  const reranked = rerankRetrievalChunks(
+    query,
+    fuseRankedResults(vectorScored, ftsScored, rerankCandidateLimit),
   );
+  const merged = request.diversity
+    ? selectDiverseRetrievalChunks(reranked, topK, request.diversity)
+    : reranked.slice(0, topK);
 
   const documentIds = [...new Set(merged.map((item) => item.documentId))];
   if (!documentIds.length) {
