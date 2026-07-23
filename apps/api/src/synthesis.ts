@@ -227,6 +227,10 @@ export function packSelectedNoteSynthesisContext(
   const segmentCharacterLimit = options.segmentCharacterLimit ?? DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT;
   validateSelectedNoteContextOptions(characterBudget, segmentCharacterLimit);
 
+  if (sources.length === 0) {
+    return { chunks: [], text: "", characterCount: 0, sourceManifest: "" };
+  }
+
   const chunks = sources.flatMap((source) => createSelectedNoteContextChunks(source, segmentCharacterLimit));
   const sourceManifest = formatSelectedSourceManifest(sources, chunks);
   if (sourceManifest.length > characterBudget) {
