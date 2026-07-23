@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "bun run src/ensure-extensions.ts && drizzle-kit migrate"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

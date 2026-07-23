@@ -22,7 +22,7 @@ function show_help {
     echo "  test       Run all tests (unit, refactor, and linking suites)"
     echo "  docker     Run local Postgres via Docker Compose (foreground logs)"
     echo "  dev        Start local development environment via Turbo"
-    echo "  db-push    Synchronize Drizzle schema to the database"
+    echo "  db-migrate Apply tracked Drizzle migrations to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
     echo "  verify-keys Verify all configured API keys & dynamic fallback chains"
     echo "  seed       Setup default users and initial knowledge metrics"
@@ -79,15 +79,13 @@ case $CMD in
         echo "💻 Starting Local Dev Environment..."
         bun run dev
         ;;
-    "db-push")
-        echo "🔄 Synchronizing database schema..."
-        # We use drizzle-kit from the db package
-        cd packages/db
-        echo "🧩 Ensuring required extensions..."
-        bun run src/ensure-extensions.ts
-        bunx drizzle-kit push
-        cd ../..
-        echo "✅ Schema synchronized."
+    "db-migrate")
+        echo "🔄 Applying tracked database migrations..."
+        (
+            cd packages/db
+            bun run migrate
+        )
+        echo "✅ Database migrations applied."
         ;;
     "seed")
         echo "🌱 Seeding default admin user..."
