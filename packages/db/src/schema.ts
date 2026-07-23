@@ -11,8 +11,16 @@ import {
   uuid,
   varchar,
   doublePrecision,
-  vector
+  vector,
+  customType
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  }
+});
 
 export const EMBEDDING_DIMENSIONS = 768;
 
@@ -60,6 +68,9 @@ export const chunks = pgTable(
       .references(() => documents.id, { onDelete: "cascade" }),
     chunk_index: integer("chunk_index").notNull(),
     text: text("text").notNull(),
+    search_vector: tsvector("search_vector")
+      .generatedAlwaysAs(sql`to_tsvector('simple', text)`)
+      .notNull(),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
     embedding_model: varchar("embedding_model", { length: 100 }).notNull(),
     embedding_version: varchar("embedding_version", { length: 40 }).notNull(),
