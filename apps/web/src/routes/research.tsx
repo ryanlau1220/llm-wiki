@@ -10,10 +10,13 @@ import {
   ExternalLink,
   FilePlus2,
   GitMerge,
+  History,
   Inbox,
   Loader2,
+  RotateCcw,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   Wifi,
 } from 'lucide-react'
 
@@ -33,6 +36,17 @@ const FILTERS: Array<{ value: InboxFilter; label: string }> = [
   { value: 'all', label: 'All' },
 ]
 
+const EMPTY_CAPTURE_ID = '00000000-0000-0000-0000-000000000000'
+
+const ACTIVITY_LABELS = {
+  captured: 'Captured locally',
+  approved: 'Approved as a vault note',
+  merged: 'Merged into a vault note',
+  discarded: 'Discarded from the inbox',
+  indexing_failed: 'Indexing needs attention',
+  indexing_retried: 'Indexing recovered',
+} as const
+
 function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -41,6 +55,12 @@ function formatTime(value: string) {
 
 function hostname(value: string) {
   try { return new URL(value).hostname.replace(/^www\./, '') } catch { return value }
+}
+
+function activityDetail(event: { eventType: keyof typeof ACTIVITY_LABELS; detail: Record<string, string> }) {
+  if (event.eventType === 'indexing_failed' && event.detail.error) return event.detail.error
+  if (event.detail.path) return event.detail.path
+  return null
 }
 
 function ResearchInbox() {
@@ -56,6 +76,10 @@ function ResearchInbox() {
 
   const capturesQuery = useQuery(orpc.listResearchCaptures.queryOptions({ input: { status: filter } }))
   const notesQuery = useQuery(orpc.listNotes.queryOptions())
+  const activitiesQuery = useQuery({
+    ...orpc.listResearchCaptureActivities.queryOptions({ input: { id: selectedId ?? EMPTY_CAPTURE_ID } }),
+    enabled: Boolean(selectedId),
+  })
   const captures = capturesQuery.data ?? []
   const selected = useMemo(() => captures.find((capture) => capture.id === selectedId) ?? captures[0], [captures, selectedId])
 
@@ -74,6 +98,7 @@ function ResearchInbox() {
   const refreshInbox = () => {
     queryClient.invalidateQueries({ queryKey: orpc.listResearchCaptures.queryKey() })
     queryClient.invalidateQueries({ queryKey: orpc.listNotes.queryKey() })
+    queryClient.invalidateQueries({ queryKey: orpc.listResearchCaptureActivities.queryKey() })
   }
 
   const pairingMutation = useMutation(orpc.createExtensionPairingCode.mutationOptions({
@@ -82,7 +107,8 @@ function ResearchInbox() {
   const approveMutation = useMutation(orpc.approveResearchCapture.mutationOptions({ onSuccess: refreshInbox }))
   const mergeMutation = useMutation(orpc.mergeResearchCapture.mutationOptions({ onSuccess: refreshInbox }))
   const discardMutation = useMutation(orpc.discardResearchCapture.mutationOptions({ onSuccess: refreshInbox }))
-  const isReviewing = approveMutation.isPending || mergeMutation.isPending || discardMutation.isPending
+  const retryMutation = useMutation(orpc.retryResearchCaptureIndex.mutationOptions({ onSuccess: refreshInbox }))
+  const isReviewing = approveMutation.isPending || mergeMutation.isPending || discardMutation.isPending || retryMutation.isPending
 
   const copyPairingCode = async () => {
     if (!pairing) return
@@ -150,6 +176,7 @@ function ResearchInbox() {
               className={`w-full text-left p-3 rounded-xl mb-1 border transition-colors ${capture.id === selected?.id ? 'bg-[rgba(79,184,178,0.14)] border-[rgba(50,143,151,0.34)]' : 'border-transparent hover:bg-foam'}`}>
               <div className="flex items-start justify-between gap-2"><span className="text-sm leading-snug font-extrabold text-sea-ink line-clamp-2">{capture.sourceTitle}</span><ChevronRight size={16} className="shrink-0 mt-0.5 text-sea-ink-soft" /></div>
               <p className="mt-1 text-[11px] text-sea-ink-soft truncate">{hostname(capture.sourceUrl)}</p>
+              {capture.indexError && <p className="mt-2 flex items-center gap-1 text-[10px] font-bold text-amber-700"><TriangleAlert size={12} />Indexing needs attention</p>}
               <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-sea-ink-soft">{formatTime(capture.capturedAt)}</p>
             </button>)}
           </div>
@@ -163,9 +190,11 @@ function ResearchInbox() {
               <a href={selected.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold"><ExternalLink size={13} />{hostname(selected.sourceUrl)}</a>
               {selected.query && <div className="mt-5 pl-4 border-l-2 border-lagoon"><div className="island-kicker mb-1">Research question</div><p className="text-sm text-sea-ink whitespace-pre-wrap">{selected.query}</p></div>}
               {selected.status === 'inbox' && selected.duplicateCandidates.length > 0 && <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"><div className="flex items-center gap-2 text-sm font-extrabold"><Archive size={16} />Already saved from this source</div><p className="mt-1 text-xs">Review the existing note before approving another capture from the same canonical URL.</p><ul className="mt-2 space-y-1 text-xs font-bold">{selected.duplicateCandidates.map((candidate) => <li key={candidate.captureId}>{candidate.path ? <a href={`/vault?path=${encodeURIComponent(candidate.path)}`} className="hover:underline">Open {candidate.title}</a> : candidate.title}</li>)}</ul></div>}
+              {selected.indexError && <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"><div className="flex items-center gap-2 text-sm font-extrabold"><TriangleAlert size={16} />The note was saved, but indexing did not finish</div><p className="mt-1 text-xs">{selected.indexError}</p><button type="button" disabled={isReviewing} onClick={() => retryMutation.mutate({ id: selected.id })} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-800 px-3 py-2 text-sm font-extrabold text-white hover:bg-amber-900 disabled:opacity-60">{retryMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <RotateCcw size={16} />}Retry indexing</button>{retryMutation.isError && <p className="mt-2 text-xs font-bold text-red-700">The retry could not finish. Your saved note is unchanged.</p>}</div>}
               <article className="mt-6 prose prose-sm max-w-none text-sea-ink prose-headings:text-sea-ink prose-a:text-lagoon-deep"><div className="island-kicker mb-2">Captured response</div><div className="whitespace-pre-wrap leading-7">{selected.content}</div></article>
               <div className="mt-7 pt-5 border-t border-line"><div className="island-kicker mb-2">Source trail</div><ul className="space-y-1.5 text-sm">{[{ title: selected.sourceTitle, url: selected.sourceUrl }, ...selected.sources].map((source, index) => <li key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5"><ExternalLink size={13} />{source.title}</a></li>)}</ul></div>
-              {selected.status === 'inbox' && <div className="mt-7 p-4 rounded-xl bg-foam border border-line space-y-3">
+              <div className="mt-7 pt-5 border-t border-line"><div className="flex items-center gap-2 island-kicker mb-3"><History size={14} />Activity</div>{activitiesQuery.isLoading && <p className="text-xs text-sea-ink-soft">Loading local activity…</p>}{activitiesQuery.isError && <p className="text-xs text-red-600">Could not load this capture’s activity.</p>}{activitiesQuery.data && <ol className="space-y-3">{activitiesQuery.data.map((event) => <li key={event.id} className="flex gap-3 text-sm"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${event.eventType === 'indexing_failed' ? 'bg-amber-500' : 'bg-lagoon'}`} /><div><p className="font-bold text-sea-ink">{ACTIVITY_LABELS[event.eventType]}</p>{activityDetail(event) && <p className="mt-0.5 break-all text-xs text-sea-ink-soft">{activityDetail(event)}</p>}<p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-sea-ink-soft">{formatTime(event.createdAt)}</p></div></li>)}</ol>}</div>
+              {selected.status === 'inbox' && !selected.indexError && <div className="mt-7 p-4 rounded-xl bg-foam border border-line space-y-3">
                 <div className="grid gap-2 lg:grid-cols-2"><input value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" aria-label="New note title" /><input value={tags} onChange={(event) => setTags(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" placeholder="Tags, comma separated" aria-label="Note tags" /><input value={destinationFolder} onChange={(event) => setDestinationFolder(event.target.value)} className="rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink outline-none focus:border-lagoon" placeholder="research" aria-label="Destination folder" /></div>
                 <div className="flex flex-col lg:flex-row gap-2"><button type="button" disabled={isReviewing || !noteTitle.trim() || !destinationFolder.trim()} onClick={() => approveMutation.mutate({ id: selected.id, title: noteTitle.trim(), tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean), destinationFolder: destinationFolder.trim() })} className="inline-flex justify-center items-center gap-2 rounded-lg bg-lagoon text-lagoon-text px-3 py-2 text-sm font-extrabold disabled:opacity-60"><FilePlus2 size={16} />Approve as note</button></div>
                 <div className="flex flex-col lg:flex-row gap-2"><select value={mergeTargetId} onChange={(event) => setMergeTargetId(event.target.value)} className="flex-1 rounded-lg border border-line bg-[var(--surface-strong)] px-3 py-2 text-sm text-sea-ink"><option value="">Merge into an existing note…</option>{notesQuery.data?.map((note) => <option key={note.id} value={note.id}>{note.title || note.path}</option>)}</select>
