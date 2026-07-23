@@ -12,6 +12,7 @@
     "build": "turbo build",
     "test": "turbo test",
     "test:unit": "bun test ./apps/ ./packages/",
+    "test:retrieval-evaluation": "RETRIEVAL_EVALUATION_REPORT=true bun test packages/core/src/retrieval/evaluation.integration.test.ts",
     "test:refactor": "bun run scripts/tests/test-refactor.ts",
     "test:linking": "bun run scripts/tests/test-linking.ts",
     "lint": "biome lint . --write --error-on-warnings",
