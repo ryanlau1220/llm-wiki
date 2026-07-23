@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type AppConfig = {
+  apiPort: number;
   embeddingProvider: "gemini-geap" | "gemini" | "ollama" | "openai" | "fallback";
   gcpProjectId?: string;
   gcpLocation?: string;
@@ -27,8 +28,23 @@ export type AppConfig = {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Monorepo root is 3 levels up from apps/api/src/config.ts (src -> api -> apps -> root)
 const ROOT_DIR = path.resolve(__dirname, "../../..");
+const DEFAULT_API_PORT = 3001;
+const DEFAULT_WATCHER_DEBOUNCE_MS = 5_000;
+const DEFAULT_EMBEDDING_VERSION = "v1";
+const DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD = 0.92;
+const DEFAULT_SEMANTIC_DUPLICATE_CANDIDATES = 200;
+const MIN_TCP_PORT = 1;
+const MAX_TCP_PORT = 65_535;
 
 let cachedConfig: AppConfig | null = null;
+
+function readApiPort(rawPort: string | undefined): number {
+  const port = Number(rawPort ?? DEFAULT_API_PORT);
+  if (!Number.isInteger(port) || port < MIN_TCP_PORT || port > MAX_TCP_PORT) {
+    throw new Error(`API_PORT must be an integer between ${MIN_TCP_PORT} and ${MAX_TCP_PORT}`);
+  }
+  return port;
+}
 
 export function loadConfig(): AppConfig {
   if (cachedConfig) {
@@ -48,6 +64,7 @@ export function loadConfig(): AppConfig {
   console.log("[Config] Default fallback VAULT_PATH:", resolvedVaultPath);
 
   cachedConfig = {
+    apiPort: readApiPort(process.env.API_PORT),
     embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? "fallback",
     gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
@@ -63,10 +80,10 @@ export function loadConfig(): AppConfig {
     jwtSecret: process.env.JWT_SECRET ?? "dev-secret-change-me",
     databaseUrl: process.env.DATABASE_URL,
     vaultPath: resolvedVaultPath,
-    watcherDebounceMs: Number(process.env.WATCHER_DEBOUNCE_MS ?? 5000),
-    embeddingVersion: process.env.EMBEDDING_VERSION ?? "v1",
-    semanticDuplicateThreshold: Number(process.env.SEMANTIC_DUPLICATE_THRESHOLD ?? 0.92),
-    semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? 200),
+    watcherDebounceMs: Number(process.env.WATCHER_DEBOUNCE_MS ?? DEFAULT_WATCHER_DEBOUNCE_MS),
+    embeddingVersion: process.env.EMBEDDING_VERSION ?? DEFAULT_EMBEDDING_VERSION,
+    semanticDuplicateThreshold: Number(process.env.SEMANTIC_DUPLICATE_THRESHOLD ?? DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD),
+    semanticDuplicateCandidates: Number(process.env.SEMANTIC_DUPLICATE_CANDIDATES ?? DEFAULT_SEMANTIC_DUPLICATE_CANDIDATES),
     tavilyApiKey: process.env.TAVILY_API_KEY
   };
 

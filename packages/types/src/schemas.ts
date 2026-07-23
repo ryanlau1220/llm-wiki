@@ -66,6 +66,21 @@ export const researchSourceSchema = z.object({
   url: httpUrlSchema,
 });
 
+export const RESEARCH_CAPTURE_STATUS = {
+  INBOX: "inbox",
+  APPROVED: "approved",
+  MERGED: "merged",
+  DISCARDED: "discarded",
+} as const;
+
+export const researchCaptureStatusSchema = z.enum([
+  RESEARCH_CAPTURE_STATUS.INBOX,
+  RESEARCH_CAPTURE_STATUS.APPROVED,
+  RESEARCH_CAPTURE_STATUS.MERGED,
+  RESEARCH_CAPTURE_STATUS.DISCARDED,
+]);
+export type ResearchCaptureStatus = z.infer<typeof researchCaptureStatusSchema>;
+
 /** Payload accepted only from a locally paired desktop extension. */
 export const extensionResearchCaptureSchema = z.object({
   sourceUrl: httpUrlSchema,

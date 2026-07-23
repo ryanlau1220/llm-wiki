@@ -144,7 +144,7 @@ const app = new Elysia()
   }, {
     parse: "none"
   })
-  .listen(3001);
+  .listen(config.apiPort);
 
 console.log(`API listening on http://${app.server?.hostname}:${app.server?.port}`);
 console.log("Embedding provider:", config.embeddingProvider);

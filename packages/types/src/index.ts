@@ -11,7 +11,9 @@ import {
   confirmSynthesisSavePayloadSchema,
   weakNotesPayloadSchema,
   approveResearchCaptureSchema,
-  mergeResearchCaptureSchema
+  mergeResearchCaptureSchema,
+  researchCaptureStatusSchema,
+  RESEARCH_CAPTURE_STATUS
 } from "./schemas";
 
 const researchCaptureSchema = z.object({
@@ -21,7 +23,7 @@ const researchCaptureSchema = z.object({
   query: z.string().nullable(),
   content: z.string(),
   sources: z.array(z.object({ title: z.string(), url: z.string() })),
-  status: z.enum(["inbox", "approved", "merged", "discarded"]),
+  status: researchCaptureStatusSchema,
   savedDocumentId: z.string().uuid().nullable(),
   savedPath: z.string().nullable(),
   capturedAt: z.string(),
@@ -169,20 +171,20 @@ export const appContract = oc.router({
     expiresAt: z.string(),
   })),
   listResearchCaptures: oc.input(z.object({
-    status: z.enum(["inbox", "approved", "merged", "discarded", "all"]).optional(),
+    status: researchCaptureStatusSchema.or(z.literal("all")).optional(),
   }).optional()).output(z.array(researchCaptureSchema)),
   approveResearchCapture: oc.input(approveResearchCaptureSchema).output(z.object({
-    status: z.literal("approved"),
+    status: z.literal(RESEARCH_CAPTURE_STATUS.APPROVED),
     path: z.string(),
     documentId: z.string().uuid().nullable(),
   })),
   mergeResearchCapture: oc.input(mergeResearchCaptureSchema).output(z.object({
-    status: z.literal("merged"),
+    status: z.literal(RESEARCH_CAPTURE_STATUS.MERGED),
     path: z.string(),
     documentId: z.string().uuid(),
   })),
   discardResearchCapture: oc.input(z.object({ id: z.string().uuid() })).output(z.object({
-    status: z.literal("discarded"),
+    status: z.literal(RESEARCH_CAPTURE_STATUS.DISCARDED),
   })),
 });
 
