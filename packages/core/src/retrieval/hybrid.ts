@@ -1,8 +1,8 @@
-import { inArray, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm/sql";
 
 import type { RetrievalDependencies, RetrievalRequest, RetrievalResponse } from "./types";
-import { chunks, links } from "@llm-wiki/db";
+import { chunks, documents, links } from "@llm-wiki/db";
 
 const DEFAULT_TOP_K = 8;
 const DEFAULT_VECTOR_CANDIDATES = 200;
@@ -11,7 +11,7 @@ const DEFAULT_LINK_EXPANSION = 50;
 
 export async function hybridRetrieve(
   deps: RetrievalDependencies,
-  request: RetrievalRequest
+  request: RetrievalRequest,
 ): Promise<RetrievalResponse> {
   const query = request.query.trim();
   if (!query) {
@@ -29,10 +29,13 @@ export async function hybridRetrieve(
   const vectorCandidates = await deps.db
     .select({
       documentId: chunks.document_id,
+      documentPath: documents.path,
+      chunkIndex: chunks.chunk_index,
       text: chunks.text,
-      distance: cosineDistance(chunks.embedding, queryVector)
+      distance: cosineDistance(chunks.embedding, queryVector),
     })
     .from(chunks)
+    .innerJoin(documents, eq(chunks.document_id, documents.id))
     // pgvector cosine distance: lower is more similar
     .orderBy(cosineDistance(chunks.embedding, queryVector))
     .limit(vectorLimit);
@@ -41,26 +44,33 @@ export async function hybridRetrieve(
   const vectorScored = vectorCandidates
     .map((candidate) => ({
       documentId: candidate.documentId,
+      documentPath: candidate.documentPath,
+      chunkIndex: candidate.chunkIndex,
       text: candidate.text,
       score: Math.max(0, 1 - Number(candidate.distance ?? 1)),
-      source: "vector" as const
+      source: "vector" as const,
     }))
     .slice(0, topK);
 
   const ftsCandidates = await deps.db
     .select({
       documentId: chunks.document_id,
-      text: chunks.text
+      documentPath: documents.path,
+      chunkIndex: chunks.chunk_index,
+      text: chunks.text,
     })
     .from(chunks)
+    .innerJoin(documents, eq(chunks.document_id, documents.id))
     .where(like(chunks.text, `%${query}%`))
     .limit(ftsLimit);
 
   const ftsScored = ftsCandidates.map((candidate) => ({
     documentId: candidate.documentId,
+    documentPath: candidate.documentPath,
+    chunkIndex: candidate.chunkIndex,
     text: candidate.text,
     score: 0.2,
-    source: "fts" as const
+    source: "fts" as const,
   }));
 
   const merged = mergeResults(vectorScored, ftsScored, topK);
@@ -74,7 +84,7 @@ export async function hybridRetrieve(
     .select({
       sourceDocumentId: links.source_document_id,
       targetLabel: links.target_label,
-      targetDocumentId: links.target_document_id
+      targetDocumentId: links.target_document_id,
     })
     .from(links)
     .where(inArray(links.source_document_id, documentIds))
@@ -84,11 +94,35 @@ export async function hybridRetrieve(
 }
 
 function mergeResults(
-  vectorResults: Array<{ documentId: string; text: string; score: number; source: "vector" }>,
-  ftsResults: Array<{ documentId: string; text: string; score: number; source: "fts" }>,
-  topK: number
+  vectorResults: Array<{
+    documentId: string;
+    documentPath: string;
+    chunkIndex: number;
+    text: string;
+    score: number;
+    source: "vector";
+  }>,
+  ftsResults: Array<{
+    documentId: string;
+    documentPath: string;
+    chunkIndex: number;
+    text: string;
+    score: number;
+    source: "fts";
+  }>,
+  topK: number,
 ) {
-  const merged = new Map<string, { documentId: string; text: string; score: number; source: "hybrid" | "vector" | "fts" }>();
+  const merged = new Map<
+    string,
+    {
+      documentId: string;
+      documentPath: string;
+      chunkIndex: number;
+      text: string;
+      score: number;
+      source: "hybrid" | "vector" | "fts";
+    }
+  >();
 
   for (const result of vectorResults) {
     merged.set(result.documentId, { ...result });
@@ -99,9 +133,11 @@ function mergeResults(
     if (existing) {
       merged.set(result.documentId, {
         documentId: existing.documentId,
+        documentPath: existing.documentPath,
+        chunkIndex: existing.chunkIndex,
         text: existing.text,
         score: Math.max(existing.score, result.score) + 0.05,
-        source: "hybrid"
+        source: "hybrid",
       });
     } else {
       merged.set(result.documentId, { ...result });
