@@ -240,6 +240,9 @@ export function createTraceReadyToolResult(
   input: TraceReadyToolResultInput,
 ): TraceReadyToolResult {
   if (!input.toolId.trim()) throw new Error("Agent tool result requires a tool ID");
+  if (!Object.values(AGENT_TOOL_RESULT_STATUS).includes(input.status)) {
+    throw new Error("Agent tool result has an invalid status");
+  }
   validatePositiveInteger(input.durationMs, "Agent tool result duration");
   validateEvidence(input.evidence);
 
