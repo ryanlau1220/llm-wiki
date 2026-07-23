@@ -204,6 +204,12 @@ describe("createTraceReadyToolResult", () => {
         confidence: 1.1,
       }],
     })).toThrow("confidence");
+    expect(() => Reflect.apply(createTraceReadyToolResult, undefined, [{
+      toolId: "search_notes",
+      status: "unknown_status",
+      durationMs: 25,
+      evidence: [],
+    }])).toThrow("invalid status");
   });
 });
 
