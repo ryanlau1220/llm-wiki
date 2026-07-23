@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import { createDbClient, extensionDevices, extensionPairingCodes, researchCaptures } from '@llm-wiki/db'
+import { createDbClient, extensionDevices, extensionPairingCodes, researchCaptureActivities, researchCaptures } from '@llm-wiki/db'
 import { loadConfig } from './config'
 import {
   approveResearchCapture,
@@ -12,6 +12,7 @@ import {
   createResearchCapture,
   hashSecret,
   pairExtension,
+  retryResearchCaptureIndex,
 } from './research-captures'
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -81,5 +82,65 @@ describeWithDatabase('research capture approval', () => {
       .from(researchCaptures)
       .where(eq(researchCaptures.id, capture.id))
     expect(stored).toEqual({ status: 'approved', savedPath: result.path })
+  })
+
+  test('keeps an indexing failure recoverable and retries the existing vault note', async () => {
+    const temporaryVault = await fs.mkdtemp(path.join(os.tmpdir(), 'llm-wiki-capture-retry-'))
+    temporaryVaults.push(temporaryVault)
+    const testConfig = { ...config, vaultPath: temporaryVault }
+    const pairing = await createExtensionPairingCodeForDashboard(testConfig)
+    createdPairingCodes.push(pairing.code)
+    const device = await pairExtension(testConfig, pairing.code, `${TEST_DEVICE_NAME}-retry`)
+    createdDeviceIds.push(device.deviceId)
+    const capture = await createResearchCapture(testConfig, device.token, {
+      sourceUrl: 'https://example.com/retry',
+      sourceTitle: 'Recoverable source',
+      content: 'The vault note should remain recoverable after an indexing error.',
+      sources: [],
+      capturedAt: '2026-07-23T11:30:00.000Z',
+    })
+    createdCaptureIds.push(capture.id)
+
+    const failed = await approveResearchCapture(testConfig, {
+      id: capture.id,
+      title: 'Recoverable research capture',
+    }, {
+      reindex: async (_config, relativePath) => ({
+        vaultPath: relativePath,
+        status: 'failed',
+        error: 'Embedding service unavailable',
+      }),
+    })
+
+    expect(failed).toMatchObject({ status: 'indexing_failed', error: 'Embedding service unavailable' })
+    const notePath = path.join(temporaryVault, failed.path)
+    await fs.appendFile(notePath, '\nManual recovery marker\n', 'utf8')
+
+    const retried = await retryResearchCaptureIndex(testConfig, { id: capture.id }, {
+      reindex: async (_config, relativePath) => ({ vaultPath: relativePath, status: 'created' }),
+    })
+
+    expect(retried).toMatchObject({ status: 'approved', path: failed.path })
+    expect(await fs.readFile(notePath, 'utf8')).toContain('Manual recovery marker')
+
+    const { db } = createDbClient(DATABASE_URL!)
+    const [stored] = await db.select({
+      status: researchCaptures.status,
+      indexError: researchCaptures.index_error,
+      savedPath: researchCaptures.saved_path,
+    })
+      .from(researchCaptures)
+      .where(eq(researchCaptures.id, capture.id))
+    expect(stored).toEqual({ status: 'approved', indexError: null, savedPath: failed.path })
+
+    const activities = await db.select({ eventType: researchCaptureActivities.event_type })
+      .from(researchCaptureActivities)
+      .where(eq(researchCaptureActivities.capture_id, capture.id))
+      .orderBy(researchCaptureActivities.created_at)
+    expect(activities.map((activity) => activity.eventType)).toEqual([
+      'captured',
+      'indexing_failed',
+      'indexing_retried',
+    ])
   })
 })

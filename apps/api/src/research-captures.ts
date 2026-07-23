@@ -9,14 +9,17 @@ import {
   documents,
   extensionDevices,
   extensionPairingCodes,
+  researchCaptureActivities,
   researchCaptures,
 } from "@llm-wiki/db";
 import {
   type ApproveResearchCapture,
   type ExtensionResearchCapture,
   type MergeResearchCapture,
+  RESEARCH_CAPTURE_ACTIVITY_EVENT,
   RESEARCH_CAPTURE_STATUS,
   type ResearchCaptureStatus,
+  type RetryResearchCaptureIndex,
 } from "@llm-wiki/types";
 import type { AppConfig } from "./config";
 import { canonicalizeCaptureSources, canonicalizeCaptureUrl } from "./capture-url-normalization";
@@ -25,6 +28,11 @@ import { reindexFile } from "./reindex";
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RESEARCH_CAPTURE_FOLDER = "research";
+const MAX_CAPTURE_ACTIVITY_EVENTS = 50;
+const CAPTURE_ACTION = {
+  APPROVAL: "approval",
+  MERGE: "merge",
+} as const;
 const DEFAULT_CAPTURE_DEPENDENCIES = {
   reindex: reindexFile,
 };
@@ -63,6 +71,28 @@ type DuplicateCandidate = {
   path: string | null;
 };
 
+type CaptureActivityDetail = Record<string, string>;
+
+function captureActivityDetail(value: unknown): CaptureActivityDetail {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+async function recordCaptureActivity(
+  db: ReturnType<typeof createDbClient>["db"],
+  captureId: string,
+  eventType: typeof RESEARCH_CAPTURE_ACTIVITY_EVENT[keyof typeof RESEARCH_CAPTURE_ACTIVITY_EVENT],
+  detail: CaptureActivityDetail = {},
+) {
+  await db.insert(researchCaptureActivities).values({
+    capture_id: captureId,
+    event_type: eventType,
+    detail,
+  });
+}
+
 function formatCapture(
   capture: typeof researchCaptures.$inferSelect,
   duplicateCandidates: DuplicateCandidate[] = [],
@@ -91,6 +121,7 @@ function formatCapture(
     status: capture.status as ResearchCaptureStatus,
     savedDocumentId: capture.saved_document_id,
     savedPath: capture.saved_path,
+    indexError: capture.index_error,
     capturedAt: capture.captured_at.toISOString(),
     reviewedAt: capture.reviewed_at?.toISOString() ?? null,
     createdAt: capture.created_at.toISOString(),
@@ -174,6 +205,8 @@ export async function createResearchCapture(
       captured_at: capturedAt,
     })
     .returning({ id: researchCaptures.id, status: researchCaptures.status });
+
+  await recordCaptureActivity(db, capture!.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.CAPTURED);
 
   await db
     .update(extensionDevices)
@@ -307,6 +340,47 @@ async function getInboxCapture(config: AppConfig, id: string) {
   return { db, capture };
 }
 
+async function getCapture(config: AppConfig, id: string) {
+  const { db } = createDbClient(requireDatabase(config));
+  const [capture] = await db
+    .select()
+    .from(researchCaptures)
+    .where(eq(researchCaptures.id, id))
+    .limit(1);
+  if (!capture) throw new Error("Research capture was not found");
+  return { db, capture };
+}
+
+async function markIndexingFailure(
+  db: ReturnType<typeof createDbClient>["db"],
+  captureId: string,
+  input: {
+    action: typeof CAPTURE_ACTION[keyof typeof CAPTURE_ACTION];
+    path: string;
+    error: string;
+    documentId?: string | null;
+  },
+) {
+  await db
+    .update(researchCaptures)
+    .set({
+      index_error: input.error,
+      saved_document_id: input.documentId ?? null,
+      saved_path: input.path,
+      updated_at: new Date(),
+    })
+    .where(eq(researchCaptures.id, captureId));
+  await recordCaptureActivity(db, captureId, RESEARCH_CAPTURE_ACTIVITY_EVENT.INDEXING_FAILED, {
+    action: input.action,
+    error: input.error,
+    path: input.path,
+  });
+}
+
+function indexingFailureResult(path: string, error: string, documentId: string | null = null) {
+  return { status: "indexing_failed" as const, path, documentId, error };
+}
+
 export async function approveResearchCapture(
   config: AppConfig,
   input: ApproveResearchCapture,
@@ -314,8 +388,12 @@ export async function approveResearchCapture(
 ) {
   const { db, capture } = await getInboxCapture(config, input.id);
   const vaultRoot = path.resolve(config.vaultPath);
-  const researchDir = captureDestinationPath(vaultRoot, input.destinationFolder);
-  const filePath = path.resolve(researchDir, `${capture.id}-${slugify(input.title || capture.source_title)}.md`);
+  const researchDir = capture.saved_path
+    ? path.dirname(path.resolve(vaultRoot, capture.saved_path))
+    : captureDestinationPath(vaultRoot, input.destinationFolder);
+  const filePath = capture.saved_path
+    ? path.resolve(vaultRoot, capture.saved_path)
+    : path.resolve(researchDir, `${capture.id}-${slugify(input.title || capture.source_title)}.md`);
   const relativePath = vaultRelativePath(vaultRoot, filePath);
   const sources = formatCapture(capture).sources;
   const content = buildResearchMarkdown({
@@ -334,7 +412,15 @@ export async function approveResearchCapture(
   await fs.writeFile(filePath, content, "utf8");
   const indexed = await dependencies.reindex(config, relativePath);
   if (indexed.status === "failed") {
-    throw new Error(indexed.error || "The note was written but could not be indexed");
+    const error = indexed.error || "The note was written but could not be indexed";
+    await markIndexingFailure(db, capture.id, {
+      action: CAPTURE_ACTION.APPROVAL,
+      path: relativePath,
+      error,
+      documentId: indexed.documentId,
+    });
+    sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
+    return indexingFailureResult(relativePath, error, indexed.documentId ?? null);
   }
 
   await db
@@ -344,9 +430,11 @@ export async function approveResearchCapture(
       reviewed_at: new Date(),
       saved_document_id: indexed.documentId ?? null,
       saved_path: relativePath,
+      index_error: null,
       updated_at: new Date(),
     })
     .where(eq(researchCaptures.id, capture.id));
+  await recordCaptureActivity(db, capture.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.APPROVED, { path: relativePath });
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
 
   return { status: RESEARCH_CAPTURE_STATUS.APPROVED, path: relativePath, documentId: indexed.documentId ?? null };
@@ -390,7 +478,15 @@ export async function mergeResearchCapture(
 
   const indexed = await dependencies.reindex(config, relativePath);
   if (indexed.status === "failed") {
-    throw new Error(indexed.error || "The note was updated but could not be indexed");
+    const error = indexed.error || "The note was updated but could not be indexed";
+    await markIndexingFailure(db, capture.id, {
+      action: CAPTURE_ACTION.MERGE,
+      path: relativePath,
+      error,
+      documentId: target.id,
+    });
+    sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
+    return indexingFailureResult(relativePath, error, target.id);
   }
 
   await db
@@ -400,9 +496,11 @@ export async function mergeResearchCapture(
       reviewed_at: new Date(),
       saved_document_id: target.id,
       saved_path: relativePath,
+      index_error: null,
       updated_at: new Date(),
     })
     .where(eq(researchCaptures.id, capture.id));
+  await recordCaptureActivity(db, capture.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.MERGED, { path: relativePath });
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
 
   return { status: RESEARCH_CAPTURE_STATUS.MERGED, path: relativePath, documentId: target.id };
@@ -414,6 +512,101 @@ export async function discardResearchCapture(config: AppConfig, id: string) {
     .update(researchCaptures)
     .set({ status: RESEARCH_CAPTURE_STATUS.DISCARDED, reviewed_at: new Date(), updated_at: new Date() })
     .where(eq(researchCaptures.id, capture.id));
+  await recordCaptureActivity(db, capture.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.DISCARDED);
   sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
   return { status: RESEARCH_CAPTURE_STATUS.DISCARDED };
+}
+
+export async function retryResearchCaptureIndex(
+  config: AppConfig,
+  input: RetryResearchCaptureIndex,
+  dependencies: ResearchCaptureDependencies = DEFAULT_CAPTURE_DEPENDENCIES,
+) {
+  const { db, capture } = await getCapture(config, input.id);
+  if (capture.status !== RESEARCH_CAPTURE_STATUS.INBOX || !capture.index_error || !capture.saved_path) {
+    throw new Error("This capture does not have a recoverable indexing failure");
+  }
+
+  const [failure] = await db
+    .select({ detail: researchCaptureActivities.detail })
+    .from(researchCaptureActivities)
+    .where(and(
+      eq(researchCaptureActivities.capture_id, capture.id),
+      eq(researchCaptureActivities.event_type, RESEARCH_CAPTURE_ACTIVITY_EVENT.INDEXING_FAILED),
+    ))
+    .orderBy(desc(researchCaptureActivities.created_at))
+    .limit(1);
+  const failureDetail = captureActivityDetail(failure?.detail);
+  const action = failureDetail.action;
+  if (action !== CAPTURE_ACTION.APPROVAL && action !== CAPTURE_ACTION.MERGE) {
+    throw new Error("The failed review action cannot be retried safely");
+  }
+
+  const indexed = await dependencies.reindex(config, capture.saved_path);
+  if (indexed.status === "failed") {
+    const error = indexed.error || "The note could not be indexed";
+    await markIndexingFailure(db, capture.id, {
+      action,
+      path: capture.saved_path,
+      error,
+      documentId: capture.saved_document_id,
+    });
+    sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
+    return indexingFailureResult(capture.saved_path, error, capture.saved_document_id);
+  }
+
+  const mergeDocumentId = capture.saved_document_id;
+  if (action === CAPTURE_ACTION.MERGE && !mergeDocumentId) {
+    throw new Error("The merge target is unavailable for retry");
+  }
+  const status = action === CAPTURE_ACTION.MERGE
+    ? RESEARCH_CAPTURE_STATUS.MERGED
+    : RESEARCH_CAPTURE_STATUS.APPROVED;
+  const documentId = action === CAPTURE_ACTION.MERGE
+    ? mergeDocumentId
+    : indexed.documentId ?? capture.saved_document_id;
+  await db
+    .update(researchCaptures)
+    .set({
+      status,
+      reviewed_at: new Date(),
+      saved_document_id: documentId ?? null,
+      index_error: null,
+      updated_at: new Date(),
+    })
+    .where(eq(researchCaptures.id, capture.id));
+  await recordCaptureActivity(db, capture.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.INDEXING_RETRIED, {
+    action,
+    path: capture.saved_path,
+  });
+  sseEmitter.emit("change", { type: "research_capture_changed", id: capture.id });
+
+  if (action === CAPTURE_ACTION.MERGE) {
+    return {
+      status: RESEARCH_CAPTURE_STATUS.MERGED,
+      path: capture.saved_path,
+      documentId: mergeDocumentId!,
+    };
+  }
+  return {
+    status: RESEARCH_CAPTURE_STATUS.APPROVED,
+    path: capture.saved_path,
+    documentId: documentId ?? null,
+  };
+}
+
+export async function listResearchCaptureActivities(config: AppConfig, id: string) {
+  const { db } = await getCapture(config, id);
+  const activities = await db
+    .select()
+    .from(researchCaptureActivities)
+    .where(eq(researchCaptureActivities.capture_id, id))
+    .orderBy(desc(researchCaptureActivities.created_at))
+    .limit(MAX_CAPTURE_ACTIVITY_EVENTS);
+  return activities.map((activity) => ({
+    id: activity.id,
+    eventType: activity.event_type as typeof RESEARCH_CAPTURE_ACTIVITY_EVENT[keyof typeof RESEARCH_CAPTURE_ACTIVITY_EVENT],
+    detail: captureActivityDetail(activity.detail),
+    createdAt: activity.created_at.toISOString(),
+  }));
 }

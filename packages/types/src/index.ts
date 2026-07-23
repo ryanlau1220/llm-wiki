@@ -12,7 +12,9 @@ import {
   weakNotesPayloadSchema,
   approveResearchCaptureSchema,
   mergeResearchCaptureSchema,
+  retryResearchCaptureIndexSchema,
   researchCaptureStatusSchema,
+  RESEARCH_CAPTURE_ACTIVITY_EVENT,
   RESEARCH_CAPTURE_STATUS
 } from "./schemas";
 
@@ -31,8 +33,42 @@ const researchCaptureSchema = z.object({
   status: researchCaptureStatusSchema,
   savedDocumentId: z.string().uuid().nullable(),
   savedPath: z.string().nullable(),
+  indexError: z.string().nullable(),
   capturedAt: z.string(),
   reviewedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const researchCaptureIndexResultSchema = z.union([
+  z.object({
+    status: z.literal(RESEARCH_CAPTURE_STATUS.APPROVED),
+    path: z.string(),
+    documentId: z.string().uuid().nullable(),
+  }),
+  z.object({
+    status: z.literal(RESEARCH_CAPTURE_STATUS.MERGED),
+    path: z.string(),
+    documentId: z.string().uuid(),
+  }),
+  z.object({
+    status: z.literal("indexing_failed"),
+    path: z.string(),
+    documentId: z.string().uuid().nullable(),
+    error: z.string(),
+  }),
+]);
+
+const researchCaptureActivitySchema = z.object({
+  id: z.string().uuid(),
+  eventType: z.enum([
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.CAPTURED,
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.APPROVED,
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.MERGED,
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.DISCARDED,
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.INDEXING_FAILED,
+    RESEARCH_CAPTURE_ACTIVITY_EVENT.INDEXING_RETRIED,
+  ]),
+  detail: z.record(z.string(), z.string()),
   createdAt: z.string(),
 });
 
@@ -178,19 +214,13 @@ export const appContract = oc.router({
   listResearchCaptures: oc.input(z.object({
     status: researchCaptureStatusSchema.or(z.literal("all")).optional(),
   }).optional()).output(z.array(researchCaptureSchema)),
-  approveResearchCapture: oc.input(approveResearchCaptureSchema).output(z.object({
-    status: z.literal(RESEARCH_CAPTURE_STATUS.APPROVED),
-    path: z.string(),
-    documentId: z.string().uuid().nullable(),
-  })),
-  mergeResearchCapture: oc.input(mergeResearchCaptureSchema).output(z.object({
-    status: z.literal(RESEARCH_CAPTURE_STATUS.MERGED),
-    path: z.string(),
-    documentId: z.string().uuid(),
-  })),
+  approveResearchCapture: oc.input(approveResearchCaptureSchema).output(researchCaptureIndexResultSchema),
+  mergeResearchCapture: oc.input(mergeResearchCaptureSchema).output(researchCaptureIndexResultSchema),
   discardResearchCapture: oc.input(z.object({ id: z.string().uuid() })).output(z.object({
     status: z.literal(RESEARCH_CAPTURE_STATUS.DISCARDED),
   })),
+  retryResearchCaptureIndex: oc.input(retryResearchCaptureIndexSchema).output(researchCaptureIndexResultSchema),
+  listResearchCaptureActivities: oc.input(z.object({ id: z.string().uuid() })).output(z.array(researchCaptureActivitySchema)),
 });
 
 export type AppRouter = typeof appContract;
