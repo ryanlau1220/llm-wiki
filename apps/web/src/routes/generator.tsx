@@ -509,6 +509,19 @@ function GeneratorComponent() {
                         </div>
                       </div>
                     )}
+
+                    {result.mode === 'rag' && result.data.citations?.length > 0 && (
+                      <div className="border-t border-[var(--line)] pt-3.5 mt-2 shrink-0">
+                        <span className="text-[10px] uppercase font-bold text-[var(--sea-ink-soft)] tracking-wider block mb-1.5">Answer citations</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {result.data.citations.map((citation: any) => (
+                            <Link key={citation.id} to="/vault" search={{ path: citation.path }} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-[var(--foam)] px-2.5 py-1 rounded-full border border-[var(--line)] text-[var(--sea-ink)] hover:bg-[var(--line)] hover:text-[var(--lagoon-deep)] transition-all font-medium">
+                              <FileText size={10} /> [{citation.id}] {citation.title}
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

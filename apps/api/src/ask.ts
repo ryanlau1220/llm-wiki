@@ -73,6 +73,7 @@ export async function askPreview(
 
   let contextText = "";
   let packedCitationIds = new Set<number>();
+  let packedCitationChunks: RetrievalResponse["chunks"] = [];
   let webSearchEnabled = false;
   let retrievalResults: RetrievalResponse = { chunks: [], links: [] };
   let tracedEvidenceCount = 0;
@@ -121,6 +122,7 @@ export async function askPreview(
     });
 
     const contextPack = packRetrievalContext(retrievalResults.chunks);
+    packedCitationChunks = contextPack.chunks;
     packedCitationIds = new Set(contextPack.chunks.map((_chunk, index) => index + 1));
     if (retrievalRunId) {
       try {
@@ -312,12 +314,23 @@ Provide your answer and suggested note in JSON format.
       .from(documents)
       .where(inArray(documents.id, documentIds))
     : [];
+  const sourceTitleById = new Map(sources.map((source) => [source.id, source.title]));
+  const citations = filterCitations(parsed.citations, packedCitationIds).map((citation) => {
+    const chunk = packedCitationChunks[citation - 1]!;
+    return {
+      id: citation,
+      documentId: chunk.documentId,
+      title: sourceTitleById.get(chunk.documentId) ?? chunk.documentPath,
+      path: chunk.documentPath,
+      chunkIndex: chunk.chunkIndex,
+    };
+  });
 
   return {
     requestId,
     answer: parsed.answer,
     note: parsed.suggested_note,
-    citations: filterCitations(parsed.citations, packedCitationIds),
+    citations,
     sources,
     retrieval: {
       chunkCount: retrievalResults.chunks.length,
