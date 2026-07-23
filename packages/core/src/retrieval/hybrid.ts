@@ -1,4 +1,4 @@
-import { eq, inArray, like } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm/sql";
 
 import type { RetrievalDependencies, RetrievalRequest, RetrievalResponse } from "./types";
@@ -8,6 +8,8 @@ const DEFAULT_TOP_K = 8;
 const DEFAULT_VECTOR_CANDIDATES = 200;
 const DEFAULT_FTS_CANDIDATES = 50;
 const DEFAULT_LINK_EXPANSION = 50;
+const FTS_CONFIGURATION = "simple";
+const RRF_RANK_OFFSET = 60;
 
 export async function hybridRetrieve(
   deps: RetrievalDependencies,
@@ -49,8 +51,10 @@ export async function hybridRetrieve(
       text: candidate.text,
       score: Math.max(0, 1 - Number(candidate.distance ?? 1)),
       source: "vector" as const,
-    }))
-    .slice(0, topK);
+    }));
+
+  const lexicalQuery = sql`websearch_to_tsquery(${FTS_CONFIGURATION}, ${query})`;
+  const lexicalRank = sql<number>`ts_rank_cd(${chunks.search_vector}, ${lexicalQuery})`;
 
   const ftsCandidates = await deps.db
     .select({
@@ -58,10 +62,12 @@ export async function hybridRetrieve(
       documentPath: documents.path,
       chunkIndex: chunks.chunk_index,
       text: chunks.text,
+      score: lexicalRank,
     })
     .from(chunks)
     .innerJoin(documents, eq(chunks.document_id, documents.id))
-    .where(like(chunks.text, `%${query}%`))
+    .where(sql`${chunks.search_vector} @@ ${lexicalQuery}`)
+    .orderBy(desc(lexicalRank))
     .limit(ftsLimit);
 
   const ftsScored = ftsCandidates.map((candidate) => ({
@@ -69,11 +75,11 @@ export async function hybridRetrieve(
     documentPath: candidate.documentPath,
     chunkIndex: candidate.chunkIndex,
     text: candidate.text,
-    score: 0.2,
+    score: Number(candidate.score),
     source: "fts" as const,
   }));
 
-  const merged = mergeResults(vectorScored, ftsScored, topK);
+  const merged = fuseRankedResults(vectorScored, ftsScored, topK);
 
   const documentIds = [...new Set(merged.map((item) => item.documentId))];
   if (!documentIds.length) {
@@ -93,7 +99,7 @@ export async function hybridRetrieve(
   return { chunks: merged, links: linkRows };
 }
 
-function mergeResults(
+function fuseRankedResults(
   vectorResults: Array<{
     documentId: string;
     documentPath: string;
@@ -124,25 +130,25 @@ function mergeResults(
     }
   >();
 
-  for (const result of vectorResults) {
-    merged.set(result.documentId, { ...result });
-  }
-
-  for (const result of ftsResults) {
-    const existing = merged.get(result.documentId);
-    if (existing) {
-      merged.set(result.documentId, {
-        documentId: existing.documentId,
-        documentPath: existing.documentPath,
-        chunkIndex: existing.chunkIndex,
-        text: existing.text,
-        score: Math.max(existing.score, result.score) + 0.05,
-        source: "hybrid",
-      });
-    } else {
-      merged.set(result.documentId, { ...result });
-    }
-  }
+  addRankedResults(merged, vectorResults, "vector");
+  addRankedResults(merged, ftsResults, "fts");
 
   return [...merged.values()].sort((a, b) => b.score - a.score).slice(0, topK);
+}
+
+function addRankedResults(
+  merged: Map<string, { documentId: string; documentPath: string; chunkIndex: number; text: string; score: number; source: "hybrid" | "vector" | "fts" }>,
+  results: Array<{ documentId: string; documentPath: string; chunkIndex: number; text: string; score: number; source: "vector" | "fts" }>,
+  source: "vector" | "fts",
+): void {
+  for (const [index, result] of results.entries()) {
+    const key = `${result.documentId}:${result.chunkIndex}`;
+    const contribution = 1 / (RRF_RANK_OFFSET + index + 1);
+    const existing = merged.get(key);
+    merged.set(key, {
+      ...result,
+      score: (existing?.score ?? 0) + contribution,
+      source: existing ? "hybrid" : source,
+    });
+  }
 }
