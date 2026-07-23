@@ -1,9 +1,10 @@
-import { rankOrganizationSuggestions, type OrganizationNoteSignals, type OrganizationSuggestion } from "@llm-wiki/core";
-import { createDbClient, documents, links } from "@llm-wiki/db";
 import {
-  qualityMetricsSchema,
-  type ListOrganizationSuggestionsInput,
-} from "@llm-wiki/types";
+  rankOrganizationSuggestions,
+  type OrganizationNoteSignals,
+  type OrganizationSuggestion,
+} from "@llm-wiki/core";
+import { createDbClient, documents, links } from "@llm-wiki/db";
+import { qualityMetricsSchema, type ListOrganizationSuggestionsInput } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
 
@@ -22,27 +23,29 @@ export async function listOrganizationSuggestions(
   const databaseUrl = requireDatabase(config);
   const { db } = createDbClient(databaseUrl);
   const [noteRows, linkRows] = await Promise.all([
-    db.select({
-      id: documents.id,
-      path: documents.path,
-      title: documents.title,
-      qualityScore: documents.quality_score,
-      qualityMetrics: documents.quality_metrics,
-      healthScore: documents.health_score,
-      updatedAt: documents.updated_at,
-    }).from(documents),
-    db.select({
-      sourceDocumentId: links.source_document_id,
-      isResolved: links.is_resolved,
-    }).from(links),
+    db
+      .select({
+        id: documents.id,
+        path: documents.path,
+        title: documents.title,
+        qualityScore: documents.quality_score,
+        qualityMetrics: documents.quality_metrics,
+        healthScore: documents.health_score,
+        updatedAt: documents.updated_at,
+      })
+      .from(documents),
+    db
+      .select({
+        sourceDocumentId: links.source_document_id,
+        isResolved: links.is_resolved,
+      })
+      .from(links),
   ]);
 
   const linkCountsByDocumentId = countUnresolvedLinks(linkRows);
-  const signals = noteRows.map((note) => toOrganizationNoteSignals(
-    note,
-    linkCountsByDocumentId.get(note.id),
-    now,
-  ));
+  const signals = noteRows.map((note) =>
+    toOrganizationNoteSignals(note, linkCountsByDocumentId.get(note.id), now),
+  );
 
   return rankOrganizationSuggestions(signals).slice(0, input?.maxResults ?? DEFAULT_MAX_RESULTS);
 }
