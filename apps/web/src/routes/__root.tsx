@@ -105,6 +105,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           queryClient.invalidateQueries({ queryKey: orpc.listNotes.queryKey() })
           // Invalidate single note details in case it was the active one
           queryClient.invalidateQueries({ queryKey: orpc.getNote.queryKey({ input: undefined as any }) })
+        } else if (data.type === 'research_capture_changed') {
+          queryClient.invalidateQueries({ queryKey: orpc.listResearchCaptures.queryKey() })
         }
       } catch (err) {
         console.error('[SSE] Failed to parse event:', err)

@@ -12,6 +12,7 @@ import { createDbClient, settings } from "@llm-wiki/db";
 import { eq } from "drizzle-orm";
 import path from "node:path";
 import { setWatcher, getWatcher } from "./watcher-manager";
+import { researchCaptureExtensionRoutes } from "./extension-routes";
 
 const config = loadConfig();
 
@@ -111,6 +112,7 @@ const app = new Elysia()
       message: error?.message || "Internal Server Error"
     };
   })
+  .use(researchCaptureExtensionRoutes(config))
   .use(authPlugin(config))
   .all("/rpc/*", async ({ request, user, jwt, cookie }: any) => {
     // Explicitly derive user if not already present

@@ -145,3 +145,76 @@ export const settings = pgTable("settings", {
   value: text("value").notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
+
+/**
+ * Short-lived one-time codes created by an authenticated dashboard session.
+ * The browser extension exchanges one for a device token; only the hash is
+ * persisted so a database export cannot be used to impersonate an extension.
+ */
+export const extensionPairingCodes = pgTable(
+  "extension_pairing_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    code_hash: varchar("code_hash", { length: 128 }).notNull(),
+    expires_at: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumed_at: timestamp("consumed_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    codeHashUnique: uniqueIndex("extension_pairing_codes_hash_unique").on(table.code_hash),
+    expiresAtIdx: index("extension_pairing_codes_expires_at_idx").on(table.expires_at)
+  })
+);
+
+/** A locally-paired desktop browser extension. */
+export const extensionDevices = pgTable(
+  "extension_devices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    token_hash: varchar("token_hash", { length: 128 }).notNull(),
+    last_used_at: timestamp("last_used_at", { withTimezone: true }),
+    revoked_at: timestamp("revoked_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex("extension_devices_token_hash_unique").on(table.token_hash)
+  })
+);
+
+/**
+ * Raw research capture awaiting a deliberate review decision. Approved content
+ * is written to the vault; the inbox remains an operational queue, not a
+ * second source of truth.
+ */
+export const researchCaptures = pgTable(
+  "research_captures",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    extension_device_id: uuid("extension_device_id").references(() => extensionDevices.id, {
+      onDelete: "set null"
+    }),
+    source_url: text("source_url").notNull(),
+    source_title: varchar("source_title", { length: 500 }).notNull(),
+    query: text("query"),
+    content: text("content").notNull(),
+    sources: jsonb("sources").notNull().default([]),
+    status: varchar("status", { length: 20 }).notNull().default("inbox"),
+    review_note: text("review_note"),
+    saved_document_id: uuid("saved_document_id").references(() => documents.id, {
+      onDelete: "set null"
+    }),
+    saved_path: varchar("saved_path", { length: 400 }),
+    captured_at: timestamp("captured_at", { withTimezone: true }).notNull(),
+    reviewed_at: timestamp("reviewed_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    statusCapturedAtIdx: index("research_captures_status_captured_at_idx").on(
+      table.status,
+      table.captured_at
+    ),
+    deviceIdx: index("research_captures_extension_device_id_idx").on(table.extension_device_id)
+  })
+);
