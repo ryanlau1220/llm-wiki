@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { packRetrievedSynthesisContext, packSelectedNoteSynthesisContext } from "./synthesis";
+import {
+  orderSelectedSynthesisSources,
+  packRetrievedSynthesisContext,
+  packSelectedNoteSynthesisContext,
+} from "./synthesis";
 
 const RETRIEVAL_CHUNKS = [
   {
@@ -30,6 +34,18 @@ const RETRIEVAL_CHUNKS = [
 ];
 
 describe("synthesis context packing", () => {
+  test("preserves the requested selected-note order", () => {
+    const orderedSources = orderSelectedSynthesisSources(
+      [
+        { id: "note-b", title: "B", path: "notes/b.md", content: "B" },
+        { id: "note-a", title: "A", path: "notes/a.md", content: "A" },
+      ],
+      ["note-a", "missing-note", "note-b"],
+    );
+
+    expect(orderedSources.map((source) => source.id)).toEqual(["note-a", "note-b"]);
+  });
+
   test("uses the existing bounded, diverse packer for retrieved sources", () => {
     const context = packRetrievedSynthesisContext(RETRIEVAL_CHUNKS, {
       characterBudget: 1_000,
