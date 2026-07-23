@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { createCaptureDraft, toCapturePayload, type CaptureDraft, type PageCapture } from './capture-draft'
+import { createCaptureDraft, toCapturePayload, toggleCaptureSource, type CaptureDraft, type PageCapture } from './capture-draft'
 
 type ExtensionConfig = {
   apiBase: string
@@ -142,7 +142,7 @@ export function App() {
       <div><h2>{draft.sourceTitle}</h2><p className="hint">The source page and URL remain attached as provenance.</p></div>
       <label>What question does this answer? <span>(optional)</span><textarea value={draft.query} onChange={(event) => setDraft((current) => current ? { ...current, query: event.target.value } : current)} placeholder="e.g. How does local-first sync work?" rows={3} /></label>
       <label>Selected research<textarea value={draft.content} onChange={(event) => setDraft((current) => current ? { ...current, content: event.target.value } : current)} rows={8} /></label>
-      <p className="hint">{draft.sources.length} visible citations will be attached. You can curate them in the next review step.</p>
+      <fieldset className="sources"><legend>Supporting citations</legend>{draft.sources.length ? draft.sources.map((source) => <label key={source.url} className="source-option"><input type="checkbox" checked={source.selected} onChange={() => setDraft((current) => current ? toggleCaptureSource(current, source.url) : current)} /><span>{source.title}</span></label>) : <p className="hint">No visible citations were found on this page.</p>}</fieldset>
       <div className="actions"><button type="button" className="quiet" onClick={() => setDraft(null)} disabled={busy}>Back</button><button type="button" onClick={saveCapture} disabled={busy || !draft.content.trim()}>{busy ? 'Saving…' : 'Save reviewed research'}</button></div>
     </section>}
     <p className={`status ${status.tone}`} role="status">{status.message}</p>
