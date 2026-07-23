@@ -72,6 +72,7 @@ export async function askPreview(
   }
 
   let contextText = "";
+  let packedCitationIds = new Set<number>();
   let webSearchEnabled = false;
   let retrievalResults: RetrievalResponse = { chunks: [], links: [] };
   let tracedEvidenceCount = 0;
@@ -120,6 +121,7 @@ export async function askPreview(
     });
 
     const contextPack = packRetrievalContext(retrievalResults.chunks);
+    packedCitationIds = new Set(contextPack.chunks.map((_chunk, index) => index + 1));
     if (retrievalRunId) {
       try {
         tracedEvidenceCount = await recordRetrievalEvidence(
@@ -196,12 +198,13 @@ RULES:
 JSON SCHEMA:
 {
   "answer": "string",
-  "suggested_note": {
+ "suggested_note": {
     "title": "string",
     "content": "string (markdown)",
     "links": ["string"],
     "tags": ["string"]
-  }
+  },
+  "citations": ["Context number used to support the answer"]
 }
 `.trim()
     : `
@@ -268,7 +271,7 @@ Provide your answer and suggested note in JSON format.
   }
   const duration = Date.now() - generationStartedAt;
 
-  let parsed: { answer: string; suggested_note: unknown };
+  let parsed: { answer: string; suggested_note: unknown; citations?: unknown };
   try {
     parsed = JSON.parse(llmResponse.text);
   } catch (error) {
@@ -314,12 +317,20 @@ Provide your answer and suggested note in JSON format.
     requestId,
     answer: parsed.answer,
     note: parsed.suggested_note,
+    citations: filterCitations(parsed.citations, packedCitationIds),
     sources,
     retrieval: {
       chunkCount: retrievalResults.chunks.length,
       linkCount: retrievalResults.links.length
     }
   };
+}
+
+function filterCitations(citations: unknown, allowedCitationIds: Set<number>): number[] {
+  if (!Array.isArray(citations)) return [];
+  return [...new Set(citations)]
+    .filter((citation): citation is number => Number.isInteger(citation))
+    .filter((citation) => allowedCitationIds.has(citation));
 }
 
 function resolveLlmModelName(config: AppConfig): string | undefined {
