@@ -132,8 +132,9 @@ describe("ingestMarkdown", () => {
   });
 
   test("skips unchanged content without requesting coherence scoring", async () => {
+    const unchangedDocument = { id: "doc-1", version: 2, content_hash: hashContent("unchanged") };
     const { deps, llmProvider, transaction } = createIngestionDependencies({
-      selectResults: [[{ id: "doc-1", version: 2, content_hash: hashContent("unchanged") }]],
+      selectResults: [[unchangedDocument], [unchangedDocument]],
     });
 
     await expect(
