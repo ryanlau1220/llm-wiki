@@ -11,7 +11,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "test:unit": "bun test ./apps/ ./packages/",
+    "test:unit": "bun test apps/api/src apps/extension/entrypoints apps/web/src packages/ai/src packages/core/src packages/obsidian/src packages/types/src --max-concurrency=1",
     "test:retrieval-evaluation": "RETRIEVAL_EVALUATION_REPORT=true bun test packages/core/src/retrieval/evaluation.integration.test.ts",
     "evaluate:local-vault": "bun run scripts/evaluate-local-vault.ts",
     "test:refactor": "bun run scripts/tests/test-refactor.ts",
