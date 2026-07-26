@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { retrievalRuns } from "@llm-wiki/db";
+import type { retrievalRuns } from "@llm-wiki/db";
 
 import {
   decodeTraceCursor,
