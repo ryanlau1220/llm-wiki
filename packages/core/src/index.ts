@@ -1,9 +1,12 @@
 export * from "./ingestion/ingest";
 export * from "./ingestion/types";
 export * from "./ingestion/utils";
+export * from "./agent/registry";
 export * from "./retrieval/hybrid";
 export * from "./retrieval/evaluation";
+export * from "./retrieval/golden";
 export * from "./retrieval/context";
+export * from "./retrieval/policy";
 export * from "./retrieval/rerank";
 export * from "./retrieval/trace";
 export * from "./retrieval/types";
@@ -15,3 +18,4 @@ export * from "./discovery/provider";
 export * from "./intelligence/coherence";
 export * from "./maintenance/weak-notes";
 export * from "./maintenance/improvements";
+export * from "./maintenance/organization-suggestions";

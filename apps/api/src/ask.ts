@@ -10,25 +10,28 @@ import {
   packRetrievalContext,
   recordRetrievalEvidence,
   RETRIEVAL_OPERATION,
-  RETRIEVAL_POLICY,
   RETRIEVAL_RUN_STATUS,
+  resolveAskRetrievalPolicy,
+  shouldAbstainForMissingEvidence,
   startRetrievalRun,
   type RetrievalResponse,
 } from "@llm-wiki/core";
 import { createDbClient, documents } from "@llm-wiki/db";
+import { askModelResponseSchema } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
+import {
+  createInvalidModelResponse,
+  parseStructuredModelResponse,
+} from "./model-response";
 
 const ASK_PROMPT_VERSION = "ask-v1";
-const ASK_TRACE_POLICY_REASON = {
-  GENERAL_MODE: "explicit_general_mode",
-  RAG_MODE: "explicit_rag_mode",
-} as const;
 const ASK_TRACE_ERROR_CODE = {
   INVALID_MODEL_RESPONSE: "invalid_model_response",
   RETRIEVAL_FAILED: "retrieval_failed",
   GENERATION_FAILED: "generation_failed",
 } as const;
+const GROUNDED_ABSTENTION_ANSWER = "I couldn't find relevant information in your vault to answer that confidently.";
 
 export async function askPreview(
   config: AppConfig,
@@ -50,19 +53,14 @@ export async function askPreview(
 
   const { db } = createDbClient(config.databaseUrl);
   const requestStartedAt = Date.now();
-  const tracePolicy = mode === "rag"
-    ? RETRIEVAL_POLICY.VAULT_HYBRID
-    : RETRIEVAL_POLICY.GENERAL_WEB;
-  const tracePolicyReason = mode === "rag"
-    ? ASK_TRACE_POLICY_REASON.RAG_MODE
-    : ASK_TRACE_POLICY_REASON.GENERAL_MODE;
+  const retrievalDecision = resolveAskRetrievalPolicy(mode);
   let retrievalRunId: string | null = null;
   try {
     retrievalRunId = await startRetrievalRun(db, {
       operation: RETRIEVAL_OPERATION.ASK,
       query,
-      policy: tracePolicy,
-      policyReason: tracePolicyReason,
+      policy: retrievalDecision.policy,
+      policyReason: retrievalDecision.reason,
       modelProvider: config.embeddingProvider,
       modelName: resolveLlmModelName(config),
       promptVersion: ASK_PROMPT_VERSION,
@@ -73,6 +71,7 @@ export async function askPreview(
 
   let contextText = "";
   let packedCitationIds = new Set<number>();
+  let packedCitationChunks: RetrievalResponse["chunks"] = [];
   let webSearchEnabled = false;
   let retrievalResults: RetrievalResponse = { chunks: [], links: [] };
   let tracedEvidenceCount = 0;
@@ -121,6 +120,7 @@ export async function askPreview(
     });
 
     const contextPack = packRetrievalContext(retrievalResults.chunks);
+    packedCitationChunks = contextPack.chunks;
     packedCitationIds = new Set(contextPack.chunks.map((_chunk, index) => index + 1));
     if (retrievalRunId) {
       try {
@@ -144,6 +144,36 @@ export async function askPreview(
     }
 
     contextText = contextPack.text;
+    if (shouldAbstainForMissingEvidence(retrievalDecision, contextPack.chunks.length)) {
+      const requestId = retrievalRunId ?? crypto.randomUUID();
+      logger.info("Abstained from ungrounded vault answer", {
+        requestId,
+        candidateCount: retrievalResults.chunks.length,
+        policy: retrievalDecision.policy,
+        policyReason: retrievalDecision.reason,
+      });
+      await completeAskTrace(db, retrievalRunId, {
+        status: RETRIEVAL_RUN_STATUS.SUCCEEDED,
+        candidateCount: retrievalResults.chunks.length,
+        selectedEvidenceCount: tracedEvidenceCount,
+        contextCharacterCount: contextPack.characterCount,
+        durationMs: Date.now() - requestStartedAt,
+      }, logger);
+      return {
+        requestId,
+        answer: GROUNDED_ABSTENTION_ANSWER,
+        note: null,
+        citations: [],
+        sources: [],
+        retrieval: {
+          chunkCount: retrievalResults.chunks.length,
+          linkCount: retrievalResults.links.length,
+          policy: retrievalDecision.policy,
+          policyReason: retrievalDecision.reason,
+          abstained: true,
+        },
+      };
+    }
   } else {
     // General Knowledge / Web Search mode
     if (config.tavilyApiKey) {
@@ -271,11 +301,12 @@ Provide your answer and suggested note in JSON format.
   }
   const duration = Date.now() - generationStartedAt;
 
-  let parsed: { answer: string; suggested_note: unknown; citations?: unknown };
-  try {
-    parsed = JSON.parse(llmResponse.text);
-  } catch (error) {
-    logger.error("Failed to parse LLM response", error, { responseLength: llmResponse.text.length });
+  const parsed = parseStructuredModelResponse(llmResponse.text, askModelResponseSchema);
+  if (!parsed.success) {
+    logger.error("Failed to validate LLM response", new Error(parsed.reason), {
+      responseLength: llmResponse.text.length,
+      reason: parsed.reason,
+    });
     await completeAskTrace(db, retrievalRunId, {
       status: RETRIEVAL_RUN_STATUS.FAILED,
       candidateCount: retrievalResults.chunks.length,
@@ -284,17 +315,14 @@ Provide your answer and suggested note in JSON format.
       durationMs: Date.now() - requestStartedAt,
       errorCode: ASK_TRACE_ERROR_CODE.INVALID_MODEL_RESPONSE,
     }, logger);
-    return {
-      error: "Failed to generate structured response",
-      rawResponse: llmResponse.text
-    };
+    return createInvalidModelResponse();
   }
 
   const requestId = retrievalRunId ?? crypto.randomUUID();
   logger.info("Knowledge answer generated", {
     requestId,
     durationMs: duration,
-    title: getSuggestedNoteTitle(parsed.suggested_note),
+    title: parsed.data.suggested_note.title,
   });
 
   await completeAskTrace(db, retrievalRunId, {
@@ -312,24 +340,36 @@ Provide your answer and suggested note in JSON format.
       .from(documents)
       .where(inArray(documents.id, documentIds))
     : [];
+  const sourceTitleById = new Map(sources.map((source) => [source.id, source.title]));
+  const citations = filterCitations(parsed.data.citations, packedCitationIds).map((citation) => {
+    const chunk = packedCitationChunks[citation - 1]!;
+    return {
+      id: citation,
+      documentId: chunk.documentId,
+      title: sourceTitleById.get(chunk.documentId) ?? chunk.documentPath,
+      path: chunk.documentPath,
+      chunkIndex: chunk.chunkIndex,
+    };
+  });
 
   return {
     requestId,
-    answer: parsed.answer,
-    note: parsed.suggested_note,
-    citations: filterCitations(parsed.citations, packedCitationIds),
+    answer: parsed.data.answer,
+    note: parsed.data.suggested_note,
+    citations,
     sources,
     retrieval: {
       chunkCount: retrievalResults.chunks.length,
-      linkCount: retrievalResults.links.length
+      linkCount: retrievalResults.links.length,
+      policy: retrievalDecision.policy,
+      policyReason: retrievalDecision.reason,
+      abstained: false,
     }
   };
 }
 
-function filterCitations(citations: unknown, allowedCitationIds: Set<number>): number[] {
-  if (!Array.isArray(citations)) return [];
+function filterCitations(citations: number[], allowedCitationIds: Set<number>): number[] {
   return [...new Set(citations)]
-    .filter((citation): citation is number => Number.isInteger(citation))
     .filter((citation) => allowedCitationIds.has(citation));
 }
 
@@ -337,12 +377,6 @@ function resolveLlmModelName(config: AppConfig): string | undefined {
   if (config.embeddingProvider === "openai") return config.openaiLlmModel;
   if (config.embeddingProvider === "ollama") return config.ollamaLlmModel;
   return config.gcpLlmModel;
-}
-
-function getSuggestedNoteTitle(suggestedNote: unknown): string | undefined {
-  if (!suggestedNote || typeof suggestedNote !== "object") return undefined;
-  const title = (suggestedNote as { title?: unknown }).title;
-  return typeof title === "string" ? title : undefined;
 }
 
 async function completeAskTrace(

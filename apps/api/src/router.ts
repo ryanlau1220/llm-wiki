@@ -16,6 +16,8 @@ import {
   mergeResearchCapture,
   retryResearchCaptureIndex,
 } from "./research-captures";
+import { listRetrievalTracePage, pruneRetrievalTraceRuns } from "./retrieval-traces";
+import { listOrganizationSuggestions } from "./organization-suggestions";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -188,6 +190,9 @@ export const router = os.router({
     const { db } = createDbClient(config.databaseUrl!);
     return getGlobalLinkHealth(db);
   }),
+  listOrganizationSuggestions: os.listOrganizationSuggestions
+    .use(authMiddleware)
+    .handler(async ({ input }) => listOrganizationSuggestions(config, input)),
   health: os.health.handler(async () => {
     console.log("[Health] Checking system status...");
     const health: any = {
@@ -550,5 +555,11 @@ export const router = os.router({
   }),
   listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
     return listResearchCaptureActivities(config, input.id);
+  }),
+  listRetrievalTraces: os.listRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
+    return listRetrievalTracePage(config, input);
+  }),
+  pruneRetrievalTraces: os.pruneRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
+    return pruneRetrievalTraceRuns(config, input);
   }),
 });

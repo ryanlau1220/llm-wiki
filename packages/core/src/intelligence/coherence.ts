@@ -23,26 +23,21 @@ Note content:
 
 export async function calculateCoherence(
   llm: LLMProvider,
-  content: string
-): Promise<number> {
+  content: string,
+): Promise<number | undefined> {
   if (!content.trim()) return 0;
-  
+
   // Truncate content for scoring if it's too long
   const truncated = content.slice(0, 4000);
   const prompt = COHERENCE_PROMPT.replace("{{CONTENT}}", truncated);
 
-  try {
-    const response = await llm.generate({
-      prompt,
-      temperature: 0.1, // High deterministic for scoring
-    });
+  const response = await llm.generate({
+    prompt,
+    temperature: 0.1,
+  });
 
-    const score = parseFloat(response.text.trim());
-    if (Number.isNaN(score)) return 0.5; // Default fallback
-    
-    return Math.max(0, Math.min(1, score));
-  } catch (error) {
-    console.error("Failed to calculate coherence:", error);
-    return 0.5; // Graceful fallback
-  }
+  const score = Number.parseFloat(response.text.trim());
+  if (Number.isNaN(score)) return undefined;
+
+  return Math.max(0, Math.min(1, score));
 }

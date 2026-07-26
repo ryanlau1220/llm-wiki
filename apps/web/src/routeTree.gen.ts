@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GeneratorRouteImport } from './routes/generator'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OrganizationRouteImport } from './routes/organization'
 import { Route as RefactorRouteImport } from './routes/refactor'
 import { Route as ResearchRouteImport } from './routes/research'
+import { Route as RetrievalRouteImport } from './routes/retrieval'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as VaultRouteImport } from './routes/vault'
 
@@ -32,6 +34,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrganizationRoute = OrganizationRouteImport.update({
+  id: '/organization',
+  path: '/organization',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RefactorRoute = RefactorRouteImport.update({
   id: '/refactor',
   path: '/refactor',
@@ -40,6 +47,11 @@ const RefactorRoute = RefactorRouteImport.update({
 const ResearchRoute = ResearchRouteImport.update({
   id: '/research',
   path: '/research',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RetrievalRoute = RetrievalRouteImport.update({
+  id: '/retrieval',
+  path: '/retrieval',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -57,8 +69,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
+  '/organization': typeof OrganizationRoute
   '/refactor': typeof RefactorRoute
   '/research': typeof ResearchRoute
+  '/retrieval': typeof RetrievalRoute
   '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
@@ -66,8 +80,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
+  '/organization': typeof OrganizationRoute
   '/refactor': typeof RefactorRoute
   '/research': typeof ResearchRoute
+  '/retrieval': typeof RetrievalRoute
   '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
@@ -76,8 +92,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/generator': typeof GeneratorRoute
   '/login': typeof LoginRoute
+  '/organization': typeof OrganizationRoute
   '/refactor': typeof RefactorRoute
   '/research': typeof ResearchRoute
+  '/retrieval': typeof RetrievalRoute
   '/settings': typeof SettingsRoute
   '/vault': typeof VaultRoute
 }
@@ -87,8 +105,10 @@ export interface FileRouteTypes {
     | '/'
     | '/generator'
     | '/login'
+    | '/organization'
     | '/refactor'
     | '/research'
+    | '/retrieval'
     | '/settings'
     | '/vault'
   fileRoutesByTo: FileRoutesByTo
@@ -96,8 +116,10 @@ export interface FileRouteTypes {
     | '/'
     | '/generator'
     | '/login'
+    | '/organization'
     | '/refactor'
     | '/research'
+    | '/retrieval'
     | '/settings'
     | '/vault'
   id:
@@ -105,8 +127,10 @@ export interface FileRouteTypes {
     | '/'
     | '/generator'
     | '/login'
+    | '/organization'
     | '/refactor'
     | '/research'
+    | '/retrieval'
     | '/settings'
     | '/vault'
   fileRoutesById: FileRoutesById
@@ -115,8 +139,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GeneratorRoute: typeof GeneratorRoute
   LoginRoute: typeof LoginRoute
+  OrganizationRoute: typeof OrganizationRoute
   RefactorRoute: typeof RefactorRoute
   ResearchRoute: typeof ResearchRoute
+  RetrievalRoute: typeof RetrievalRoute
   SettingsRoute: typeof SettingsRoute
   VaultRoute: typeof VaultRoute
 }
@@ -144,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organization': {
+      id: '/organization'
+      path: '/organization'
+      fullPath: '/organization'
+      preLoaderRoute: typeof OrganizationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/refactor': {
       id: '/refactor'
       path: '/refactor'
@@ -156,6 +189,13 @@ declare module '@tanstack/react-router' {
       path: '/research'
       fullPath: '/research'
       preLoaderRoute: typeof ResearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/retrieval': {
+      id: '/retrieval'
+      path: '/retrieval'
+      fullPath: '/retrieval'
+      preLoaderRoute: typeof RetrievalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -179,8 +219,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GeneratorRoute: GeneratorRoute,
   LoginRoute: LoginRoute,
+  OrganizationRoute: OrganizationRoute,
   RefactorRoute: RefactorRoute,
   ResearchRoute: ResearchRoute,
+  RetrievalRoute: RetrievalRoute,
   SettingsRoute: SettingsRoute,
   VaultRoute: VaultRoute,
 }

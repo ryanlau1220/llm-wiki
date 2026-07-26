@@ -14,8 +14,21 @@ import {
   mergeResearchCaptureSchema,
   retryResearchCaptureIndexSchema,
   researchCaptureStatusSchema,
+  listRetrievalTracesSchema,
+  pruneRetrievalTracesSchema,
+  retrievalTracePageSchema,
+  pruneRetrievalTracesResultSchema,
+  listOrganizationSuggestionsSchema,
+  organizationSuggestionSchema,
   RESEARCH_CAPTURE_ACTIVITY_EVENT,
   RESEARCH_CAPTURE_STATUS
+} from "./schemas";
+
+export {
+  askModelResponseSchema,
+  synthesisModelResponseSchema,
+  type AskModelResponse,
+  type SynthesisModelResponse,
 } from "./schemas";
 
 const researchCaptureSchema = z.object({
@@ -100,6 +113,9 @@ export const appContract = oc.router({
     count: z.number(),
     sourcePaths: z.array(z.string())
   }))),
+  listOrganizationSuggestions: oc
+    .input(listOrganizationSuggestionsSchema)
+    .output(z.array(organizationSuggestionSchema)),
   health: oc.input(z.void().optional()).output(z.any()),
   me: oc.input(z.void().optional()).output(z.object({
     id: z.string(),
@@ -221,6 +237,8 @@ export const appContract = oc.router({
   })),
   retryResearchCaptureIndex: oc.input(retryResearchCaptureIndexSchema).output(researchCaptureIndexResultSchema),
   listResearchCaptureActivities: oc.input(z.object({ id: z.string().uuid() })).output(z.array(researchCaptureActivitySchema)),
+  listRetrievalTraces: oc.input(listRetrievalTracesSchema).output(retrievalTracePageSchema),
+  pruneRetrievalTraces: oc.input(pruneRetrievalTracesSchema).output(pruneRetrievalTracesResultSchema),
 });
 
 export type AppRouter = typeof appContract;
