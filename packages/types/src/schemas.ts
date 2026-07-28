@@ -136,6 +136,65 @@ export const aiTracePageSchema = z.object({
 export const aiTraceDetailSchema = aiTraceRunSchema.nullable();
 export type ListAiTracesInput = z.input<typeof listAiTracesSchema>;
 
+const evaluationEvidenceSchema = z.object({
+  documentPath: z.string().trim().min(1).max(400),
+  chunkIndex: z.number().int().nonnegative().optional(),
+});
+
+export const createAiEvaluationDatasetSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(2_000).optional(),
+  /** Explicit acknowledgement: creating a durable case is an owner action. */
+  approved: z.literal(true),
+  cases: z.array(z.object({
+    label: z.string().trim().min(1).max(160),
+    redactedInput: z.string().trim().min(1).max(20_000),
+    expectedEvidence: z.array(evaluationEvidenceSchema).max(100).default([]),
+    expectedOutcome: z.string().trim().max(20_000).optional(),
+    referenceAnswer: z.string().trim().max(20_000).optional(),
+    candidateOutput: z.string().trim().max(40_000).optional(),
+    retrievedEvidence: z.array(evaluationEvidenceSchema).max(100).default([]),
+    /** Structural provenance only: the API does not read trace payload into this case. */
+    sourceTraceId: z.string().uuid().optional(),
+  })).min(1).max(100),
+});
+
+export const runAiEvaluationSchema = z.object({
+  datasetId: z.string().uuid(),
+  judgeEnabled: z.boolean().default(false),
+  /** Required when a judge could call the configured model provider. */
+  confirmLlmJudge: z.boolean().default(false),
+  maxCases: z.number().int().min(1).max(100).default(25),
+  maxJudgeCalls: z.number().int().min(0).max(100).default(25),
+  maxTotalTokens: z.number().int().min(1).max(100_000).default(20_000),
+  rubricVersion: z.string().trim().min(1).max(80).default("groundedness-v1"),
+}).superRefine((value, context) => {
+  if (value.judgeEnabled && !value.confirmLlmJudge) context.addIssue({ code: z.ZodIssueCode.custom, message: "LLM judge runs require explicit confirmation", path: ["confirmLlmJudge"] });
+});
+
+export const listAiEvaluationRunsSchema = z.object({ datasetId: z.string().uuid().optional() }).optional();
+export const getAiEvaluationRunSchema = z.object({ runId: z.string().uuid() });
+export const compareAiEvaluationRunsSchema = z.object({ baselineRunId: z.string().uuid(), candidateRunId: z.string().uuid() }).refine((value) => value.baselineRunId !== value.candidateRunId, "Select two distinct evaluation runs");
+
+const aiEvaluationResultSchema = z.object({
+  id: z.string().uuid(), caseId: z.string().uuid(), status: z.enum(["succeeded", "failed"]),
+  deterministic: z.record(z.string(), z.unknown()), judgeScore: z.number().nullable(), judgeRationale: z.string().nullable(),
+  promptTokens: z.number().int().nullable(), candidateTokens: z.number().int().nullable(), totalTokens: z.number().int().nullable(), errorCode: z.string().nullable(), createdAt: z.string().datetime(),
+});
+const aiEvaluationSpanSchema = z.object({
+  id: z.string().uuid(), parentSpanId: z.string().uuid().nullable(), spanType: z.string(), status: z.enum(["started", "succeeded", "failed"]),
+  attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])), errorCode: z.string().nullable(), startedAt: z.string().datetime(), completedAt: z.string().datetime().nullable(), durationMs: z.number().int().nullable(),
+});
+export const aiEvaluationDatasetSchema = z.object({ id: z.string().uuid(), name: z.string(), description: z.string().nullable(), version: z.number().int(), approvedAt: z.string().datetime(), createdAt: z.string().datetime(), caseCount: z.number().int() });
+export const aiEvaluationRunSchema = z.object({
+  id: z.string().uuid(), datasetId: z.string().uuid(), datasetName: z.string(), datasetVersion: z.number().int(), evaluatorContractVersion: z.string(), rubricVersion: z.string(), judgeEnabled: z.boolean(), modelProvider: z.string().nullable(), modelName: z.string().nullable(), maxCases: z.number().int(), maxJudgeCalls: z.number().int(), maxTotalTokens: z.number().int(), status: z.enum(["started", "succeeded", "failed"]), errorCode: z.string().nullable(), summary: z.record(z.string(), z.unknown()), startedAt: z.string().datetime(), completedAt: z.string().datetime().nullable(), durationMs: z.number().int().nullable(), results: z.array(aiEvaluationResultSchema).optional(), spans: z.array(aiEvaluationSpanSchema).optional(),
+});
+export const aiEvaluationComparisonSchema = z.object({
+  baseline: aiEvaluationRunSchema,
+  candidate: aiEvaluationRunSchema,
+  comparison: z.object({ baselineRunId: z.string().uuid(), candidateRunId: z.string().uuid(), retrievalRecallDelta: z.number().nullable(), judgeScoreDelta: z.number().nullable(), failedCaseDelta: z.number().int() }),
+});
+
 const httpUrlSchema = z.string().url().max(4_000).refine(
   (value) => /^https?:\/\//i.test(value),
   "Only http(s) URLs are allowed"

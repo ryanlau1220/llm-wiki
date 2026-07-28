@@ -17,6 +17,7 @@ import {
   retryResearchCaptureIndex,
 } from "./research-captures";
 import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
+import { compareAiEvaluationRuns, createAiEvaluationDataset, getAiEvaluationRun, listAiEvaluationDatasets, listAiEvaluationRuns, runAiEvaluation } from "./ai-evaluation";
 import { listOrganizationSuggestions } from "./organization-suggestions";
 
 const config = loadConfig();
@@ -561,5 +562,23 @@ export const router = os.router({
   }),
   getAiTrace: os.getAiTrace.use(authMiddleware).handler(async ({ input }) => {
     return getAiTraceDetail(config, input.traceId);
+  }),
+  createAiEvaluationDataset: os.createAiEvaluationDataset.use(authMiddleware).handler(async ({ input }) => {
+    return createAiEvaluationDataset(config, input);
+  }),
+  listAiEvaluationDatasets: os.listAiEvaluationDatasets.use(authMiddleware).handler(async () => {
+    return listAiEvaluationDatasets(config);
+  }),
+  runAiEvaluation: os.runAiEvaluation.use(authMiddleware).handler(async ({ input }) => {
+    return runAiEvaluation(config, input);
+  }),
+  listAiEvaluationRuns: os.listAiEvaluationRuns.use(authMiddleware).handler(async ({ input }) => {
+    return listAiEvaluationRuns(config, input?.datasetId);
+  }),
+  getAiEvaluationRun: os.getAiEvaluationRun.use(authMiddleware).handler(async ({ input }) => {
+    return getAiEvaluationRun(config, input.runId);
+  }),
+  compareAiEvaluationRuns: os.compareAiEvaluationRuns.use(authMiddleware).handler(async ({ input }) => {
+    return compareAiEvaluationRuns(config, input);
   }),
 });

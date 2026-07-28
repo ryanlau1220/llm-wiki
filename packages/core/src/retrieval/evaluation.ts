@@ -1,5 +1,119 @@
 const DEFAULT_EVALUATION_K = 5;
 
+export const AI_EVALUATOR_CONTRACT_VERSION = "ai-generator-evaluator-v1";
+export const AI_EVALUATOR_RUBRIC_VERSION = "groundedness-v1";
+export const AI_EVALUATION_LIMITS = {
+  MAX_CASES: 100,
+  MAX_JUDGE_CALLS: 100,
+  MAX_TOTAL_TOKENS: 100_000,
+  MAX_RATIONALE_LENGTH: 1_000,
+} as const;
+
+export type EvaluationEvidence = { documentPath: string; chunkIndex?: number };
+
+/** Approved, redacted case material. It never originates from a stored trace payload. */
+export type AiEvaluationCaseInput = {
+  id: string;
+  redactedInput: string;
+  expectedEvidence: EvaluationEvidence[];
+  expectedOutcome?: string | null;
+  referenceAnswer?: string | null;
+  candidateOutput?: string | null;
+  retrievedEvidence?: EvaluationEvidence[];
+};
+
+export type DeterministicEvaluation = {
+  citationSourceValidity: { passed: boolean; expectedCount: number; retrievedCount: number; invalidCount: number };
+  retrieval: { recallAtK: number; reciprocalRank: number; ndcgAtK: number } | null;
+  groundedAbstention: { expected: boolean; observed: boolean; passed: boolean } | null;
+  toolPolicy: { expected: "required" | "forbidden" | null; observed: "used" | "not_used" | "unknown"; passed: boolean | null };
+};
+
+export type JudgeEvaluation = { score: number; rationale: string };
+
+export type EvaluationRunComparison = {
+  baselineRunId: string;
+  candidateRunId: string;
+  retrievalRecallDelta: number | null;
+  judgeScoreDelta: number | null;
+  failedCaseDelta: number;
+};
+
+/** Compare versioned, structured results without inspecting any case payload. */
+export function compareEvaluationRuns(
+  baseline: { id: string; results: Array<{ status: "succeeded" | "failed"; deterministic: DeterministicEvaluation; judgeScore?: number | null }> },
+  candidate: { id: string; results: Array<{ status: "succeeded" | "failed"; deterministic: DeterministicEvaluation; judgeScore?: number | null }> },
+): EvaluationRunComparison {
+  const candidateRecall = averageOptional(candidate.results.map((result) => result.deterministic.retrieval?.recallAtK));
+  const baselineRecall = averageOptional(baseline.results.map((result) => result.deterministic.retrieval?.recallAtK));
+  const candidateJudge = averageOptional(candidate.results.map((result) => result.judgeScore));
+  const baselineJudge = averageOptional(baseline.results.map((result) => result.judgeScore));
+  return {
+    baselineRunId: baseline.id,
+    candidateRunId: candidate.id,
+    retrievalRecallDelta: candidateRecall === null || baselineRecall === null ? null : candidateRecall - baselineRecall,
+    judgeScoreDelta: candidateJudge === null || baselineJudge === null ? null : candidateJudge - baselineJudge,
+    failedCaseDelta: candidate.results.filter((result) => result.status === "failed").length - baseline.results.filter((result) => result.status === "failed").length,
+  };
+}
+
+export function evaluateDeterministicCase(input: AiEvaluationCaseInput, k = DEFAULT_EVALUATION_K): DeterministicEvaluation {
+  validateAiEvaluationCase(input);
+  const retrieved = input.retrievedEvidence ?? [];
+  const expected = input.expectedEvidence;
+  const invalidCount = retrieved.filter((item) => !isEvidence(item)).length;
+  const retrieval = expected.length > 0
+    ? evaluateRetrieval([{ id: input.id, query: input.redactedInput, relevant: expected }], new Map([[input.id, retrieved.filter(isEvidence).map((item) => ({ documentPath: item.documentPath, chunkIndex: item.chunkIndex ?? 0 }))]]), k).cases[0]
+    : null;
+  const expectedAbstention = /\b(abstain|unknown|insufficient|cannot answer|not enough)\b/i.test(input.expectedOutcome ?? "");
+  const observedAbstention = /\b(i (?:do not|don't) know|cannot answer|not enough (?:information|evidence)|insufficient (?:information|evidence))\b/i.test(input.candidateOutput ?? "");
+  const toolExpected = /\b(tool|web search)\s*(?:is )?(required|must use)\b/i.test(input.expectedOutcome ?? "")
+    ? "required" as const
+    : /\b(tool|web search)\s*(?:is )?(forbidden|must not use|do not use)\b/i.test(input.expectedOutcome ?? "")
+      ? "forbidden" as const : null;
+  const toolObserved = /\b(tool|web search)\b/i.test(input.candidateOutput ?? "") ? "used" as const : "unknown" as const;
+  return {
+    citationSourceValidity: { passed: invalidCount === 0, expectedCount: expected.length, retrievedCount: retrieved.length, invalidCount },
+    retrieval: retrieval ? { recallAtK: retrieval.recallAtK, reciprocalRank: retrieval.reciprocalRank, ndcgAtK: retrieval.ndcgAtK } : null,
+    groundedAbstention: input.expectedOutcome ? { expected: expectedAbstention, observed: observedAbstention, passed: expectedAbstention === observedAbstention } : null,
+    toolPolicy: { expected: toolExpected, observed: toolObserved, passed: toolExpected === null || toolObserved === "unknown" ? null : (toolExpected === "required") === (toolObserved === "used") },
+  };
+}
+
+/** Parse only a compact, structured judge result. Never request or retain CoT. */
+export function parseJudgeEvaluation(text: string): JudgeEvaluation {
+  let value: unknown;
+  try { value = JSON.parse(text); } catch { throw new Error("Evaluator judge returned invalid JSON"); }
+  if (!value || typeof value !== "object") throw new Error("Evaluator judge result must be an object");
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.score !== "number" || !Number.isFinite(candidate.score) || candidate.score < 0 || candidate.score > 1) throw new Error("Evaluator judge score must be a number from 0 to 1");
+  if (typeof candidate.rationale !== "string" || !candidate.rationale.trim() || candidate.rationale.length > AI_EVALUATION_LIMITS.MAX_RATIONALE_LENGTH) throw new Error("Evaluator judge rationale must be a short explanation");
+  return { score: candidate.score, rationale: candidate.rationale.trim() };
+}
+
+export function validateAiEvaluationCase(input: AiEvaluationCaseInput): void {
+  if (!input.id.trim()) throw new Error("Evaluation case ID is required");
+  if (!input.redactedInput.trim()) throw new Error("A user-approved redacted evaluation input is required");
+  if (!Array.isArray(input.expectedEvidence)) throw new Error("Expected evaluation evidence must be an array");
+  for (const evidence of [...input.expectedEvidence, ...(input.retrievedEvidence ?? [])]) {
+    if (!isEvidence(evidence)) throw new Error("Evaluation evidence must have a document path and optional non-negative chunk index");
+  }
+}
+
+export function validateEvaluationBudget(input: { caseCount: number; judgeEnabled: boolean; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number }): void {
+  if (!Number.isInteger(input.caseCount) || input.caseCount < 1 || input.caseCount > input.maxCases || input.maxCases > AI_EVALUATION_LIMITS.MAX_CASES) throw new Error("Evaluation case budget exceeded");
+  if (!Number.isInteger(input.maxJudgeCalls) || input.maxJudgeCalls < 0 || input.maxJudgeCalls > AI_EVALUATION_LIMITS.MAX_JUDGE_CALLS) throw new Error("Evaluation judge-call budget is invalid");
+  if (input.judgeEnabled && input.maxJudgeCalls < input.caseCount) throw new Error("Evaluation judge-call budget must cover every case");
+  if (!Number.isInteger(input.maxTotalTokens) || input.maxTotalTokens < 1 || input.maxTotalTokens > AI_EVALUATION_LIMITS.MAX_TOTAL_TOKENS) throw new Error("Evaluation token budget is invalid");
+}
+
+function isEvidence(value: unknown): value is EvaluationEvidence {
+  if (!value || typeof value !== "object") return false;
+  const evidence = value as EvaluationEvidence;
+  return typeof evidence.documentPath === "string" && evidence.documentPath.trim().length > 0
+    && (evidence.chunkIndex === undefined || (Number.isInteger(evidence.chunkIndex) && evidence.chunkIndex >= 0));
+}
+
 export type RetrievalEvaluationTarget = {
   documentPath: string;
   chunkIndex?: number;
@@ -152,4 +266,9 @@ function discountedCumulativeGain(relevances: number[]): number {
 
 function average(values: number[]): number {
   return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function averageOptional(values: Array<number | null | undefined>): number | null {
+  const present = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return present.length ? average(present) : null;
 }

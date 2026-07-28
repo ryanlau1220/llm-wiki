@@ -18,6 +18,14 @@ import {
   getAiTraceSchema,
   aiTracePageSchema,
   aiTraceDetailSchema,
+  createAiEvaluationDatasetSchema,
+  runAiEvaluationSchema,
+  listAiEvaluationRunsSchema,
+  getAiEvaluationRunSchema,
+  compareAiEvaluationRunsSchema,
+  aiEvaluationDatasetSchema,
+  aiEvaluationRunSchema,
+  aiEvaluationComparisonSchema,
   listOrganizationSuggestionsSchema,
   organizationSuggestionSchema,
   RESEARCH_CAPTURE_ACTIVITY_EVENT,
@@ -239,6 +247,12 @@ export const appContract = oc.router({
   listResearchCaptureActivities: oc.input(z.object({ id: z.string().uuid() })).output(z.array(researchCaptureActivitySchema)),
   listAiTraces: oc.input(listAiTracesSchema).output(aiTracePageSchema),
   getAiTrace: oc.input(getAiTraceSchema).output(aiTraceDetailSchema),
+  createAiEvaluationDataset: oc.input(createAiEvaluationDatasetSchema).output(aiEvaluationDatasetSchema),
+  listAiEvaluationDatasets: oc.input(z.void().optional()).output(z.array(aiEvaluationDatasetSchema)),
+  runAiEvaluation: oc.input(runAiEvaluationSchema).output(aiEvaluationRunSchema),
+  listAiEvaluationRuns: oc.input(listAiEvaluationRunsSchema).output(z.array(aiEvaluationRunSchema)),
+  getAiEvaluationRun: oc.input(getAiEvaluationRunSchema).output(aiEvaluationRunSchema.nullable()),
+  compareAiEvaluationRuns: oc.input(compareAiEvaluationRunsSchema).output(aiEvaluationComparisonSchema),
 });
 
 export type AppRouter = typeof appContract;

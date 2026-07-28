@@ -336,3 +336,117 @@ export const retrievalEvidence = pgTable(
     ),
   }),
 );
+
+/**
+ * Owner-approved, redacted data used to evaluate AI Generator behavior. This
+ * is intentionally separate from structural AI traces: no trace payload is
+ * copied into an evaluation dataset automatically.
+ */
+export const aiEvaluationDatasets = pgTable(
+  "ai_evaluation_datasets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    description: text("description"),
+    version: integer("version").notNull().default(1),
+    approved_at: timestamp("approved_at", { withTimezone: true }).notNull().defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    approvedAtIdx: index("ai_evaluation_datasets_approved_at_idx").on(table.approved_at),
+  }),
+);
+
+export const aiEvaluationCases = pgTable(
+  "ai_evaluation_cases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dataset_id: uuid("dataset_id").notNull().references(() => aiEvaluationDatasets.id, { onDelete: "cascade" }),
+    label: varchar("label", { length: 160 }).notNull(),
+    /** Explicitly supplied or edited redacted material only. */
+    redacted_input: text("redacted_input").notNull(),
+    expected_evidence: jsonb("expected_evidence").notNull().default([]),
+    expected_outcome: text("expected_outcome"),
+    reference_answer: text("reference_answer"),
+    candidate_output: text("candidate_output"),
+    retrieved_evidence: jsonb("retrieved_evidence").notNull().default([]),
+    source_trace_id: uuid("source_trace_id").references(() => retrievalRuns.id, { onDelete: "set null" }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    datasetIdx: index("ai_evaluation_cases_dataset_id_idx").on(table.dataset_id),
+    traceIdx: index("ai_evaluation_cases_source_trace_id_idx").on(table.source_trace_id),
+  }),
+);
+
+/** An immutable, observable execution of versioned evaluator contracts. */
+export const aiEvaluationRuns = pgTable(
+  "ai_evaluation_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dataset_id: uuid("dataset_id").notNull().references(() => aiEvaluationDatasets.id, { onDelete: "restrict" }),
+    dataset_version: integer("dataset_version").notNull(),
+    evaluator_contract_version: varchar("evaluator_contract_version", { length: 80 }).notNull(),
+    rubric_version: varchar("rubric_version", { length: 80 }).notNull(),
+    judge_enabled: boolean("judge_enabled").notNull().default(false),
+    model_provider: varchar("model_provider", { length: 80 }),
+    model_name: varchar("model_name", { length: 160 }),
+    max_cases: integer("max_cases").notNull(),
+    max_judge_calls: integer("max_judge_calls").notNull(),
+    max_total_tokens: integer("max_total_tokens").notNull(),
+    status: varchar("status", { length: 20 }).notNull(),
+    error_code: varchar("error_code", { length: 80 }),
+    summary: jsonb("summary").notNull().default({}),
+    started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+    duration_ms: integer("duration_ms"),
+  },
+  (table) => ({
+    datasetStartedAtIdx: index("ai_evaluation_runs_dataset_started_at_idx").on(table.dataset_id, table.started_at),
+    statusStartedAtIdx: index("ai_evaluation_runs_status_started_at_idx").on(table.status, table.started_at),
+  }),
+);
+
+export const aiEvaluationResults = pgTable(
+  "ai_evaluation_results",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    evaluation_run_id: uuid("evaluation_run_id").notNull().references(() => aiEvaluationRuns.id, { onDelete: "cascade" }),
+    evaluation_case_id: uuid("evaluation_case_id").notNull().references(() => aiEvaluationCases.id, { onDelete: "restrict" }),
+    status: varchar("status", { length: 20 }).notNull(),
+    deterministic: jsonb("deterministic").notNull().default({}),
+    judge_score: doublePrecision("judge_score"),
+    judge_rationale: varchar("judge_rationale", { length: 1_000 }),
+    prompt_tokens: integer("prompt_tokens"),
+    candidate_tokens: integer("candidate_tokens"),
+    total_tokens: integer("total_tokens"),
+    error_code: varchar("error_code", { length: 80 }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    runIdx: index("ai_evaluation_results_run_id_idx").on(table.evaluation_run_id),
+    caseIdx: index("ai_evaluation_results_case_id_idx").on(table.evaluation_case_id),
+  }),
+);
+
+/** Structural evaluator decisions only; rubric inputs and model reasoning are not persisted. */
+export const aiEvaluationSpans = pgTable(
+  "ai_evaluation_spans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    evaluation_run_id: uuid("evaluation_run_id").notNull().references(() => aiEvaluationRuns.id, { onDelete: "cascade" }),
+    parent_span_id: uuid("parent_span_id"),
+    span_type: varchar("span_type", { length: 40 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull(),
+    attributes: jsonb("attributes").notNull().default({}),
+    error_code: varchar("error_code", { length: 80 }),
+    started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+    duration_ms: integer("duration_ms"),
+  },
+  (table) => ({
+    runStartedAtIdx: index("ai_evaluation_spans_run_started_at_idx").on(table.evaluation_run_id, table.started_at),
+  }),
+);
