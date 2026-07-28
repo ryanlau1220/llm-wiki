@@ -218,9 +218,6 @@ function GeneratorComponent() {
             result
               ? reviewResponseToPrefill(
                   result.query,
-                  result.mode === "synthesis" || result.mode === "bootstrap"
-                    ? (result.data.note?.content ?? "")
-                    : (result.data.answer ?? ""),
                   result.data.sources ?? result.data.citations ?? [],
                 )
               : undefined

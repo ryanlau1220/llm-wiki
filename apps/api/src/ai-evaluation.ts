@@ -1,10 +1,8 @@
 import { asc, desc, eq } from "drizzle-orm";
-import { createLLMProvider } from "@llm-wiki/ai";
 import {
   AI_EVALUATOR_CONTRACT_VERSION,
   compareEvaluationRuns,
   evaluateDeterministicCase,
-  parseJudgeEvaluation,
   type DeterministicEvaluation,
   validateAiEvaluationCase,
   validateEvaluationBudget,
@@ -18,15 +16,19 @@ import {
   createDbClient,
 } from "@llm-wiki/db";
 import type { AppConfig } from "./config";
-import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
-import { configuredAiEvaluationModelName } from "./ai-evaluation-model";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
+import {
+  executeAskEvaluation,
+  getLocalJudgeCapability,
+  runLocalJudge,
+} from "./ai-evaluation-execution";
+import { buildAskWorkflowManifest } from "./ask";
 
 const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } as const;
 
 type CreateDataset = {
   name: string; description?: string; approved: true;
-  cases: Array<{ label: string; redactedInput: string; expectedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; expectedOutcome?: string; referenceAnswer?: string; candidateOutput?: string; retrievedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; retrievalEvidenceEvaluated: boolean; sourceTraceId?: string }>;
+  cases: Array<{ label: string; redactedInput: string; expectedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; expectedOutcome?: string; referenceAnswer?: string; retrievedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; retrievalEvidenceEvaluated: boolean; sourceTraceId?: string }>;
 };
 
 export async function createAiEvaluationDataset(config: AppConfig, input: CreateDataset) {
@@ -37,7 +39,7 @@ export async function createAiEvaluationDataset(config: AppConfig, input: Create
   await db.insert(aiEvaluationCases).values(input.cases.map((item) => ({
     dataset_id: dataset.id, label: item.label, redacted_input: item.redactedInput,
     expected_evidence: item.expectedEvidence, expected_outcome: item.expectedOutcome,
-    reference_answer: item.referenceAnswer, candidate_output: item.candidateOutput,
+    reference_answer: item.referenceAnswer,
     retrieved_evidence: item.retrievedEvidence,
     retrieval_evidence_evaluated: item.retrievalEvidenceEvaluated,
     source_trace_id: item.sourceTraceId,
@@ -54,51 +56,128 @@ export async function listAiEvaluationDatasets(config: AppConfig) {
   }));
 }
 
-export async function runAiEvaluation(config: AppConfig, input: { datasetId: string; judgeEnabled: boolean; confirmLlmJudge: boolean; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number; rubricVersion: string }) {
+export async function runAiEvaluation(config: AppConfig, input: { datasetId: string; confirmTargetExecution: true; judgeEnabled: boolean; confirmLlmJudge: boolean; topK: number; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number; rubricVersion: string }) {
+  if (input.confirmTargetExecution !== true) throw new Error("Ask/RAG evaluation runs require explicit confirmation");
   if (input.judgeEnabled && !input.confirmLlmJudge) throw new Error("LLM judge runs require explicit confirmation");
+  if (input.judgeEnabled && !getLocalJudgeCapability(config).localJudgeAvailable) {
+    throw new Error("A configured local Ollama model is required for semantic evaluation");
+  }
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const [dataset] = await db.select().from(aiEvaluationDatasets).where(eq(aiEvaluationDatasets.id, input.datasetId)).limit(1);
   if (!dataset) throw new Error("Evaluation dataset not found");
   const cases = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.dataset_id, dataset.id)).orderBy(asc(aiEvaluationCases.created_at));
   validateEvaluationBudget({ caseCount: cases.length, judgeEnabled: input.judgeEnabled, maxCases: input.maxCases, maxJudgeCalls: input.maxJudgeCalls, maxTotalTokens: input.maxTotalTokens });
 
-  const provider = input.judgeEnabled ? buildProvider(config) : null;
+  const localJudge = getLocalJudgeCapability(config);
+  const workflowManifest = buildAskWorkflowManifest(config, input.topK);
   const [run] = await db.insert(aiEvaluationRuns).values({
     dataset_id: dataset.id, dataset_version: dataset.version, evaluator_contract_version: AI_EVALUATOR_CONTRACT_VERSION,
     rubric_version: input.rubricVersion, judge_enabled: input.judgeEnabled,
-    model_provider: provider ? config.embeddingProvider : null, model_name: provider ? configuredAiEvaluationModelName(config) : null,
-    max_cases: input.maxCases, max_judge_calls: input.maxJudgeCalls, max_total_tokens: input.maxTotalTokens, status: STATUS.STARTED,
+    model_provider: input.judgeEnabled ? "ollama" : null, model_name: input.judgeEnabled ? localJudge.localJudgeModel : null,
+    max_cases: input.maxCases, max_judge_calls: input.maxJudgeCalls, max_total_tokens: input.maxTotalTokens,
+    workflow_manifest: workflowManifest, status: STATUS.STARTED,
   }).returning();
   const startedAt = Date.now();
   const rootSpanId = await startSpan(db, run.id, "evaluation", { case_count: cases.length, judge_enabled: input.judgeEnabled, contract_version: AI_EVALUATOR_CONTRACT_VERSION });
   let totalTokens = 0;
   let judgeCalls = 0;
   let failedCases = 0;
-  for (const evaluationCase of cases) {
+  for (const [caseIndex, evaluationCase] of cases.entries()) {
     const caseStartedAt = Date.now();
-    const caseSpanId = await startSpan(db, run.id, "case", { case_number: judgeCalls + 1 }, rootSpanId);
-    const deterministic = evaluateDeterministicCase({ id: evaluationCase.id, redactedInput: evaluationCase.redacted_input, expectedEvidence: evaluationCase.expected_evidence as Array<{ documentPath: string; chunkIndex?: number }>, expectedOutcome: evaluationCase.expected_outcome, referenceAnswer: evaluationCase.reference_answer, candidateOutput: evaluationCase.candidate_output, retrievedEvidence: evaluationCase.retrieved_evidence as Array<{ documentPath: string; chunkIndex?: number }>, retrievalEvaluated: evaluationCase.retrieval_evidence_evaluated });
+    const caseSpanId = await startSpan(db, run.id, "case", { case_number: caseIndex + 1 }, rootSpanId);
     let status: "succeeded" | "failed" = STATUS.SUCCEEDED;
-    let judge: { score: number; rationale: string } | null = null;
-    let usage: { promptTokens: number; candidatesTokens: number; totalTokens: number } | undefined;
+    let deterministic: DeterministicEvaluation & { execution: Record<string, string | number | boolean | null> } = failedExecutionDeterministic(evaluationCase);
+    let executionTraceId: string | null = null;
+    let judge: { score: number; labels: string[] } | null = null;
+    let executionSpanId: string | null = null;
+    let targetExecutionSucceeded = false;
+    let judgeAttempted = false;
+    let targetPromptTokens: number | null = null;
+    let targetCandidateTokens: number | null = null;
+    let totalCaseTokens: number | null = null;
     let errorCode: string | null = null;
-    if (provider) {
-      if (judgeCalls >= input.maxJudgeCalls || totalTokens >= input.maxTotalTokens) {
-        status = STATUS.FAILED; errorCode = "judge_budget_exhausted"; failedCases += 1;
-      } else {
+    try {
+      const executionStartedAt = Date.now();
+      executionSpanId = await startSpan(db, run.id, "target_execution", { target: "ask_rag", top_k: input.topK }, caseSpanId);
+      const execution = await executeAskEvaluation(config, { redactedInput: evaluationCase.redacted_input, topK: input.topK });
+      executionTraceId = execution.traceId;
+      targetPromptTokens = execution.trace.promptTokens;
+      targetCandidateTokens = execution.trace.candidateTokens;
+      totalCaseTokens = execution.trace.totalTokens;
+      totalTokens += execution.trace.totalTokens ?? 0;
+      deterministic = {
+        ...evaluateDeterministicCase({
+          id: evaluationCase.id,
+          redactedInput: evaluationCase.redacted_input,
+          expectedEvidence: evaluationCase.expected_evidence as Array<{ documentPath: string; chunkIndex?: number }>,
+          expectedOutcome: evaluationCase.expected_outcome,
+          referenceAnswer: evaluationCase.reference_answer,
+          candidateOutput: execution.candidateOutput,
+          retrievedEvidence: execution.retrievedEvidence,
+          retrievalEvaluated: true,
+          citedEvidence: execution.citedEvidence,
+        }),
+        execution: {
+          status: execution.trace.status,
+          policy: execution.trace.policy,
+          candidate_count: execution.trace.candidateCount,
+          selected_evidence_count: execution.trace.selectedEvidenceCount,
+          context_character_count: execution.trace.contextCharacterCount,
+          duration_ms: execution.trace.durationMs,
+          citation_count: execution.trace.citationCount,
+        },
+      };
+      await completeSpan(db, executionSpanId, STATUS.SUCCEEDED, Date.now() - executionStartedAt, {
+        selected_evidence_count: execution.trace.selectedEvidenceCount,
+        citation_count: execution.trace.citationCount,
+        total_tokens: execution.trace.totalTokens,
+      });
+      targetExecutionSucceeded = true;
+
+      if (input.judgeEnabled) {
+        if (judgeCalls >= input.maxJudgeCalls || totalTokens >= input.maxTotalTokens) {
+          throw new Error("judge_budget_exhausted");
+        }
         const judgeStartedAt = Date.now();
-        const judgeSpanId = await startSpan(db, run.id, "llm_judge", { rubric_version: input.rubricVersion, max_output_tokens: 512 }, caseSpanId);
+        const judgeSpanId = await startSpan(db, run.id, "local_judge", { rubric_version: input.rubricVersion, max_output_tokens: 256 }, caseSpanId);
+        judgeAttempted = true;
         try {
-          const response = await provider.generate({ prompt: buildAiEvaluationJudgePrompt(evaluationCase), systemInstruction: "You are a bounded evaluation agent. Score only supplied redacted data. Return JSON with score (0 to 1) and a short rationale. Do not reveal chain-of-thought.", responseMimeType: "application/json", temperature: 0, maxOutputTokens: 512 });
-          judge = parseJudgeEvaluation(response.text); usage = response.usage; judgeCalls += 1; totalTokens += response.usage?.totalTokens ?? 0;
-          await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, usage ? { total_tokens: usage.totalTokens } : {});
-        } catch (_error) {
-          status = STATUS.FAILED; errorCode = "judge_failed"; failedCases += 1;
-          await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, "judge_failed");
+          const localResult = await runLocalJudge(config, {
+            redactedInput: evaluationCase.redacted_input,
+            expectedOutcome: evaluationCase.expected_outcome,
+            candidateOutput: execution.candidateOutput,
+            evidence: execution.localJudgeEvidence,
+          });
+          judge = localResult.result;
+          judgeCalls += 1;
+          totalCaseTokens = (totalCaseTokens ?? 0) + (localResult.totalTokens ?? 0);
+          totalTokens += localResult.totalTokens ?? 0;
+          await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, localResult.totalTokens === null ? {} : { total_tokens: localResult.totalTokens });
+        } catch (error) {
+          await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, error instanceof Error ? error.message : "local_judge_failed");
+          throw error;
         }
       }
+    } catch (error) {
+      if (executionSpanId && !targetExecutionSucceeded) {
+        await completeSpan(
+          db,
+          executionSpanId,
+          STATUS.FAILED,
+          Date.now() - caseStartedAt,
+          {},
+          "target_execution_failed",
+        );
+      }
+      status = STATUS.FAILED;
+      errorCode = error instanceof Error && error.message === "judge_budget_exhausted"
+        ? "judge_budget_exhausted"
+        : judgeAttempted
+          ? "local_judge_failed"
+          : "target_execution_failed";
+      failedCases += 1;
     }
-    await db.insert(aiEvaluationResults).values({ evaluation_run_id: run.id, evaluation_case_id: evaluationCase.id, status, deterministic, judge_score: judge?.score ?? null, judge_rationale: judge?.rationale ?? null, prompt_tokens: usage?.promptTokens ?? null, candidate_tokens: usage?.candidatesTokens ?? null, total_tokens: usage?.totalTokens ?? null, error_code: errorCode });
+    await db.insert(aiEvaluationResults).values({ evaluation_run_id: run.id, evaluation_case_id: evaluationCase.id, status, deterministic, execution_trace_id: executionTraceId, judge_score: judge?.score ?? null, judge_labels: judge?.labels ?? [], judge_rationale: null, prompt_tokens: targetPromptTokens, candidate_tokens: targetCandidateTokens, total_tokens: totalCaseTokens, error_code: errorCode });
     await completeSpan(db, caseSpanId, status, Date.now() - caseStartedAt, { deterministic: true }, errorCode ?? undefined);
   }
   const durationMs = Date.now() - startedAt;
@@ -106,6 +185,10 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   await completeSpan(db, rootSpanId, runStatus, durationMs, { judge_calls: judgeCalls, total_tokens: totalTokens, failed_cases: failedCases }, runStatus === STATUS.FAILED ? "case_evaluation_failed" : undefined);
   const [completed] = await db.update(aiEvaluationRuns).set({ status: runStatus, error_code: runStatus === STATUS.FAILED ? "case_evaluation_failed" : null, summary: { caseCount: cases.length, judgeCalls, totalTokens, failedCases }, completed_at: new Date(), duration_ms: durationMs }).where(eq(aiEvaluationRuns.id, run.id)).returning();
   return getAiEvaluationRunFromDb(db, completed.id) as Promise<NonNullable<Awaited<ReturnType<typeof getAiEvaluationRunFromDb>>>>;
+}
+
+export function getAiEvaluationCapabilities(config: AppConfig) {
+  return getLocalJudgeCapability(config);
 }
 
 export async function listAiEvaluationRuns(config: AppConfig, datasetId?: string) {
@@ -139,8 +222,8 @@ async function getAiEvaluationRunFromDb(db: ReturnType<typeof createDbClient>["d
   const results = await db.select().from(aiEvaluationResults).where(eq(aiEvaluationResults.evaluation_run_id, run.id)).orderBy(asc(aiEvaluationResults.created_at));
   const spans = await db.select().from(aiEvaluationSpans).where(eq(aiEvaluationSpans.evaluation_run_id, run.id)).orderBy(asc(aiEvaluationSpans.started_at));
   return {
-    id: run.id, datasetId: run.dataset_id, datasetName: dataset?.name ?? "Deleted dataset", datasetVersion: run.dataset_version, evaluatorContractVersion: run.evaluator_contract_version, rubricVersion: run.rubric_version, judgeEnabled: run.judge_enabled, modelProvider: run.model_provider, modelName: run.model_name, maxCases: run.max_cases, maxJudgeCalls: run.max_judge_calls, maxTotalTokens: run.max_total_tokens, status: run.status as "started" | "succeeded" | "failed", errorCode: run.error_code, summary: run.summary as Record<string, unknown>, startedAt: run.started_at.toISOString(), completedAt: run.completed_at?.toISOString() ?? null, durationMs: run.duration_ms,
-    results: results.map((result) => ({ id: result.id, caseId: result.evaluation_case_id, status: result.status as "succeeded" | "failed", deterministic: result.deterministic as Record<string, unknown>, judgeScore: result.judge_score, judgeRationale: result.judge_rationale, promptTokens: result.prompt_tokens, candidateTokens: result.candidate_tokens, totalTokens: result.total_tokens, errorCode: result.error_code, createdAt: result.created_at.toISOString() })),
+    id: run.id, datasetId: run.dataset_id, datasetName: dataset?.name ?? "Deleted dataset", datasetVersion: run.dataset_version, evaluatorContractVersion: run.evaluator_contract_version, rubricVersion: run.rubric_version, judgeEnabled: run.judge_enabled, modelProvider: run.model_provider, modelName: run.model_name, maxCases: run.max_cases, maxJudgeCalls: run.max_judge_calls, maxTotalTokens: run.max_total_tokens, workflowManifest: run.workflow_manifest as Record<string, unknown>, status: run.status as "started" | "succeeded" | "failed", errorCode: run.error_code, summary: run.summary as Record<string, unknown>, startedAt: run.started_at.toISOString(), completedAt: run.completed_at?.toISOString() ?? null, durationMs: run.duration_ms,
+    results: results.map((result) => ({ id: result.id, caseId: result.evaluation_case_id, status: result.status as "succeeded" | "failed", deterministic: result.deterministic as Record<string, unknown>, executionTraceId: result.execution_trace_id, judgeScore: result.judge_score, judgeLabels: result.judge_labels as string[], promptTokens: result.prompt_tokens, candidateTokens: result.candidate_tokens, totalTokens: result.total_tokens, errorCode: result.error_code, createdAt: result.created_at.toISOString() })),
     spans: spans.map((span) => ({ id: span.id, parentSpanId: span.parent_span_id, spanType: span.span_type, status: span.status as "started" | "succeeded" | "failed", attributes: span.attributes as Record<string, string | number | boolean | null>, errorCode: span.error_code, startedAt: span.started_at.toISOString(), completedAt: span.completed_at?.toISOString() ?? null, durationMs: span.duration_ms })),
   };
 }
@@ -150,7 +233,20 @@ export function isPresent<T>(value: T | null): value is T {
 }
 
 function formatDataset(dataset: typeof aiEvaluationDatasets.$inferSelect, caseCount: number) { return { id: dataset.id, name: dataset.name, description: dataset.description, version: dataset.version, approvedAt: dataset.approved_at.toISOString(), createdAt: dataset.created_at.toISOString(), caseCount }; }
+function failedExecutionDeterministic(evaluationCase: typeof aiEvaluationCases.$inferSelect) {
+  return {
+    ...evaluateDeterministicCase({
+      id: evaluationCase.id,
+      redactedInput: evaluationCase.redacted_input,
+      expectedEvidence: evaluationCase.expected_evidence as Array<{ documentPath: string; chunkIndex?: number }>,
+      expectedOutcome: evaluationCase.expected_outcome,
+      referenceAnswer: evaluationCase.reference_answer,
+      retrievedEvidence: [],
+      retrievalEvaluated: false,
+    }),
+    execution: { status: "failed", policy: "vault_hybrid", candidate_count: 0, selected_evidence_count: 0, context_character_count: 0, duration_ms: null, citation_count: 0 },
+  };
+}
 function requiredDatabaseUrl(config: AppConfig) { if (!config.databaseUrl) throw new Error("DATABASE_URL is required for AI evaluation"); return config.databaseUrl; }
-function buildProvider(config: AppConfig) { return createLLMProvider({ provider: config.embeddingProvider, geminiGeap: { projectId: config.gcpProjectId, location: config.gcpLocation, model: config.gcpLlmModel }, openai: { apiKey: config.openaiApiKey, baseUrl: config.openaiBaseUrl, model: config.openaiLlmModel }, ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaLlmModel } }); }
 async function startSpan(db: ReturnType<typeof createDbClient>["db"], runId: string, spanType: string, attributes: Record<string, string | number | boolean | null>, parentSpanId?: string) { const [span] = await db.insert(aiEvaluationSpans).values({ evaluation_run_id: runId, parent_span_id: parentSpanId, span_type: spanType, status: STATUS.STARTED, attributes }).returning({ id: aiEvaluationSpans.id }); return span.id; }
 async function completeSpan(db: ReturnType<typeof createDbClient>["db"], spanId: string, status: "succeeded" | "failed", durationMs: number, attributes: Record<string, string | number | boolean | null>, errorCode?: string) { await db.update(aiEvaluationSpans).set({ status, duration_ms: durationMs, completed_at: new Date(), attributes, error_code: errorCode ?? null }).where(eq(aiEvaluationSpans.id, spanId)); }

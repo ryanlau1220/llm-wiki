@@ -22,10 +22,12 @@ export type AiEvaluationCaseInput = {
   retrievedEvidence?: EvaluationEvidence[];
   /** True only when retrieved evidence was actually captured for this evaluation case. */
   retrievalEvaluated?: boolean;
+  citedEvidence?: EvaluationEvidence[];
 };
 
 export type DeterministicEvaluation = {
   citationSourceValidity: { passed: boolean; expectedCount: number; retrievedCount: number; invalidCount: number };
+  citationCoverage: { citedCount: number; selectedCount: number; validCount: number };
   retrieval: { recallAtK: number; reciprocalRank: number; ndcgAtK: number } | null;
   groundedAbstention: { expected: boolean; observed: boolean; passed: boolean } | null;
   toolPolicy: { expected: "required" | "forbidden" | null; observed: "used" | "not_used" | "unknown"; passed: boolean | null };
@@ -64,6 +66,9 @@ export function evaluateDeterministicCase(input: AiEvaluationCaseInput, k = DEFA
   const retrieved = input.retrievedEvidence ?? [];
   const expected = input.expectedEvidence;
   const invalidCount = retrieved.filter((item) => !isEvidence(item)).length;
+  const cited = input.citedEvidence ?? [];
+  const selectedKeys = new Set(retrieved.filter(isEvidence).map(evidenceKey));
+  const validCitationCount = cited.filter((item) => isEvidence(item) && selectedKeys.has(evidenceKey(item))).length;
   const retrievalEvaluated = input.retrievalEvaluated ?? input.retrievedEvidence !== undefined;
   const retrieval = retrievalEvaluated && expected.length > 0
     ? evaluateRetrieval([{ id: input.id, query: input.redactedInput, relevant: expected }], new Map([[input.id, retrieved.filter(isEvidence).map((item) => ({ documentPath: item.documentPath, chunkIndex: item.chunkIndex ?? 0 }))]]), k).cases[0]
@@ -76,7 +81,8 @@ export function evaluateDeterministicCase(input: AiEvaluationCaseInput, k = DEFA
       ? "forbidden" as const : null;
   const toolObserved = /\b(tool|web search)\b/i.test(input.candidateOutput ?? "") ? "used" as const : "unknown" as const;
   return {
-    citationSourceValidity: { passed: invalidCount === 0, expectedCount: expected.length, retrievedCount: retrieved.length, invalidCount },
+    citationSourceValidity: { passed: invalidCount === 0 && validCitationCount === cited.length, expectedCount: expected.length, retrievedCount: retrieved.length, invalidCount },
+    citationCoverage: { citedCount: cited.length, selectedCount: retrieved.length, validCount: validCitationCount },
     retrieval: retrieval ? { recallAtK: retrieval.recallAtK, reciprocalRank: retrieval.reciprocalRank, ndcgAtK: retrieval.ndcgAtK } : null,
     groundedAbstention: input.expectedOutcome ? { expected: expectedAbstention, observed: observedAbstention, passed: expectedAbstention === observedAbstention } : null,
     toolPolicy: { expected: toolExpected, observed: toolObserved, passed: toolExpected === null || toolObserved === "unknown" ? null : (toolExpected === "required") === (toolObserved === "used") },
@@ -115,6 +121,10 @@ function isEvidence(value: unknown): value is EvaluationEvidence {
   const evidence = value as EvaluationEvidence;
   return typeof evidence.documentPath === "string" && evidence.documentPath.trim().length > 0
     && (evidence.chunkIndex === undefined || (Number.isInteger(evidence.chunkIndex) && evidence.chunkIndex >= 0));
+}
+
+function evidenceKey(value: EvaluationEvidence): string {
+  return `${value.documentPath}:${value.chunkIndex ?? "document"}`;
 }
 
 export type RetrievalEvaluationTarget = {

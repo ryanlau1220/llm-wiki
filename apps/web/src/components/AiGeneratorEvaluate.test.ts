@@ -3,13 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { formatRetrievalRecall, reviewResponseToPrefill } from "./AiGeneratorEvaluate";
 
 describe("response review prefill", () => {
-  test("uses only the current response data and source paths", () => {
+  test("uses the current query and source paths without carrying the generated response", () => {
     expect(
-      reviewResponseToPrefill("What is RAG?", "A retrieval workflow", [{ path: "AI/RAG.md" }, {}]),
+      reviewResponseToPrefill("What is RAG?", [{ path: "AI/RAG.md" }, {}]),
     ).toEqual({
       name: "Review: What is RAG?",
       input: "What is RAG?",
-      output: "A retrieval workflow",
       evidencePaths: ["AI/RAG.md"],
     });
   });

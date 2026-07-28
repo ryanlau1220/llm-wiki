@@ -17,6 +17,16 @@ describe("AI generator evaluator contract", () => {
     expect(result.retrieval?.recallAtK).toBe(1);
   });
 
+  test("measures citation coverage against the evidence selected by execution", () => {
+    const result = evaluateDeterministicCase({
+      ...caseInput,
+      citedEvidence: [{ documentPath: "docs/system.md", chunkIndex: 0 }],
+    });
+
+    expect(result.citationCoverage).toEqual({ citedCount: 1, selectedCount: 1, validCount: 1 });
+    expect(result.citationSourceValidity.passed).toBe(true);
+  });
+
   test("does not report a zero recall when retrieval was not evaluated", () => {
     const result = evaluateDeterministicCase({
       ...caseInput,
