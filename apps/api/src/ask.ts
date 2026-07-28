@@ -27,6 +27,7 @@ import {
   createInvalidModelResponse,
   parseStructuredModelResponse,
 } from "./model-response";
+import { modelUsageAttributes } from "./trace-usage";
 
 const ASK_PROMPT_VERSION = "ask-v1";
 const ASK_TRACE_ERROR_CODE = {
@@ -208,6 +209,7 @@ export async function askPreview(
       logger.info("Performing web search via Tavily...");
       const toolStartedAt = Date.now();
       const toolSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.TOOL, parentSpanId: requestSpanId ?? undefined, attributes: { tool_name: "web_search", max_results: 5 } }) : null;
+      let webSearchFailed = false;
       try {
         const { createWebSearchProvider } = await import("@llm-wiki/ai");
         const searchProvider = createWebSearchProvider({
@@ -219,9 +221,10 @@ export async function askPreview(
           .join("\n\n");
       } catch (err) {
         logger.error("Tavily search failed, falling back to local weights...", err);
+        webSearchFailed = true;
         if (toolSpanId) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - toolStartedAt, errorCode: "web_search_failed" });
       }
-      if (toolSpanId) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - toolStartedAt, attributes: { enabled: true } });
+      if (toolSpanId && !webSearchFailed) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - toolStartedAt, attributes: { enabled: true } });
     } else if (config.embeddingProvider === "gemini" || config.embeddingProvider === "gemini-geap") {
       logger.info("Using native Gemini search grounding...");
       webSearchEnabled = true;
@@ -335,7 +338,7 @@ Provide your answer and suggested note in JSON format.
     throw error;
   }
   const duration = Date.now() - generationStartedAt;
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, response_format: "json" } });
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, response_format: "json", ...modelUsageAttributes(llmResponse.usage) } });
 
   const parsed = parseStructuredModelResponse(llmResponse.text, askModelResponseSchema);
   if (!parsed.success) {

@@ -161,7 +161,7 @@ export function formatAiTraceRun(row: typeof retrievalRuns.$inferSelect, evidenc
 export function normalizeAiTraceSpanAttributes(attributes: AiTraceSpanAttributes): AiTraceSpanAttributes {
   const entries = Object.entries(attributes);
   if (entries.length > MAX_SPAN_ATTRIBUTES) throw new Error(`AI trace spans allow at most ${MAX_SPAN_ATTRIBUTES} attributes`);
-  for (const [key, value] of entries) { if (!/^[a-z][a-z0-9_]*$/.test(key) || key.includes("query") || key.includes("prompt") || key.includes("context") || key.includes("output")) throw new Error("AI trace span attribute key is not allowed"); if (!(value === null || typeof value === "boolean" || typeof value === "number" || (typeof value === "string" && value.length <= MAX_ATTRIBUTE_VALUE_LENGTH))) throw new Error("AI trace span attribute value is not allowed"); }
+  for (const [key, value] of entries) { if (!/^[a-z][a-z0-9_]*$/.test(key) || key.includes("query") || (key.includes("prompt") && key !== "prompt_tokens") || key.includes("context") || key.includes("output")) throw new Error("AI trace span attribute key is not allowed"); if (!(value === null || typeof value === "boolean" || typeof value === "number" || (typeof value === "string" && value.length <= MAX_ATTRIBUTE_VALUE_LENGTH))) throw new Error("AI trace span attribute value is not allowed"); }
   return attributes;
 }
 function nonNegativeInteger(value: number, label: string): number { if (!Number.isInteger(value) || value < 0) throw new Error(`${label} must be a non-negative integer`); return value; }

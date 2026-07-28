@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
+import { createEmbeddingProvider, createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
 import {
   DEFAULT_CONTEXT_CHARACTER_BUDGET,
   AI_TRACE_OPERATION,
@@ -27,6 +27,7 @@ import {
   createInvalidModelResponse,
   parseStructuredModelResponse,
 } from "./model-response";
+import { modelUsageAttributes } from "./trace-usage";
 
 const DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT = 2_000;
 const SELECTED_NOTE_CHUNKS_PER_DOCUMENT = 2;
@@ -196,10 +197,10 @@ Synthesize a concise wiki note.
   logger.debug("Generating synthesis...");
   const modelStartedAt = Date.now();
   const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json" } }) : null;
-  let llmResponse: { text: string };
+  let llmResponse: LLMResponse;
   try { llmResponse = await llmProvider.generate({ prompt, systemInstruction, responseMimeType: "application/json", temperature: 0.2 }); }
   catch (error) { if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - modelStartedAt, errorCode: "generation_failed" }); await completeSynthesisTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: retrievalInfo.chunkCount, selectedEvidenceCount: retrievalInfo.chunkCount, contextCharacterCount: contextText.length, durationMs: Date.now() - traceStartedAt, errorCode: "generation_failed" }); throw error; }
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - modelStartedAt, attributes: { provider: config.embeddingProvider } });
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - modelStartedAt, attributes: { provider: config.embeddingProvider, ...modelUsageAttributes(llmResponse.usage) } });
 
   const parsed = parseStructuredModelResponse(llmResponse.text, synthesisModelResponseSchema);
   if (parsed.success) {

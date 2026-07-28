@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
 import { sql, inArray } from "drizzle-orm";
 
-import { createLLMProvider } from "@llm-wiki/ai";
+import { createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
 import { createDbClient, documents, links } from "@llm-wiki/db";
 import { AI_TRACE_OPERATION, AI_TRACE_POLICY, AI_TRACE_SPAN_TYPE, AI_TRACE_STATUS, completeAiTrace, completeAiTraceSpan, createLogger, startAiTrace, startAiTraceSpan } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
+import { modelUsageAttributes } from "./trace-usage";
 
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -145,11 +146,11 @@ Generate the definition note in the requested JSON format.
   logger.debug("Calling LLM to generate bootstrap definition...");
   const startTime = Date.now();
   const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json" } }) : null;
-  let llmResponse: { text: string };
+  let llmResponse: LLMResponse;
   try { llmResponse = await llmProvider.generate({ prompt, systemInstruction, responseMimeType: "application/json", temperature: 0.2 } as any); }
   catch (error) { if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - startTime, errorCode: "generation_failed" }); await completeBootstrapTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: referencingLinks.length, selectedEvidenceCount: snippets.length, contextCharacterCount: 0, durationMs: Date.now() - traceStartedAt, errorCode: "generation_failed" }); throw error; }
   const duration = Date.now() - startTime;
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider } });
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, ...modelUsageAttributes(llmResponse.usage) } });
 
   try {
     const parsed = JSON.parse(llmResponse.text);
