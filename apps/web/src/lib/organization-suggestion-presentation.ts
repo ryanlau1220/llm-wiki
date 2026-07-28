@@ -8,6 +8,11 @@ const ORGANIZATION_SUGGESTION_LABELS = {
 
 type OrganizationSuggestionKind = keyof typeof ORGANIZATION_SUGGESTION_LABELS;
 
+export type CandidateNoteReference = {
+  path: string;
+  title?: string | null;
+};
+
 export function formatOrganizationSuggestionKind(type: string): string {
   if (isOrganizationSuggestionKind(type)) return ORGANIZATION_SUGGESTION_LABELS[type];
   return "Organization review";
@@ -19,6 +24,15 @@ export function formatOrganizationPercentage(value: number): string {
 
 export function formatCandidateReferenceCount(count: number): string {
   return `${count} indexed note${count === 1 ? "" : "s"}`;
+}
+
+export function formatCandidateNoteReference(
+  candidate: CandidateNoteReference | undefined,
+  candidateId: string,
+): string {
+  if (!candidate) return `Unavailable note reference (${candidateId.slice(0, 8)}…)`;
+
+  return candidate.title?.trim() ? `${candidate.title} · ${candidate.path}` : candidate.path;
 }
 
 export function organizationSuggestionTone(priority: number): "high" | "medium" | "low" {

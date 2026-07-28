@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { computeAlignedDiff } from "../lib/diff";
 import {
+  formatCandidateNoteReference,
   formatCandidateReferenceCount,
   formatOrganizationPercentage,
   formatOrganizationSuggestionKind,
@@ -47,6 +48,11 @@ type OrganizationSuggestion = {
   candidateNoteIds: string[];
   requiresApproval: true;
   reversible: true;
+};
+
+type CandidateNoteReference = {
+  path: string;
+  title?: string | null;
 };
 
 function RefactorComponent() {
@@ -142,6 +148,10 @@ function RefactorComponent() {
         note.title?.toLowerCase().includes(searchTerm.toLowerCase()),
     ) || [];
 
+  const candidateNotesById = new Map<string, CandidateNoteReference>(
+    notes?.map((note) => [note.id, { path: note.path, title: note.title }]) ?? [],
+  );
+
   const alignedDiff = (() => {
     if (!previewData) return [];
     const diff = computeAlignedDiff(previewData.originalContent, previewData.note.content);
@@ -188,6 +198,7 @@ function RefactorComponent() {
             isError={auditSuggestionsQuery.isError}
             isFetching={auditSuggestionsQuery.isFetching}
             isLoading={auditSuggestionsQuery.isLoading}
+            candidateNotesById={candidateNotesById}
             onOpenRefactor={handleRefactor}
             onRefresh={() => auditSuggestionsQuery.refetch()}
             suggestions={auditSuggestionsQuery.data ?? []}
@@ -600,6 +611,7 @@ function RefactorComponent() {
 }
 
 function AuditQueue({
+  candidateNotesById,
   isError,
   isFetching,
   isLoading,
@@ -607,6 +619,7 @@ function AuditQueue({
   onRefresh,
   suggestions,
 }: {
+  candidateNotesById: Map<string, CandidateNoteReference>;
   isError: boolean;
   isFetching: boolean;
   isLoading: boolean;
@@ -668,6 +681,7 @@ function AuditQueue({
           {suggestions.map((suggestion) => (
             <AuditSuggestionCard
               key={suggestion.id}
+              candidateNotesById={candidateNotesById}
               suggestion={suggestion}
               onOpenRefactor={onOpenRefactor}
             />
@@ -679,9 +693,11 @@ function AuditQueue({
 }
 
 function AuditSuggestionCard({
+  candidateNotesById,
   onOpenRefactor,
   suggestion,
 }: {
+  candidateNotesById: Map<string, CandidateNoteReference>;
   onOpenRefactor: (path: string) => void;
   suggestion: OrganizationSuggestion;
 }) {
@@ -717,15 +733,28 @@ function AuditSuggestionCard({
                   {formatCandidateReferenceCount(suggestion.candidateNoteIds.length)}
                 </p>
                 <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Candidate note references">
-                  {suggestion.candidateNoteIds.map((candidateId) => (
-                    <li
-                      key={candidateId}
-                      title={candidateId}
-                      className="rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 py-1 font-mono text-[10px] text-[var(--sea-ink-soft)]"
-                    >
-                      {candidateId.slice(0, 8)}…
-                    </li>
-                  ))}
+                  {suggestion.candidateNoteIds.map((candidateId) => {
+                    const candidate = candidateNotesById.get(candidateId);
+                    const label = formatCandidateNoteReference(candidate, candidateId);
+
+                    return (
+                      <li key={candidateId} title={candidateId}>
+                        {candidate ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenRefactor(candidate.path)}
+                            className="rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 py-1 text-left text-[10px] text-[var(--sea-ink-soft)] hover:border-[var(--lagoon)] hover:text-[var(--lagoon-deep)]"
+                          >
+                            {label}
+                          </button>
+                        ) : (
+                          <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                            {label}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
