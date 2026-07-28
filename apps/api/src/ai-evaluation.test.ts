@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
+import { isPresent } from "./ai-evaluation";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
 import { configuredAiEvaluationModelName } from "./ai-evaluation-model";
+import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
 
 describe("AI evaluation API privacy boundary", () => {
   test("sends only owner-approved case fields to a confirmed judge", () => {
@@ -40,5 +41,12 @@ describe("AI evaluation API privacy boundary", () => {
     expect(configuredAiEvaluationModelName({ embeddingProvider: "openai", openaiLlmModel: "gpt-4.1-mini" })).toBe("gpt-4.1-mini");
     expect(configuredAiEvaluationModelName({ embeddingProvider: "ollama", ollamaLlmModel: "qwen3" })).toBe("qwen3");
     expect(configuredAiEvaluationModelName({ embeddingProvider: "fallback" })).toBeNull();
+  });
+
+  test("omits evaluation runs that no longer resolve from list responses", () => {
+    expect([{ id: "run-1" }, null, { id: "run-2" }].filter(isPresent)).toEqual([
+      { id: "run-1" },
+      { id: "run-2" },
+    ]);
   });
 });

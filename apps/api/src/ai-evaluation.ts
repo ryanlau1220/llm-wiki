@@ -90,7 +90,7 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
           const response = await provider.generate({ prompt: buildAiEvaluationJudgePrompt(evaluationCase), systemInstruction: "You are a bounded evaluation agent. Score only supplied redacted data. Return JSON with score (0 to 1) and a short rationale. Do not reveal chain-of-thought.", responseMimeType: "application/json", temperature: 0, maxOutputTokens: 512 });
           judge = parseJudgeEvaluation(response.text); usage = response.usage; judgeCalls += 1; totalTokens += response.usage?.totalTokens ?? 0;
           await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, usage ? { total_tokens: usage.totalTokens } : {});
-        } catch (error) {
+        } catch (_error) {
           status = STATUS.FAILED; errorCode = "judge_failed"; failedCases += 1;
           await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, "judge_failed");
         }
@@ -109,7 +109,8 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
 export async function listAiEvaluationRuns(config: AppConfig, datasetId?: string) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const runs = datasetId ? await db.select().from(aiEvaluationRuns).where(eq(aiEvaluationRuns.dataset_id, datasetId)).orderBy(desc(aiEvaluationRuns.started_at)) : await db.select().from(aiEvaluationRuns).orderBy(desc(aiEvaluationRuns.started_at));
-  return Promise.all(runs.map((run) => getAiEvaluationRunFromDb(db, run.id)));
+  const hydratedRuns = await Promise.all(runs.map((run) => getAiEvaluationRunFromDb(db, run.id)));
+  return hydratedRuns.filter(isPresent);
 }
 
 export async function getAiEvaluationRun(config: AppConfig, runId: string) {
@@ -140,6 +141,10 @@ async function getAiEvaluationRunFromDb(db: ReturnType<typeof createDbClient>["d
     results: results.map((result) => ({ id: result.id, caseId: result.evaluation_case_id, status: result.status as "succeeded" | "failed", deterministic: result.deterministic as Record<string, unknown>, judgeScore: result.judge_score, judgeRationale: result.judge_rationale, promptTokens: result.prompt_tokens, candidateTokens: result.candidate_tokens, totalTokens: result.total_tokens, errorCode: result.error_code, createdAt: result.created_at.toISOString() })),
     spans: spans.map((span) => ({ id: span.id, parentSpanId: span.parent_span_id, spanType: span.span_type, status: span.status as "started" | "succeeded" | "failed", attributes: span.attributes as Record<string, string | number | boolean | null>, errorCode: span.error_code, startedAt: span.started_at.toISOString(), completedAt: span.completed_at?.toISOString() ?? null, durationMs: span.duration_ms })),
   };
+}
+
+export function isPresent<T>(value: T | null): value is T {
+  return value !== null;
 }
 
 function formatDataset(dataset: typeof aiEvaluationDatasets.$inferSelect, caseCount: number) { return { id: dataset.id, name: dataset.name, description: dataset.description, version: dataset.version, approvedAt: dataset.approved_at.toISOString(), createdAt: dataset.created_at.toISOString(), caseCount }; }
