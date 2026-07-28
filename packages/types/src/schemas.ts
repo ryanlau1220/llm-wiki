@@ -167,7 +167,6 @@ export const createAiEvaluationDatasetSchema = z.object({
         expectedEvidence: z.array(evaluationEvidenceSchema).max(100).default([]),
         expectedOutcome: z.string().trim().max(20_000).optional(),
         referenceAnswer: z.string().trim().max(20_000).optional(),
-        candidateOutput: z.string().trim().max(40_000).optional(),
         retrievedEvidence: z.array(evaluationEvidenceSchema).max(100).default([]),
         /** Distinguishes an unavailable retrieval measurement from a measured empty result. */
         retrievalEvidenceEvaluated: z.boolean().default(false),
@@ -182,9 +181,12 @@ export const createAiEvaluationDatasetSchema = z.object({
 export const runAiEvaluationSchema = z
   .object({
     datasetId: z.string().uuid(),
+    /** Owner acknowledgement that approved cases will execute the configured Ask/RAG target. */
+    confirmTargetExecution: z.literal(true),
     judgeEnabled: z.boolean().default(false),
-    /** Required when a judge could call the configured model provider. */
+    /** Required when a local judge could receive generated vault-derived material. */
     confirmLlmJudge: z.boolean().default(false),
+    topK: z.number().int().min(1).max(20).default(8),
     maxCases: z.number().int().min(1).max(100).default(25),
     maxJudgeCalls: z.number().int().min(0).max(100).default(25),
     maxTotalTokens: z.number().int().min(1).max(100_000).default(20_000),
@@ -215,8 +217,9 @@ const aiEvaluationResultSchema = z.object({
   caseId: z.string().uuid(),
   status: z.enum(["succeeded", "failed"]),
   deterministic: z.record(z.string(), z.unknown()),
+  executionTraceId: z.string().uuid().nullable(),
   judgeScore: z.number().nullable(),
-  judgeRationale: z.string().nullable(),
+  judgeLabels: z.array(z.string()),
   promptTokens: z.number().int().nullable(),
   candidateTokens: z.number().int().nullable(),
   totalTokens: z.number().int().nullable(),
@@ -256,6 +259,7 @@ export const aiEvaluationRunSchema = z.object({
   maxCases: z.number().int(),
   maxJudgeCalls: z.number().int(),
   maxTotalTokens: z.number().int(),
+  workflowManifest: z.record(z.string(), z.unknown()),
   status: z.enum(["started", "succeeded", "failed"]),
   errorCode: z.string().nullable(),
   summary: z.record(z.string(), z.unknown()),
@@ -264,6 +268,10 @@ export const aiEvaluationRunSchema = z.object({
   durationMs: z.number().int().nullable(),
   results: z.array(aiEvaluationResultSchema).optional(),
   spans: z.array(aiEvaluationSpanSchema).optional(),
+});
+export const aiEvaluationCapabilitiesSchema = z.object({
+  localJudgeAvailable: z.boolean(),
+  localJudgeModel: z.string().nullable(),
 });
 export const aiEvaluationComparisonSchema = z.object({
   baseline: aiEvaluationRunSchema,

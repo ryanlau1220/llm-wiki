@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildAskSystemInstruction } from "./ask";
+import { ASK_EVALUATION_TARGET, ASK_PROMPT_VERSION, buildAskSystemInstruction, buildAskWorkflowManifest } from "./ask";
 
 describe("Ask Flow", () => {
   test("askPreview should handle valid query", async () => {
@@ -24,5 +24,21 @@ describe("Ask Flow", () => {
     expect(instruction).toContain('"citations": [1, 2]');
     expect(instruction).toContain("array of positive integer context numbers");
     expect(instruction).not.toContain('["Context number used to support the answer"]');
+  });
+
+  test("freezes the Ask/RAG target identity into an evaluation manifest", () => {
+    const manifest = buildAskWorkflowManifest(
+      { embeddingProvider: "ollama", ollamaLlmModel: "local-judge" } as any,
+      8,
+    );
+
+    expect(manifest).toMatchObject({
+      target: ASK_EVALUATION_TARGET,
+      targetVersion: ASK_PROMPT_VERSION,
+      policy: "vault_hybrid",
+      topK: 8,
+      modelProvider: "ollama",
+      modelName: "local-judge",
+    });
   });
 });

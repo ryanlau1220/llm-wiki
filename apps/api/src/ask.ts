@@ -6,6 +6,7 @@ import {
   completeAiTrace,
   completeAiTraceSpan,
   createLogger,
+  DEFAULT_CONTEXT_CHARACTER_BUDGET,
   hashRetrievalValue,
   hybridRetrieve,
   packRetrievalContext,
@@ -29,7 +30,8 @@ import {
 } from "./model-response";
 import { modelUsageAttributes } from "./trace-usage";
 
-const ASK_PROMPT_VERSION = "ask-v2";
+export const ASK_PROMPT_VERSION = "ask-v2";
+export const ASK_EVALUATION_TARGET = "ask_rag";
 const ASK_TRACE_ERROR_CODE = {
   INVALID_MODEL_RESPONSE: "invalid_model_response",
   RETRIEVAL_FAILED: "retrieval_failed",
@@ -391,6 +393,7 @@ JSON SCHEMA:
   },
   "citations": [1, 2]
 }
+
 `.trim();
   }
 
@@ -416,6 +419,19 @@ JSON SCHEMA:
   }
 }
 `.trim();
+}
+
+/** Immutable, structural description of the executable Ask/RAG target. */
+export function buildAskWorkflowManifest(config: AppConfig, topK: number) {
+  return {
+    target: ASK_EVALUATION_TARGET,
+    targetVersion: ASK_PROMPT_VERSION,
+    policy: "vault_hybrid",
+    topK,
+    contextCharacterBudget: DEFAULT_CONTEXT_CHARACTER_BUDGET,
+    modelProvider: config.embeddingProvider,
+    modelName: resolveLlmModelName(config) ?? null,
+  };
 }
 
 function filterCitations(citations: number[], allowedCitationIds: Set<number>): number[] {

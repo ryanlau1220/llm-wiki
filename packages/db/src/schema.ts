@@ -397,6 +397,8 @@ export const aiEvaluationRuns = pgTable(
     max_cases: integer("max_cases").notNull(),
     max_judge_calls: integer("max_judge_calls").notNull(),
     max_total_tokens: integer("max_total_tokens").notNull(),
+    /** Immutable description of the Ask/RAG target that was actually executed. */
+    workflow_manifest: jsonb("workflow_manifest").notNull().default({}),
     status: varchar("status", { length: 20 }).notNull(),
     error_code: varchar("error_code", { length: 80 }),
     summary: jsonb("summary").notNull().default({}),
@@ -418,7 +420,11 @@ export const aiEvaluationResults = pgTable(
     evaluation_case_id: uuid("evaluation_case_id").notNull().references(() => aiEvaluationCases.id, { onDelete: "restrict" }),
     status: varchar("status", { length: 20 }).notNull(),
     deterministic: jsonb("deterministic").notNull().default({}),
+    /** Links to structural trace data; generated output is never stored here. */
+    execution_trace_id: uuid("execution_trace_id").references(() => retrievalRuns.id, { onDelete: "set null" }),
     judge_score: doublePrecision("judge_score"),
+    /** Compact local-judge categories only; no free-form rationale or source content. */
+    judge_labels: jsonb("judge_labels").notNull().default([]),
     judge_rationale: varchar("judge_rationale", { length: 1_000 }),
     prompt_tokens: integer("prompt_tokens"),
     candidate_tokens: integer("candidate_tokens"),
@@ -429,6 +435,7 @@ export const aiEvaluationResults = pgTable(
   (table) => ({
     runIdx: index("ai_evaluation_results_run_id_idx").on(table.evaluation_run_id),
     caseIdx: index("ai_evaluation_results_case_id_idx").on(table.evaluation_case_id),
+    traceIdx: index("ai_evaluation_results_execution_trace_id_idx").on(table.execution_trace_id),
   }),
 );
 
