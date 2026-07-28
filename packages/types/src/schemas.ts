@@ -169,6 +169,8 @@ export const createAiEvaluationDatasetSchema = z.object({
         referenceAnswer: z.string().trim().max(20_000).optional(),
         candidateOutput: z.string().trim().max(40_000).optional(),
         retrievedEvidence: z.array(evaluationEvidenceSchema).max(100).default([]),
+        /** Distinguishes an unavailable retrieval measurement from a measured empty result. */
+        retrievalEvidenceEvaluated: z.boolean().default(false),
         /** Structural provenance only: the API does not read trace payload into this case. */
         sourceTraceId: z.string().uuid().optional(),
       }),

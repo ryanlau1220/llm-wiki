@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { reviewResponseToPrefill } from "./AiGeneratorEvaluate";
+import { formatRetrievalRecall, reviewResponseToPrefill } from "./AiGeneratorEvaluate";
 
 describe("response review prefill", () => {
   test("uses only the current response data and source paths", () => {
@@ -12,5 +12,12 @@ describe("response review prefill", () => {
       output: "A retrieval workflow",
       evidencePaths: ["AI/RAG.md"],
     });
+  });
+});
+
+describe("evaluation metric presentation", () => {
+  test("does not present an unmeasured retrieval score as zero", () => {
+    expect(formatRetrievalRecall(null)).toBe("not assessed");
+    expect(formatRetrievalRecall(0)).toBe("0.00");
   });
 });
