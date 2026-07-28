@@ -1,9 +1,11 @@
 import { asc, desc, eq } from "drizzle-orm";
-import { createLLMProvider, type LLMProvider } from "@llm-wiki/ai";
+import { createLLMProvider } from "@llm-wiki/ai";
 import {
   AI_EVALUATOR_CONTRACT_VERSION,
+  compareEvaluationRuns,
   evaluateDeterministicCase,
   parseJudgeEvaluation,
+  type DeterministicEvaluation,
   validateAiEvaluationCase,
   validateEvaluationBudget,
 } from "@llm-wiki/core";
@@ -17,6 +19,8 @@ import {
 } from "@llm-wiki/db";
 import type { AppConfig } from "./config";
 import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
+import { configuredAiEvaluationModelName } from "./ai-evaluation-model";
+import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
 
 const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } as const;
 
@@ -60,7 +64,7 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   const [run] = await db.insert(aiEvaluationRuns).values({
     dataset_id: dataset.id, dataset_version: dataset.version, evaluator_contract_version: AI_EVALUATOR_CONTRACT_VERSION,
     rubric_version: input.rubricVersion, judge_enabled: input.judgeEnabled,
-    model_provider: provider ? config.embeddingProvider : null, model_name: provider ? modelName(provider) : null,
+    model_provider: provider ? config.embeddingProvider : null, model_name: provider ? configuredAiEvaluationModelName(config) : null,
     max_cases: input.maxCases, max_judge_calls: input.maxJudgeCalls, max_total_tokens: input.maxTotalTokens, status: STATUS.STARTED,
   }).returning();
   const startedAt = Date.now();
@@ -113,6 +117,18 @@ export async function getAiEvaluationRun(config: AppConfig, runId: string) {
   return getAiEvaluationRunFromDb(db, runId);
 }
 
+export async function compareAiEvaluationRuns(config: AppConfig, input: { baselineRunId: string; candidateRunId: string }) {
+  if (input.baselineRunId === input.candidateRunId) throw new Error("Select two distinct evaluation runs");
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const [baseline, candidate] = await Promise.all([getAiEvaluationRunFromDb(db, input.baselineRunId), getAiEvaluationRunFromDb(db, input.candidateRunId)]);
+  if (!baseline || !candidate) throw new Error("Evaluation run not found");
+  const comparison = compareEvaluationRuns(
+    { id: baseline.id, results: baseline.results.map((result) => ({ status: result.status, deterministic: result.deterministic as unknown as DeterministicEvaluation, judgeScore: result.judgeScore })) },
+    { id: candidate.id, results: candidate.results.map((result) => ({ status: result.status, deterministic: result.deterministic as unknown as DeterministicEvaluation, judgeScore: result.judgeScore })) },
+  );
+  return buildAiEvaluationComparison(baseline, candidate, comparison);
+}
+
 async function getAiEvaluationRunFromDb(db: ReturnType<typeof createDbClient>["db"], runId: string) {
   const [run] = await db.select().from(aiEvaluationRuns).where(eq(aiEvaluationRuns.id, runId)).limit(1);
   if (!run) return null;
@@ -129,6 +145,5 @@ async function getAiEvaluationRunFromDb(db: ReturnType<typeof createDbClient>["d
 function formatDataset(dataset: typeof aiEvaluationDatasets.$inferSelect, caseCount: number) { return { id: dataset.id, name: dataset.name, description: dataset.description, version: dataset.version, approvedAt: dataset.approved_at.toISOString(), createdAt: dataset.created_at.toISOString(), caseCount }; }
 function requiredDatabaseUrl(config: AppConfig) { if (!config.databaseUrl) throw new Error("DATABASE_URL is required for AI evaluation"); return config.databaseUrl; }
 function buildProvider(config: AppConfig) { return createLLMProvider({ provider: config.embeddingProvider, geminiGeap: { projectId: config.gcpProjectId, location: config.gcpLocation, model: config.gcpLlmModel }, openai: { apiKey: config.openaiApiKey, baseUrl: config.openaiBaseUrl, model: config.openaiLlmModel }, ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaLlmModel } }); }
-function modelName(provider: LLMProvider) { return typeof (provider as { model?: unknown }).model === "string" ? (provider as { model: string }).model : null; }
 async function startSpan(db: ReturnType<typeof createDbClient>["db"], runId: string, spanType: string, attributes: Record<string, string | number | boolean | null>, parentSpanId?: string) { const [span] = await db.insert(aiEvaluationSpans).values({ evaluation_run_id: runId, parent_span_id: parentSpanId, span_type: spanType, status: STATUS.STARTED, attributes }).returning({ id: aiEvaluationSpans.id }); return span.id; }
 async function completeSpan(db: ReturnType<typeof createDbClient>["db"], spanId: string, status: "succeeded" | "failed", durationMs: number, attributes: Record<string, string | number | boolean | null>, errorCode?: string) { await db.update(aiEvaluationSpans).set({ status, duration_ms: durationMs, completed_at: new Date(), attributes, error_code: errorCode ?? null }).where(eq(aiEvaluationSpans.id, spanId)); }

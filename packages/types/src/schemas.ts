@@ -174,6 +174,7 @@ export const runAiEvaluationSchema = z.object({
 
 export const listAiEvaluationRunsSchema = z.object({ datasetId: z.string().uuid().optional() }).optional();
 export const getAiEvaluationRunSchema = z.object({ runId: z.string().uuid() });
+export const compareAiEvaluationRunsSchema = z.object({ baselineRunId: z.string().uuid(), candidateRunId: z.string().uuid() }).refine((value) => value.baselineRunId !== value.candidateRunId, "Select two distinct evaluation runs");
 
 const aiEvaluationResultSchema = z.object({
   id: z.string().uuid(), caseId: z.string().uuid(), status: z.enum(["succeeded", "failed"]),
@@ -187,6 +188,11 @@ const aiEvaluationSpanSchema = z.object({
 export const aiEvaluationDatasetSchema = z.object({ id: z.string().uuid(), name: z.string(), description: z.string().nullable(), version: z.number().int(), approvedAt: z.string().datetime(), createdAt: z.string().datetime(), caseCount: z.number().int() });
 export const aiEvaluationRunSchema = z.object({
   id: z.string().uuid(), datasetId: z.string().uuid(), datasetName: z.string(), datasetVersion: z.number().int(), evaluatorContractVersion: z.string(), rubricVersion: z.string(), judgeEnabled: z.boolean(), modelProvider: z.string().nullable(), modelName: z.string().nullable(), maxCases: z.number().int(), maxJudgeCalls: z.number().int(), maxTotalTokens: z.number().int(), status: z.enum(["started", "succeeded", "failed"]), errorCode: z.string().nullable(), summary: z.record(z.string(), z.unknown()), startedAt: z.string().datetime(), completedAt: z.string().datetime().nullable(), durationMs: z.number().int().nullable(), results: z.array(aiEvaluationResultSchema).optional(), spans: z.array(aiEvaluationSpanSchema).optional(),
+});
+export const aiEvaluationComparisonSchema = z.object({
+  baseline: aiEvaluationRunSchema,
+  candidate: aiEvaluationRunSchema,
+  comparison: z.object({ baselineRunId: z.string().uuid(), candidateRunId: z.string().uuid(), retrievalRecallDelta: z.number().nullable(), judgeScoreDelta: z.number().nullable(), failedCaseDelta: z.number().int() }),
 });
 
 const httpUrlSchema = z.string().url().max(4_000).refine(

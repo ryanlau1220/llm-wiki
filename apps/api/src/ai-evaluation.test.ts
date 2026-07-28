@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
+import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
+import { configuredAiEvaluationModelName } from "./ai-evaluation-model";
 
 describe("AI evaluation API privacy boundary", () => {
   test("sends only owner-approved case fields to a confirmed judge", () => {
@@ -22,5 +24,21 @@ describe("AI evaluation API privacy boundary", () => {
       candidateOutput: "Candidate answer",
       retrievedEvidence: [{ documentPath: "docs/approved.md", chunkIndex: 2 }],
     });
+  });
+
+  test("returns the selected baseline and candidate beside structured deltas", () => {
+    const response = buildAiEvaluationComparison(
+      { id: "baseline", status: "succeeded" }, { id: "candidate", status: "failed" },
+      { baselineRunId: "baseline", candidateRunId: "candidate", retrievalRecallDelta: 0.2, judgeScoreDelta: null, failedCaseDelta: 1 },
+    );
+    expect(response.candidate.status).toBe("failed");
+    expect(response.comparison.retrievalRecallDelta).toBe(0.2);
+    expect(() => buildAiEvaluationComparison({ id: "same" }, { id: "same" }, { baselineRunId: "same", candidateRunId: "same", retrievalRecallDelta: null, judgeScoreDelta: null, failedCaseDelta: 0 })).toThrow("distinct");
+  });
+
+  test("records the configured model rather than provider internals", () => {
+    expect(configuredAiEvaluationModelName({ embeddingProvider: "openai", openaiLlmModel: "gpt-4.1-mini" })).toBe("gpt-4.1-mini");
+    expect(configuredAiEvaluationModelName({ embeddingProvider: "ollama", ollamaLlmModel: "qwen3" })).toBe("qwen3");
+    expect(configuredAiEvaluationModelName({ embeddingProvider: "fallback" })).toBeNull();
   });
 });
