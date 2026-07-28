@@ -16,7 +16,7 @@ import {
   mergeResearchCapture,
   retryResearchCaptureIndex,
 } from "./research-captures";
-import { listRetrievalTracePage, pruneRetrievalTraceRuns } from "./retrieval-traces";
+import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
 import { listOrganizationSuggestions } from "./organization-suggestions";
 
 const config = loadConfig();
@@ -556,10 +556,10 @@ export const router = os.router({
   listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
     return listResearchCaptureActivities(config, input.id);
   }),
-  listRetrievalTraces: os.listRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
-    return listRetrievalTracePage(config, input);
+  listAiTraces: os.listAiTraces.use(authMiddleware).handler(async ({ input }) => {
+    return listAiTracePage(config, input);
   }),
-  pruneRetrievalTraces: os.pruneRetrievalTraces.use(authMiddleware).handler(async ({ input }) => {
-    return pruneRetrievalTraceRuns(config, input);
+  getAiTrace: os.getAiTrace.use(authMiddleware).handler(async ({ input }) => {
+    return getAiTraceDetail(config, input.traceId);
   }),
 });

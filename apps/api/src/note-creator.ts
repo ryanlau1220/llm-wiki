@@ -3,7 +3,7 @@ import { sql, inArray } from "drizzle-orm";
 
 import { createLLMProvider } from "@llm-wiki/ai";
 import { createDbClient, documents, links } from "@llm-wiki/db";
-import { createLogger } from "@llm-wiki/core";
+import { AI_TRACE_OPERATION, AI_TRACE_POLICY, AI_TRACE_SPAN_TYPE, AI_TRACE_STATUS, completeAiTrace, completeAiTraceSpan, createLogger, startAiTrace, startAiTraceSpan } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
 
@@ -35,6 +35,7 @@ export async function generateBootstrapPreview(
     links?: string[];
     tags?: string[];
   };
+  traceId: string | null;
 }> {
   const logger = createLogger("bootstrapper");
   logger.info("Generating bootstrap note preview", { title });
@@ -44,6 +45,13 @@ export async function generateBootstrapPreview(
   }
 
   const { db } = createDbClient(config.databaseUrl);
+  const traceStartedAt = Date.now();
+  let traceId: string | null = null;
+  let requestSpanId: string | null = null;
+  try {
+    traceId = await startAiTrace(db, { operation: AI_TRACE_OPERATION.BOOTSTRAP, query: title, policy: AI_TRACE_POLICY.NO_RETRIEVAL, policyReason: "unresolved_link_bootstrap", modelProvider: config.embeddingProvider, modelName: config.embeddingProvider === "openai" ? config.openaiLlmModel : config.gcpLlmModel, promptVersion: "bootstrap-v1" });
+    requestSpanId = await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.REQUEST, attributes: { input_length: title.length } });
+  } catch (error) { logger.error("Failed to start bootstrap trace", error); }
 
   // 1. Fetch referencing notes
   const referencingLinks = await db
@@ -136,25 +144,26 @@ Generate the definition note in the requested JSON format.
 
   logger.debug("Calling LLM to generate bootstrap definition...");
   const startTime = Date.now();
-  const llmResponse = await llmProvider.generate({
-    prompt,
-    systemInstruction,
-    responseMimeType: "application/json",
-    temperature: 0.2,
-  } as any);
+  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json" } }) : null;
+  let llmResponse: { text: string };
+  try { llmResponse = await llmProvider.generate({ prompt, systemInstruction, responseMimeType: "application/json", temperature: 0.2 } as any); }
+  catch (error) { if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - startTime, errorCode: "generation_failed" }); await completeBootstrapTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: referencingLinks.length, selectedEvidenceCount: snippets.length, contextCharacterCount: 0, durationMs: Date.now() - traceStartedAt, errorCode: "generation_failed" }); throw error; }
   const duration = Date.now() - startTime;
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider } });
 
   try {
     const parsed = JSON.parse(llmResponse.text);
-    const requestId = crypto.randomUUID();
+    const requestId = traceId ?? crypto.randomUUID();
 
     logger.info("Bootstrap preview generated successfully", {
       requestId,
       durationMs: duration,
     });
+    await completeBootstrapTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, candidateCount: referencingLinks.length, selectedEvidenceCount: snippets.length, contextCharacterCount: 0, durationMs: Date.now() - traceStartedAt });
 
     return {
       requestId,
+      traceId,
       note: {
         title: parsed.title || title,
         content: parsed.content || "",
@@ -164,6 +173,13 @@ Generate the definition note in the requested JSON format.
     };
   } catch (err: any) {
     logger.error("Failed to parse LLM JSON response for bootstrap preview", err);
+    await completeBootstrapTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: referencingLinks.length, selectedEvidenceCount: snippets.length, contextCharacterCount: 0, durationMs: Date.now() - traceStartedAt, errorCode: "invalid_model_response" });
     throw new Error(`LLM did not return valid note JSON: ${err.message}`);
   }
+}
+
+async function completeBootstrapTrace(db: ReturnType<typeof createDbClient>["db"], traceId: string | null, requestSpanId: string | null, input: Parameters<typeof completeAiTrace>[2]) {
+  if (!traceId) return;
+  await completeAiTrace(db, traceId, input);
+  if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: input.status, durationMs: input.durationMs, errorCode: input.errorCode, attributes: { source_count: input.selectedEvidenceCount } });
 }

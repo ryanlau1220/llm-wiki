@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
-  ListTree,
   LogOut,
   PlusCircle,
   RotateCcw,
@@ -53,7 +52,6 @@ export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onCl
     { label: "AI Generator", icon: Sparkles, to: "/generator" },
     { label: "Refactor Note", icon: RotateCcw, to: "/refactor" },
     { label: "Research Inbox", icon: Inbox, to: "/research" },
-    { label: "Retrieval Traces", icon: ListTree, to: "/retrieval" },
     { label: "Wiki Pages", icon: BookOpen, to: "/vault" },
     { label: "Settings", icon: Settings, to: "/settings" },
   ];
