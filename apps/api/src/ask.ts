@@ -132,7 +132,7 @@ export async function askPreview(
         durationMs: Date.now() - requestStartedAt,
         errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED,
       }, logger);
-      if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - requestStartedAt, attributes: { abstained: true, citation_count: 0 } });
+      if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - requestStartedAt, errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED });
       throw error;
     }
     if (retrievalSpanId) await completeAiTraceSpan(db, retrievalSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - retrievalStartedAt, attributes: { candidate_count: retrievalResults.chunks.length, link_count: retrievalResults.links.length } });
@@ -185,6 +185,7 @@ export async function askPreview(
         contextCharacterCount: contextPack.characterCount,
         durationMs: Date.now() - requestStartedAt,
       }, logger);
+      if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - requestStartedAt, attributes: { abstained: true, citation_count: 0 } });
       return {
         requestId,
         traceId,
@@ -330,6 +331,7 @@ Provide your answer and suggested note in JSON format.
       durationMs: Date.now() - requestStartedAt,
       errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED,
     }, logger);
+    if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - requestStartedAt, errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED });
     throw error;
   }
   const duration = Date.now() - generationStartedAt;

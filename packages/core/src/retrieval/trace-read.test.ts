@@ -10,7 +10,7 @@ import {
   encodeTraceCursor,
   formatAiTraceRun,
   normalizeListAiTracesInput,
-  startAiTraceSpan,
+  normalizeAiTraceSpanAttributes,
 } from "./trace";
 
 const TRACE_ID = "11111111-1111-4111-8111-111111111111";
@@ -36,10 +36,14 @@ describe("AI trace contract privacy boundaries", () => {
     expect(trace.evidence?.[0]).not.toHaveProperty("contentHash");
   });
 
-  test("rejects span fields that could persist private payloads", async () => {
-    const db = {} as any;
-    await expect(startAiTraceSpan(db, TRACE_ID, { spanType: "model", attributes: { provider: "local" } })).rejects.toThrow();
-    await expect(startAiTraceSpan(db, TRACE_ID, { spanType: "model", attributes: { prompt_text: "secret" } })).rejects.toThrow("not allowed");
-    await expect(startAiTraceSpan(db, TRACE_ID, { spanType: "context_packing", attributes: { packed_characters: 512 } })).rejects.toThrow();
+  test("rejects span payload fields and enforces the structural attribute budget", () => {
+    expect(normalizeAiTraceSpanAttributes({ provider: "local", attempts: 1 })).toEqual({ provider: "local", attempts: 1 });
+    expect(() => normalizeAiTraceSpanAttributes({ prompt_text: "secret" })).toThrow("not allowed");
+    expect(() => normalizeAiTraceSpanAttributes(Object.fromEntries(Array.from({ length: 17 }, (_, index) => [`field_${index}`, index])))).toThrow("at most 16");
+  });
+
+  test("preserves observable failure codes without retaining a generated response", () => {
+    const failedRun = { id: TRACE_ID, trace_version: 1, operation: AI_TRACE_OPERATION.ASK, query_hash: "hash", query_length: 7, policy: AI_TRACE_POLICY.VAULT_HYBRID, policy_reason: "explicit_vault_mode", status: AI_TRACE_STATUS.FAILED, candidate_count: 0, selected_evidence_count: 0, context_character_count: 0, model_provider: "test-provider", model_name: "test-model", prompt_version: "ask-v1", duration_ms: 42, error_code: "generation_failed", created_at: TRACE_DATE, completed_at: TRACE_DATE } as unknown as typeof retrievalRuns.$inferSelect;
+    expect(formatAiTraceRun(failedRun).errorCode).toBe("generation_failed");
   });
 });

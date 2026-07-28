@@ -103,7 +103,7 @@ export async function startAiTrace(db: DbClient, input: StartAiTraceInput): Prom
 }
 
 export async function startAiTraceSpan(db: DbClient, traceId: string, input: StartAiTraceSpanInput): Promise<string> {
-  const attributes = normalizeSpanAttributes(input.attributes ?? {});
+  const attributes = normalizeAiTraceSpanAttributes(input.attributes ?? {});
   const [spanCount] = await db.select({ value: count() }).from(aiTraceSpans).where(eq(aiTraceSpans.retrieval_run_id, traceId));
   if ((spanCount?.value ?? 0) >= MAX_SPANS_PER_TRACE) throw new Error(`AI traces allow at most ${MAX_SPANS_PER_TRACE} spans`);
   const [span] = await db.insert(aiTraceSpans).values({ retrieval_run_id: traceId, parent_span_id: input.parentSpanId ?? null, span_type: input.spanType, status: AI_TRACE_STATUS.STARTED, attributes }).returning({ id: aiTraceSpans.id });
@@ -112,7 +112,7 @@ export async function startAiTraceSpan(db: DbClient, traceId: string, input: Sta
 }
 
 export async function completeAiTraceSpan(db: DbClient, spanId: string, input: CompleteAiTraceSpanInput): Promise<void> {
-  await db.update(aiTraceSpans).set({ status: input.status, duration_ms: nonNegativeInteger(input.durationMs, "Span duration"), error_code: input.errorCode ?? null, attributes: normalizeSpanAttributes(input.attributes ?? {}), completed_at: new Date() }).where(eq(aiTraceSpans.id, spanId));
+  await db.update(aiTraceSpans).set({ status: input.status, duration_ms: nonNegativeInteger(input.durationMs, "Span duration"), error_code: input.errorCode ?? null, attributes: normalizeAiTraceSpanAttributes(input.attributes ?? {}), completed_at: new Date() }).where(eq(aiTraceSpans.id, spanId));
 }
 
 export async function recordAiTraceEvidence(db: DbClient, traceId: string, evidence: RecordAiTraceEvidenceInput[]): Promise<number> {
@@ -158,7 +158,7 @@ export function formatAiTraceRun(row: typeof retrievalRuns.$inferSelect, evidenc
   return { id: row.id, traceVersion: row.trace_version === 1 ? AI_TRACE_VERSION : `legacy-v${row.trace_version}`, operation: asOperation(row.operation), policy: asPolicy(row.policy), policyReason: row.policy_reason, status: asStatus(row.status), candidateCount: row.candidate_count, selectedEvidenceCount: row.selected_evidence_count, contextCharacterCount: row.context_character_count, modelProvider: row.model_provider, modelName: row.model_name, promptVersion: row.prompt_version, durationMs: row.duration_ms, errorCode: row.error_code, createdAt: row.created_at.toISOString(), completedAt: row.completed_at?.toISOString() ?? null, ...(evidence ? { evidence } : {}), ...(spans ? { spans } : {}) };
 }
 
-function normalizeSpanAttributes(attributes: AiTraceSpanAttributes): AiTraceSpanAttributes {
+export function normalizeAiTraceSpanAttributes(attributes: AiTraceSpanAttributes): AiTraceSpanAttributes {
   const entries = Object.entries(attributes);
   if (entries.length > MAX_SPAN_ATTRIBUTES) throw new Error(`AI trace spans allow at most ${MAX_SPAN_ATTRIBUTES} attributes`);
   for (const [key, value] of entries) { if (!/^[a-z][a-z0-9_]*$/.test(key) || key.includes("query") || key.includes("prompt") || key.includes("context") || key.includes("output")) throw new Error("AI trace span attribute key is not allowed"); if (!(value === null || typeof value === "boolean" || typeof value === "number" || (typeof value === "string" && value.length <= MAX_ATTRIBUTE_VALUE_LENGTH))) throw new Error("AI trace span attribute value is not allowed"); }
