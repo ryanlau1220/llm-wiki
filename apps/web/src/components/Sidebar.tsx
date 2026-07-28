@@ -17,6 +17,12 @@ import { orpc } from "../lib/orpc";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import ThemeToggle from "./ThemeToggle";
 
+export function shouldIgnoreSidebarShortcut(target: EventTarget | null) {
+  if (!target || typeof target !== "object") return false;
+  const element = target as HTMLElement;
+  return element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
+}
+
 export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onClose: () => void }) {
   const isMobile = useMediaQuery("(max-width: 1024px)");
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -46,6 +52,21 @@ export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onCl
       isMobile ? "0px" : isCollapsed ? "64px" : "224px",
     );
   }, [isCollapsed, isMobile]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isMobile || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
+      if (shouldIgnoreSidebarShortcut(event.target)) return;
+      event.preventDefault();
+      setIsCollapsed((previous) => {
+        const next = !previous;
+        localStorage.setItem("sidebar_collapsed", JSON.stringify(next));
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isMobile]);
 
   const navItems = [
     { label: "Dashboard", icon: Activity, to: "/" },
@@ -78,14 +99,16 @@ export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onCl
           )}
           <button
             type="button"
-            onClick={() => {
+            onClick={() =>
               setIsCollapsed((prev: boolean) => {
                 const next = !prev;
                 localStorage.setItem("sidebar_collapsed", JSON.stringify(next));
                 return next;
-              });
-            }}
+              })
+            }
             className="p-1 rounded hover:bg-[var(--line)] text-[var(--sea-ink-soft)]"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={`${isCollapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
           >
             {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
           </button>

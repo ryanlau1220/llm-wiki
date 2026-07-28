@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   FileText,
   ListChecks,
   Loader2,
@@ -13,8 +12,6 @@ import {
   RotateCcw,
   Save,
   Search,
-  ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -61,6 +58,7 @@ function RefactorComponent() {
   const [selectedPath, setSelectedPath] = useState<string | null>(path || null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [worklistFilter, setWorklistFilter] = useState<"all" | "review" | "notes">("all");
   const [saveStatus, setSaveStatus] = useState<{
     type: "success" | "error";
     message: string;
@@ -151,6 +149,15 @@ function RefactorComponent() {
   const candidateNotesById = new Map<string, CandidateNoteReference>(
     notes?.map((note) => [note.id, { path: note.path, title: note.title }]) ?? [],
   );
+  const matchingSuggestions = (auditSuggestionsQuery.data ?? []).filter((suggestion) => {
+    const query = searchTerm.trim().toLowerCase();
+    return (
+      !query ||
+      [suggestion.notePath, suggestion.reason, suggestion.actionLabel, suggestion.type].some(
+        (value) => value.toLowerCase().includes(query),
+      )
+    );
+  });
 
   const alignedDiff = (() => {
     if (!previewData) return [];
@@ -193,118 +200,153 @@ function RefactorComponent() {
       )}
 
       {!selectedPath ? (
-        <div className="space-y-6 rise-in">
-          <AuditQueue
-            isError={auditSuggestionsQuery.isError}
-            isFetching={auditSuggestionsQuery.isFetching}
-            isLoading={auditSuggestionsQuery.isLoading}
-            candidateNotesById={candidateNotesById}
-            onOpenRefactor={handleRefactor}
-            onRefresh={() => auditSuggestionsQuery.refetch()}
-            suggestions={auditSuggestionsQuery.data ?? []}
-          />
-
-          <section className="island-shell rounded-xl p-5 overflow-hidden">
-            <div className="relative mb-6">
-              <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
-              <input
-                type="text"
-                placeholder="Search notes to refactor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-lg py-2.5 pl-11 pr-4 text-sm text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
-              />
+        <div className="rise-in">
+          <section className="island-shell overflow-hidden rounded-xl">
+            <div className="border-b border-[var(--line)] p-5">
+              <div className="relative">
+                <Search className="absolute left-4 top-3 text-[var(--sea-ink-soft)]" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search notes to refactor..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-[var(--foam)] border border-[var(--line)] rounded-lg py-2.5 pl-11 pr-4 text-sm text-[var(--sea-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--lagoon)] shadow-inner"
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    ["all", "All work"],
+                    ["review", "Needs review"],
+                    ["notes", "Notes"],
+                  ] as const
+                ).map(([filter, label]) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setWorklistFilter(filter)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors ${worklistFilter === filter ? "border-lagoon bg-lagoon text-lagoon-text" : "border-line text-sea-ink hover:bg-foam"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {worklistFilter !== "notes" && (
+                  <button
+                    type="button"
+                    onClick={() => auditSuggestionsQuery.refetch()}
+                    disabled={auditSuggestionsQuery.isFetching}
+                    className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-lagoon-deep hover:underline disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={auditSuggestionsQuery.isFetching ? "animate-spin" : ""}
+                      size={14}
+                    />{" "}
+                    Refresh
+                  </button>
+                )}
+              </div>
             </div>
 
-            {isLoadingNotes || isLoadingWeakNotes ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
-              </div>
-            ) : (
-              <div className="max-h-[500px] overflow-y-auto pr-1 space-y-2">
-                {(() => {
-                  const weakNoteMap = new Map(weakNotes?.map((w) => [w.path, w.reasons]) || []);
-                  const sortedNotes = filteredNotes
-                    ? [...filteredNotes].sort((a, b) => {
-                        const aWeak = weakNoteMap.has(a.path);
-                        const bWeak = weakNoteMap.has(b.path);
-                        if (aWeak && !bWeak) return -1;
-                        if (!aWeak && bWeak) return 1;
-                        return 0;
-                      })
-                    : [];
+            {worklistFilter !== "notes" && (
+              <AuditSuggestionList
+                isError={auditSuggestionsQuery.isError}
+                isLoading={auditSuggestionsQuery.isLoading}
+                candidateNotesById={candidateNotesById}
+                onOpenRefactor={handleRefactor}
+                suggestions={matchingSuggestions}
+              />
+            )}
 
-                  if (sortedNotes.length === 0) {
-                    return (
-                      <div className="text-center py-12 text-sm text-[var(--sea-ink-soft)] italic">
-                        No notes found.
-                      </div>
-                    );
-                  }
+            {worklistFilter !== "review" &&
+              (isLoadingNotes || isLoadingWeakNotes ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
+                </div>
+              ) : (
+                <div className="max-h-[500px] overflow-y-auto p-2 space-y-2">
+                  {(() => {
+                    const weakNoteMap = new Map(weakNotes?.map((w) => [w.path, w.reasons]) || []);
+                    const sortedNotes = filteredNotes
+                      ? [...filteredNotes].sort((a, b) => {
+                          const aWeak = weakNoteMap.has(a.path);
+                          const bWeak = weakNoteMap.has(b.path);
+                          if (aWeak && !bWeak) return -1;
+                          if (!aWeak && bWeak) return 1;
+                          return 0;
+                        })
+                      : [];
 
-                  return sortedNotes.map((note) => {
-                    const reasons = weakNoteMap.get(note.path);
-                    const isWeak = !!reasons;
+                    if (sortedNotes.length === 0) {
+                      return (
+                        <div className="text-center py-12 text-sm text-[var(--sea-ink-soft)] italic">
+                          No notes found.
+                        </div>
+                      );
+                    }
 
-                    return (
-                      <button
-                        type="button"
-                        key={note.id}
-                        onClick={() => handleRefactor(note.path)}
-                        className="w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
-                      >
-                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                          <div className="p-2 bg-surface rounded-lg shadow-sm shrink-0 border border-line mt-0.5">
-                            <FileText size={16} className="text-[var(--sea-ink-soft)]" />
-                          </div>
+                    return sortedNotes.map((note) => {
+                      const reasons = weakNoteMap.get(note.path);
+                      const isWeak = !!reasons;
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2.5">
-                              <h4 className="font-bold text-sm text-[var(--sea-ink)] truncate">
-                                {note.title || note.path.split("/").pop()?.replace(".md", "")}
-                              </h4>
-                              {note.qualityScore !== null && note.qualityScore !== undefined && (
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                                    isWeak
-                                      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/30"
-                                      : "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-450 dark:border-green-900/30"
-                                  }`}
-                                >
-                                  Score: {note.qualityScore.toFixed(2)}
-                                </span>
+                      return (
+                        <button
+                          type="button"
+                          key={note.id}
+                          onClick={() => handleRefactor(note.path)}
+                          className="w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
+                        >
+                          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                            <div className="p-2 bg-surface rounded-lg shadow-sm shrink-0 border border-line mt-0.5">
+                              <FileText size={16} className="text-[var(--sea-ink-soft)]" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2.5">
+                                <h4 className="font-bold text-sm text-[var(--sea-ink)] truncate">
+                                  {note.title || note.path.split("/").pop()?.replace(".md", "")}
+                                </h4>
+                                {note.qualityScore !== null && note.qualityScore !== undefined && (
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                                      isWeak
+                                        ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/30"
+                                        : "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-450 dark:border-green-900/30"
+                                    }`}
+                                  >
+                                    Score: {note.qualityScore.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] text-[var(--sea-ink-soft)] font-mono truncate mt-0.5 mb-1">
+                                {note.path}
+                              </div>
+
+                              {isWeak && reasons && reasons.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                  {reasons.map((r: string) => (
+                                    <span
+                                      key={r}
+                                      className="text-[9px] uppercase tracking-wider font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-450 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30"
+                                    >
+                                      {r.replace(/_/g, " ")}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
-
-                            <div className="text-[11px] text-[var(--sea-ink-soft)] font-mono truncate mt-0.5 mb-1">
-                              {note.path}
-                            </div>
-
-                            {isWeak && reasons && reasons.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-1">
-                                {reasons.map((r: string) => (
-                                  <span
-                                    key={r}
-                                    className="text-[9px] uppercase tracking-wider font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-450 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30"
-                                  >
-                                    {r.replace(/_/g, " ")}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
-                        </div>
 
-                        <ChevronRight
-                          size={18}
-                          className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-4"
-                        />
-                      </button>
-                    );
-                  });
-                })()}
-              </div>
-            )}
+                          <ChevronRight
+                            size={18}
+                            className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-4"
+                          />
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              ))}
           </section>
         </div>
       ) : (
@@ -610,71 +652,23 @@ function RefactorComponent() {
   );
 }
 
-function AuditQueue({
+function AuditSuggestionList({
   candidateNotesById,
   isError,
-  isFetching,
   isLoading,
   onOpenRefactor,
-  onRefresh,
   suggestions,
 }: {
   candidateNotesById: Map<string, CandidateNoteReference>;
   isError: boolean;
-  isFetching: boolean;
   isLoading: boolean;
   onOpenRefactor: (path: string) => void;
-  onRefresh: () => void;
   suggestions: OrganizationSuggestion[];
 }) {
   return (
-    <section
-      className="island-shell overflow-hidden rounded-xl"
-      aria-labelledby="audit-queue-heading"
-    >
-      <div className="flex flex-col gap-4 border-b border-[var(--line)] p-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-[rgba(79,184,178,0.16)] p-2.5 text-[var(--lagoon-deep)]">
-            <ClipboardCheck size={20} />
-          </div>
-          <div>
-            <div className="island-kicker mb-1">Vault audit</div>
-            <h2 id="audit-queue-heading" className="font-extrabold text-[var(--sea-ink)]">
-              Prioritized, deterministic review queue
-            </h2>
-            <p className="mt-1 max-w-2xl text-xs text-[var(--sea-ink-soft)]">
-              Signals are calculated from indexed metadata and sorted by priority, then confidence.
-              Opening a note starts a refactor preview; nothing in the vault changes until you save.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!isLoading && !isError && (
-            <span className="rounded-md bg-[var(--foam)] px-2 py-1 text-[11px] font-bold text-[var(--sea-ink-soft)]">
-              {suggestions.length} {suggestions.length === 1 ? "signal" : "signals"}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isFetching}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-3 py-2 text-xs font-bold text-[var(--sea-ink)] hover:bg-[var(--foam)] disabled:opacity-60"
-          >
-            <RefreshCw className={isFetching ? "animate-spin" : ""} size={15} /> Refresh signals
-          </button>
-        </div>
-      </div>
-
-      <div className="border-b border-[var(--line)] bg-[var(--foam)]/40 px-5 py-3 text-xs text-[var(--sea-ink-soft)]">
-        <span className="inline-flex items-center gap-1.5 font-bold text-[var(--sea-ink)]">
-          <ShieldCheck size={15} className="text-[var(--lagoon-deep)]" /> Read-only audit
-        </span>{" "}
-        · Evidence and candidate references are shown for review; merging, linking, or editing
-        always requires explicit approval.
-      </div>
-
+    <div className="border-b border-[var(--line)]">
       {isLoading && <AuditQueueLoading />}
-      {isError && <AuditQueueUnavailable onRetry={onRefresh} />}
+      {isError && <AuditQueueUnavailable />}
       {!isLoading && !isError && suggestions.length === 0 && <AuditQueueEmpty />}
       {!isLoading && !isError && suggestions.length > 0 && (
         <ol className="divide-y divide-[var(--line)]">
@@ -688,7 +682,7 @@ function AuditQueue({
           ))}
         </ol>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -814,7 +808,7 @@ function AuditQueueLoading() {
   );
 }
 
-function AuditQueueUnavailable({ onRetry }: { onRetry: () => void }) {
+function AuditQueueUnavailable() {
   return (
     <div className="p-10 text-center">
       <AlertTriangle className="mx-auto mb-3 text-red-600" size={26} />
@@ -823,26 +817,14 @@ function AuditQueueUnavailable({ onRetry }: { onRetry: () => void }) {
         Confirm the local API and indexed vault are available, then try again. Your vault remains
         unchanged.
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 inline-flex items-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2 text-sm font-bold text-[var(--sea-ink)] hover:bg-[var(--foam)]"
-      >
-        <RefreshCw size={15} /> Retry
-      </button>
     </div>
   );
 }
 
 function AuditQueueEmpty() {
   return (
-    <div className="p-12 text-center">
-      <Sparkles className="mx-auto mb-3 text-[var(--lagoon-deep)]" size={28} />
-      <h3 className="font-extrabold text-[var(--sea-ink)]">No audit signals right now</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-[var(--sea-ink-soft)]">
-        This does not mean the vault is perfect. The current indexed metadata did not cross a review
-        threshold.
-      </p>
+    <div className="px-5 py-4 text-sm text-[var(--sea-ink-soft)]">
+      No notes need review with the current filters.
     </div>
   );
 }
