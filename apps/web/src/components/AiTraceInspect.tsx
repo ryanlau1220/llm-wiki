@@ -14,9 +14,15 @@ import { orpc } from "../lib/orpc";
 
 type Props = { traceId?: string; onBack: () => void };
 
-export function pageButtons(visitedPageCount: number, hasNextPage: boolean) {
-  const visited = Array.from({ length: visitedPageCount }, (_, index) => index + 1);
-  return hasNextPage ? [...visited, "ellipsis" as const, "next" as const] : visited;
+export function pageButtons(totalPages: number, currentPage: number): Array<number | "ellipsis"> {
+  const pages = new Set([1, 2, currentPage - 1, currentPage, currentPage + 1, totalPages]);
+  const ordered = [...pages]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+  return ordered.flatMap((page, index) => {
+    const previous = ordered[index - 1];
+    return previous !== undefined && page - previous > 1 ? ["ellipsis" as const, page] : [page];
+  });
 }
 
 export function AiTraceInspect({ traceId, onBack }: Props) {
@@ -33,6 +39,7 @@ export function AiTraceInspect({ traceId, onBack }: Props) {
     orpc.listAiTraces.queryOptions({ input: { limit: 20, cursor, includeEvidence: false } } as any),
   );
   const detail = detailQuery.data;
+  const totalPages = Math.max(1, Math.ceil((listQuery.data?.totalCount ?? 0) / 20));
 
   if (traceId)
     return (
@@ -63,7 +70,7 @@ export function AiTraceInspect({ traceId, onBack }: Props) {
   const nextPage = () => {
     const nextCursor = listQuery.data?.nextCursor;
     if (!nextCursor) return;
-    setCursors((known) => (known[targetPageIndex(page)] ? known : [...known, nextCursor]));
+    setCursors((known) => (known[page] ? known : [...known, nextCursor]));
     setPage((current) => current + 1);
   };
 
@@ -161,42 +168,39 @@ export function AiTraceInspect({ traceId, onBack }: Props) {
           >
             <ChevronLeft size={15} />
           </button>
-          {pageButtons(cursors.length, Boolean(listQuery.data?.nextCursor)).map((item) =>
+          {pageButtons(totalPages, page).map((item) =>
             item === "ellipsis" ? (
               <span key="ellipsis" className="px-1 text-sea-ink-soft" aria-hidden="true">
                 …
               </span>
-            ) : item === "next" ? (
-              <button
-                key="next"
-                type="button"
-                disabled={listQuery.isFetching}
-                onClick={nextPage}
-                className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink disabled:opacity-50"
-                aria-label="Next page"
-              >
-                <ChevronRight size={15} />
-              </button>
             ) : (
               <button
                 key={item}
                 type="button"
+                disabled={item > cursors.length || listQuery.isFetching}
                 onClick={() => navigateToPage(item)}
-                className={`min-w-10 rounded-lg border px-3 py-2 text-sm font-bold ${item === page ? "border-lagoon bg-lagoon text-lagoon-text" : "border-line text-sea-ink hover:bg-foam"}`}
+                title={item > cursors.length ? "Visit earlier pages to reach this page" : undefined}
+                className={`min-w-10 rounded-lg border px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-45 ${item === page ? "border-lagoon bg-lagoon text-lagoon-text" : "border-line text-sea-ink hover:bg-foam"}`}
               >
                 {item}
               </button>
             ),
           )}
+          <button
+            type="button"
+            disabled={!listQuery.data?.nextCursor || listQuery.isFetching}
+            onClick={nextPage}
+            className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink disabled:opacity-50"
+            aria-label="Next page"
+          >
+            <ChevronRight size={15} />
+          </button>
         </nav>
       ) : null}
     </section>
   );
 }
 
-function targetPageIndex(page: number) {
-  return page;
-}
 function TraceDetail({ trace }: { trace: any }) {
   const noVaultEvidence = trace.policy === "general_web";
   return (

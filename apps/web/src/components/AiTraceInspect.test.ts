@@ -18,8 +18,9 @@ describe("AI trace span tree", () => {
 });
 
 describe("trace cursor pagination", () => {
-  test("shows only visited pages and an unknown-next affordance", () => {
-    expect(pageButtons(2, true)).toEqual([1, 2, "ellipsis", "next"]);
-    expect(pageButtons(3, false)).toEqual([1, 2, 3]);
+  test("shows actual final page numbers with compact ellipses", () => {
+    expect(pageButtons(12, 1)).toEqual([1, 2, "ellipsis", 12]);
+    expect(pageButtons(12, 6)).toEqual([1, 2, "ellipsis", 5, 6, 7, "ellipsis", 12]);
+    expect(pageButtons(3, 2)).toEqual([1, 2, 3]);
   });
 });

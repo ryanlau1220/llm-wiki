@@ -19,8 +19,17 @@ import ThemeToggle from "./ThemeToggle";
 
 export function shouldIgnoreSidebarShortcut(target: EventTarget | null) {
   if (!target || typeof target !== "object") return false;
-  const element = target as HTMLElement;
-  return element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
+  let element = target as Pick<
+    HTMLElement,
+    "tagName" | "isContentEditable" | "parentElement"
+  > | null;
+  while (element) {
+    if (element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)) {
+      return true;
+    }
+    element = element.parentElement;
+  }
+  return false;
 }
 
 export function Sidebar({ isMobileOpen, onClose }: { isMobileOpen: boolean; onClose: () => void }) {

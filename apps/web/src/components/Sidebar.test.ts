@@ -14,6 +14,13 @@ describe("sidebar keyboard shortcut guard", () => {
         isContentEditable: true,
       } as unknown as EventTarget),
     ).toBe(true);
+    expect(
+      shouldIgnoreSidebarShortcut({
+        tagName: "SPAN",
+        isContentEditable: false,
+        parentElement: { tagName: "DIV", isContentEditable: true, parentElement: null },
+      } as unknown as EventTarget),
+    ).toBe(true);
   });
 
   test("allows the shortcut from non-editable UI", () => {
