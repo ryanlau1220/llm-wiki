@@ -17,7 +17,11 @@ export function formatOrganizationPercentage(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function organizationSuggestionTone(priority: number): string {
+export function formatCandidateReferenceCount(count: number): string {
+  return `${count} indexed note${count === 1 ? "" : "s"}`;
+}
+
+export function organizationSuggestionTone(priority: number): "high" | "medium" | "low" {
   if (priority >= 0.8) return "high";
   if (priority >= 0.6) return "medium";
   return "low";

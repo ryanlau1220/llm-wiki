@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatCandidateReferenceCount,
   formatOrganizationPercentage,
   formatOrganizationSuggestionKind,
   organizationSuggestionTone,
@@ -17,6 +18,11 @@ describe("organization suggestion presentation helpers", () => {
     expect(formatOrganizationPercentage(0)).toBe("0%");
     expect(formatOrganizationPercentage(0.725)).toBe("73%");
     expect(formatOrganizationPercentage(1)).toBe("100%");
+  });
+
+  it("labels candidate references with the correct count", () => {
+    expect(formatCandidateReferenceCount(1)).toBe("1 indexed note");
+    expect(formatCandidateReferenceCount(2)).toBe("2 indexed notes");
   });
 
   it("assigns restrained priority tones at the review boundaries", () => {
