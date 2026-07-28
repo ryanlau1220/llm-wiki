@@ -2,27 +2,19 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   FileText,
   ListChecks,
   Loader2,
-  RefreshCw,
   RotateCcw,
   Save,
   Search,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { computeAlignedDiff } from "../lib/diff";
-import {
-  formatCandidateNoteReference,
-  formatCandidateReferenceCount,
-  formatOrganizationPercentage,
-  formatOrganizationSuggestionKind,
-  organizationSuggestionTone,
-} from "../lib/organization-suggestion-presentation";
+import { formatOrganizationPercentage } from "../lib/organization-suggestion-presentation";
 import { orpc } from "../lib/orpc";
 
 export const Route = createFileRoute("/refactor")({
@@ -35,21 +27,9 @@ export const Route = createFileRoute("/refactor")({
 const ORGANIZATION_SUGGESTION_LIMIT = 50;
 
 type OrganizationSuggestion = {
-  id: string;
-  type: string;
   notePath: string;
   priority: number;
   confidence: number;
-  reason: string;
-  actionLabel: string;
-  candidateNoteIds: string[];
-  requiresApproval: true;
-  reversible: true;
-};
-
-type CandidateNoteReference = {
-  path: string;
-  title?: string | null;
 };
 
 function RefactorComponent() {
@@ -58,7 +38,7 @@ function RefactorComponent() {
   const [selectedPath, setSelectedPath] = useState<string | null>(path || null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [worklistFilter, setWorklistFilter] = useState<"all" | "review" | "notes">("all");
+  const [worklistFilter, setWorklistFilter] = useState<"all" | "review">("all");
   const [saveStatus, setSaveStatus] = useState<{
     type: "success" | "error";
     message: string;
@@ -139,25 +119,55 @@ function RefactorComponent() {
     navigate({ to: "/refactor", search: { path: targetPath } });
   };
 
-  const filteredNotes =
-    notes?.filter(
-      (note) =>
-        note.path.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        note.title?.toLowerCase().includes(searchTerm.toLowerCase()),
-    ) || [];
-
-  const candidateNotesById = new Map<string, CandidateNoteReference>(
-    notes?.map((note) => [note.id, { path: note.path, title: note.title }]) ?? [],
+  const weakNoteReasonsByPath = useMemo(
+    () => new Map(weakNotes?.map((note) => [note.path, note.reasons]) ?? []),
+    [weakNotes],
   );
-  const matchingSuggestions = (auditSuggestionsQuery.data ?? []).filter((suggestion) => {
+
+  const suggestionByNotePath = useMemo(() => {
+    const suggestions = new Map<string, OrganizationSuggestion>();
+
+    for (const suggestion of auditSuggestionsQuery.data ?? []) {
+      const current = suggestions.get(suggestion.notePath);
+      if (
+        !current ||
+        suggestion.priority > current.priority ||
+        (suggestion.priority === current.priority && suggestion.confidence > current.confidence)
+      ) {
+        suggestions.set(suggestion.notePath, suggestion);
+      }
+    }
+
+    return suggestions;
+  }, [auditSuggestionsQuery.data]);
+
+  const visibleNotes = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    return (
-      !query ||
-      [suggestion.notePath, suggestion.reason, suggestion.actionLabel, suggestion.type].some(
-        (value) => value.toLowerCase().includes(query),
+
+    const matchingNotes = (notes ?? [])
+      .filter(
+        (note) =>
+          !query ||
+          note.path.toLowerCase().includes(query) ||
+          note.title?.toLowerCase().includes(query),
       )
-    );
-  });
+      .filter(
+        (note) =>
+          worklistFilter === "all" ||
+          weakNoteReasonsByPath.has(note.path) ||
+          suggestionByNotePath.has(note.path),
+      );
+
+    return matchingNotes.sort((left, right) => {
+      const leftNeedsAttention =
+        weakNoteReasonsByPath.has(left.path) || suggestionByNotePath.has(left.path);
+      const rightNeedsAttention =
+        weakNoteReasonsByPath.has(right.path) || suggestionByNotePath.has(right.path);
+
+      if (leftNeedsAttention !== rightNeedsAttention) return leftNeedsAttention ? -1 : 1;
+      return left.path.localeCompare(right.path);
+    });
+  }, [notes, searchTerm, suggestionByNotePath, weakNoteReasonsByPath, worklistFilter]);
 
   const alignedDiff = (() => {
     if (!previewData) return [];
@@ -216,9 +226,8 @@ function RefactorComponent() {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {(
                   [
-                    ["all", "All work"],
-                    ["review", "Needs review"],
-                    ["notes", "Notes"],
+                    ["all", "All notes"],
+                    ["review", "Needs attention"],
                   ] as const
                 ).map(([filter, label]) => (
                   <button
@@ -230,123 +239,106 @@ function RefactorComponent() {
                     {label}
                   </button>
                 ))}
-                {worklistFilter !== "notes" && (
-                  <button
-                    type="button"
-                    onClick={() => auditSuggestionsQuery.refetch()}
-                    disabled={auditSuggestionsQuery.isFetching}
-                    className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-lagoon-deep hover:underline disabled:opacity-50"
-                  >
-                    <RefreshCw
-                      className={auditSuggestionsQuery.isFetching ? "animate-spin" : ""}
-                      size={14}
-                    />{" "}
-                    Refresh
-                  </button>
-                )}
               </div>
             </div>
 
-            {worklistFilter !== "notes" && (
-              <AuditSuggestionList
-                isError={auditSuggestionsQuery.isError}
-                isLoading={auditSuggestionsQuery.isLoading}
-                candidateNotesById={candidateNotesById}
-                onOpenRefactor={handleRefactor}
-                suggestions={matchingSuggestions}
-              />
-            )}
+            {isLoadingNotes || isLoadingWeakNotes ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
+              </div>
+            ) : (
+              <div className="max-h-[500px] space-y-2 overflow-y-auto p-2">
+                {visibleNotes.length === 0 ? (
+                  <div className="py-12 text-center text-sm italic text-[var(--sea-ink-soft)]">
+                    No notes found.
+                  </div>
+                ) : (
+                  visibleNotes.map((note) => {
+                    const reasons = weakNoteReasonsByPath.get(note.path);
+                    const suggestion = suggestionByNotePath.get(note.path);
+                    const needsAttention = Boolean(reasons?.length || suggestion);
 
-            {worklistFilter !== "review" &&
-              (isLoadingNotes || isLoadingWeakNotes ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="animate-spin text-[var(--lagoon-deep)]" size={28} />
-                </div>
-              ) : (
-                <div className="max-h-[500px] overflow-y-auto p-2 space-y-2">
-                  {(() => {
-                    const weakNoteMap = new Map(weakNotes?.map((w) => [w.path, w.reasons]) || []);
-                    const sortedNotes = filteredNotes
-                      ? [...filteredNotes].sort((a, b) => {
-                          const aWeak = weakNoteMap.has(a.path);
-                          const bWeak = weakNoteMap.has(b.path);
-                          if (aWeak && !bWeak) return -1;
-                          if (!aWeak && bWeak) return 1;
-                          return 0;
-                        })
-                      : [];
-
-                    if (sortedNotes.length === 0) {
-                      return (
-                        <div className="text-center py-12 text-sm text-[var(--sea-ink-soft)] italic">
-                          No notes found.
-                        </div>
-                      );
-                    }
-
-                    return sortedNotes.map((note) => {
-                      const reasons = weakNoteMap.get(note.path);
-                      const isWeak = !!reasons;
-
-                      return (
-                        <button
-                          type="button"
-                          key={note.id}
-                          onClick={() => handleRefactor(note.path)}
-                          className="w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-[var(--foam)] border border-transparent hover:border-[var(--line)] transition-all group text-left cursor-pointer"
-                        >
-                          <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                            <div className="p-2 bg-surface rounded-lg shadow-sm shrink-0 border border-line mt-0.5">
-                              <FileText size={16} className="text-[var(--sea-ink-soft)]" />
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2.5">
-                                <h4 className="font-bold text-sm text-[var(--sea-ink)] truncate">
-                                  {note.title || note.path.split("/").pop()?.replace(".md", "")}
-                                </h4>
-                                {note.qualityScore !== null && note.qualityScore !== undefined && (
-                                  <span
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
-                                      isWeak
-                                        ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/20 dark:text-amber-450 dark:border-amber-900/30"
-                                        : "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-450 dark:border-green-900/30"
-                                    }`}
-                                  >
-                                    Score: {note.qualityScore.toFixed(2)}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="text-[11px] text-[var(--sea-ink-soft)] font-mono truncate mt-0.5 mb-1">
-                                {note.path}
-                              </div>
-
-                              {isWeak && reasons && reasons.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-1">
-                                  {reasons.map((r: string) => (
-                                    <span
-                                      key={r}
-                                      className="text-[9px] uppercase tracking-wider font-bold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-450 px-2 py-0.5 rounded border border-amber-100 dark:border-amber-900/30"
-                                    >
-                                      {r.replace(/_/g, " ")}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                    return (
+                      <button
+                        type="button"
+                        key={note.id}
+                        onClick={() => handleRefactor(note.path)}
+                        className="group flex w-full items-center justify-between rounded-xl border border-transparent p-3.5 text-left transition-all hover:border-[var(--line)] hover:bg-[var(--foam)]"
+                      >
+                        <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                          <div className="mt-0.5 shrink-0 rounded-lg border border-line bg-surface p-2 shadow-sm">
+                            <FileText size={16} className="text-[var(--sea-ink-soft)]" />
                           </div>
 
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2.5">
+                              <h4 className="truncate text-sm font-bold text-[var(--sea-ink)]">
+                                {note.title || note.path.split("/").pop()?.replace(".md", "")}
+                              </h4>
+                              {note.qualityScore !== null && note.qualityScore !== undefined && (
+                                <span
+                                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                                    needsAttention
+                                      ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-450"
+                                      : "border-green-200 bg-green-50 text-green-700 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-450"
+                                  }`}
+                                >
+                                  Score: {note.qualityScore.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mb-1 mt-0.5 truncate font-mono text-[11px] text-[var(--sea-ink-soft)]">
+                              {note.path}
+                            </div>
+
+                            {reasons && reasons.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1.5">
+                                {reasons.map((reason: string) => (
+                                  <span
+                                    key={reason}
+                                    className="rounded border border-amber-100 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-450"
+                                  >
+                                    {reason.replace(/_/g, " ")}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="ml-4 flex shrink-0 items-center gap-3">
+                          {suggestion && (
+                            <dl className="grid grid-cols-2 gap-x-3 text-right">
+                              <div>
+                                <dt className="text-[9px] font-bold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+                                  Priority
+                                </dt>
+                                <dd className="text-xs font-extrabold text-amber-700 dark:text-amber-300">
+                                  {formatOrganizationPercentage(suggestion.priority)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[9px] font-bold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+                                  Confidence
+                                </dt>
+                                <dd className="text-xs font-extrabold text-[var(--sea-ink)]">
+                                  {formatOrganizationPercentage(suggestion.confidence)}
+                                </dd>
+                              </div>
+                            </dl>
+                          )}
                           <ChevronRight
                             size={18}
-                            className="text-[var(--line)] group-hover:text-[var(--lagoon-deep)] transition-colors shrink-0 ml-4"
+                            className="shrink-0 text-[var(--line)] transition-colors group-hover:text-[var(--lagoon-deep)]"
                           />
-                        </button>
-                      );
-                    });
-                  })()}
-                </div>
-              ))}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </section>
         </div>
       ) : (
@@ -650,199 +642,4 @@ function RefactorComponent() {
       )}
     </div>
   );
-}
-
-function AuditSuggestionList({
-  candidateNotesById,
-  isError,
-  isLoading,
-  onOpenRefactor,
-  suggestions,
-}: {
-  candidateNotesById: Map<string, CandidateNoteReference>;
-  isError: boolean;
-  isLoading: boolean;
-  onOpenRefactor: (path: string) => void;
-  suggestions: OrganizationSuggestion[];
-}) {
-  return (
-    <div className="border-b border-[var(--line)]">
-      {isLoading && <AuditQueueLoading />}
-      {isError && <AuditQueueUnavailable />}
-      {!isLoading && !isError && suggestions.length === 0 && <AuditQueueEmpty />}
-      {!isLoading && !isError && suggestions.length > 0 && (
-        <ol className="divide-y divide-[var(--line)]">
-          {suggestions.map((suggestion) => (
-            <AuditSuggestionCard
-              key={suggestion.id}
-              candidateNotesById={candidateNotesById}
-              suggestion={suggestion}
-              onOpenRefactor={onOpenRefactor}
-            />
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
-
-function AuditSuggestionCard({
-  candidateNotesById,
-  onOpenRefactor,
-  suggestion,
-}: {
-  candidateNotesById: Map<string, CandidateNoteReference>;
-  onOpenRefactor: (path: string) => void;
-  suggestion: OrganizationSuggestion;
-}) {
-  const tone = organizationSuggestionTone(suggestion.priority);
-
-  return (
-    <li className="p-4 lg:p-5">
-      <article className="rounded-xl border border-transparent p-1 transition-colors hover:border-[rgba(50,143,151,0.3)] hover:bg-[var(--foam)]/50">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={suggestionTypeClass(tone)}>
-                {formatOrganizationSuggestionKind(suggestion.type)}
-              </span>
-              {suggestion.requiresApproval && (
-                <span className="rounded-md bg-amber-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                  Approval required
-                </span>
-              )}
-              {suggestion.reversible && (
-                <span className="rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  Reversible
-                </span>
-              )}
-            </div>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--sea-ink)]">
-              {suggestion.reason}
-            </p>
-            {suggestion.candidateNoteIds.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs font-bold text-[var(--sea-ink-soft)]">
-                  Candidate references ·{" "}
-                  {formatCandidateReferenceCount(suggestion.candidateNoteIds.length)}
-                </p>
-                <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Candidate note references">
-                  {suggestion.candidateNoteIds.map((candidateId) => {
-                    const candidate = candidateNotesById.get(candidateId);
-                    const label = formatCandidateNoteReference(candidate, candidateId);
-
-                    return (
-                      <li key={candidateId} title={candidateId}>
-                        {candidate ? (
-                          <button
-                            type="button"
-                            onClick={() => onOpenRefactor(candidate.path)}
-                            className="rounded-md border border-[var(--line)] bg-[var(--surface-strong)] px-2 py-1 text-left text-[10px] text-[var(--sea-ink-soft)] hover:border-[var(--lagoon)] hover:text-[var(--lagoon-deep)]"
-                          >
-                            {label}
-                          </button>
-                        ) : (
-                          <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
-                            {label}
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-            <p className="mt-3 text-xs font-bold text-[var(--sea-ink-soft)]">
-              Next review: <span className="text-[var(--sea-ink)]">{suggestion.actionLabel}</span>
-            </p>
-            <button
-              type="button"
-              onClick={() => onOpenRefactor(suggestion.notePath)}
-              className="mt-3 inline-flex max-w-full items-center gap-1.5 text-sm font-bold text-[var(--lagoon-deep)] hover:underline"
-            >
-              <RotateCcw size={15} className="shrink-0" />
-              <span className="truncate">Open {suggestion.notePath} in Refactor Note</span>
-            </button>
-          </div>
-          <dl className="grid shrink-0 grid-cols-2 gap-2 text-center lg:min-w-[190px]">
-            <AuditMetric
-              label="Priority"
-              value={formatOrganizationPercentage(suggestion.priority)}
-              tone={tone}
-            />
-            <AuditMetric
-              label="Confidence"
-              value={formatOrganizationPercentage(suggestion.confidence)}
-              tone="neutral"
-            />
-          </dl>
-        </div>
-      </article>
-    </li>
-  );
-}
-
-function AuditMetric({
-  label,
-  tone,
-  value,
-}: {
-  label: string;
-  tone: "high" | "medium" | "low" | "neutral";
-  value: string;
-}) {
-  return (
-    <div className={metricClass(tone)}>
-      <dt className="text-[10px] font-bold uppercase tracking-wider">{label}</dt>
-      <dd className="mt-0.5 text-sm font-extrabold">{value}</dd>
-    </div>
-  );
-}
-
-function AuditQueueLoading() {
-  return (
-    <div className="p-12 text-center text-sm text-[var(--sea-ink-soft)]">
-      <Loader2 className="mx-auto mb-3 animate-spin" size={22} />
-      Loading deterministic audit signals…
-    </div>
-  );
-}
-
-function AuditQueueUnavailable() {
-  return (
-    <div className="p-10 text-center">
-      <AlertTriangle className="mx-auto mb-3 text-red-600" size={26} />
-      <h3 className="font-extrabold text-[var(--sea-ink)]">Audit signals are unavailable</h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-[var(--sea-ink-soft)]">
-        Confirm the local API and indexed vault are available, then try again. Your vault remains
-        unchanged.
-      </p>
-    </div>
-  );
-}
-
-function AuditQueueEmpty() {
-  return (
-    <div className="px-5 py-4 text-sm text-[var(--sea-ink-soft)]">
-      No notes need review with the current filters.
-    </div>
-  );
-}
-
-function suggestionTypeClass(tone: "high" | "medium" | "low"): string {
-  if (tone === "high")
-    return "rounded-md bg-red-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-800 dark:bg-red-950/40 dark:text-red-300";
-  if (tone === "medium")
-    return "rounded-md bg-amber-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
-  return "rounded-md bg-sky-100 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-sky-800 dark:bg-sky-950/40 dark:text-sky-300";
-}
-
-function metricClass(tone: "high" | "medium" | "low" | "neutral"): string {
-  if (tone === "high")
-    return "rounded-lg bg-red-50 px-2 py-2 text-red-800 dark:bg-red-950/30 dark:text-red-200";
-  if (tone === "medium")
-    return "rounded-lg bg-amber-50 px-2 py-2 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200";
-  if (tone === "low")
-    return "rounded-lg bg-sky-50 px-2 py-2 text-sky-800 dark:bg-sky-950/30 dark:text-sky-200";
-  return "rounded-lg bg-[var(--foam)] px-2 py-2 text-[var(--sea-ink)]";
 }
