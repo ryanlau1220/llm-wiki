@@ -1,17 +1,18 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { tmpdir } from "node:os";
+import path from "node:path";
 
 import type { LLMProvider } from "@llm-wiki/ai";
-
-import { refactorNotePreview } from "./refactor";
 import type { AppConfig } from "./config";
+import { refactorNotePreview } from "./refactor";
 
 const temporaryVaults: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryVaults.splice(0).map((vaultPath) => rm(vaultPath, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryVaults.splice(0).map((vaultPath) => rm(vaultPath, { recursive: true, force: true })),
+  );
 });
 
 function createConfig(vaultPath: string): AppConfig {
@@ -30,7 +31,10 @@ function createConfig(vaultPath: string): AppConfig {
 test("refactor preview uses an injected provider and preserves the source path", async () => {
   const vaultPath = await mkdtemp(path.join(tmpdir(), "llm-wiki-refactor-"));
   temporaryVaults.push(vaultPath);
-  await writeFile(path.join(vaultPath, "messy.md"), "# Rough note\n\nA short idea about retrieval.");
+  await writeFile(
+    path.join(vaultPath, "messy.md"),
+    "# Rough note\n\nA short idea about retrieval.",
+  );
 
   const llmProvider: LLMProvider = {
     generate: async () => ({
