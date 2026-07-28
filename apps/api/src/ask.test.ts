@@ -1,4 +1,6 @@
-import { test, describe, } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { buildAskSystemInstruction } from "./ask";
 
 describe("Ask Flow", () => {
   test("askPreview should handle valid query", async () => {
@@ -14,5 +16,13 @@ describe("Ask Flow", () => {
 
     // We need to mock the providers that askPreview creates internally
     // This is a sign that askPreview should accept providers as dependencies for better testability
+  });
+
+  test("requires numeric context numbers for RAG citations", () => {
+    const instruction = buildAskSystemInstruction("rag");
+
+    expect(instruction).toContain('"citations": [1, 2]');
+    expect(instruction).toContain("array of positive integer context numbers");
+    expect(instruction).not.toContain('["Context number used to support the answer"]');
   });
 });

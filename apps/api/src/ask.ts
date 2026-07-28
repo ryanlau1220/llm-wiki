@@ -29,7 +29,7 @@ import {
 } from "./model-response";
 import { modelUsageAttributes } from "./trace-usage";
 
-const ASK_PROMPT_VERSION = "ask-v1";
+const ASK_PROMPT_VERSION = "ask-v2";
 const ASK_TRACE_ERROR_CODE = {
   INVALID_MODEL_RESPONSE: "invalid_model_response",
   RETRIEVAL_FAILED: "retrieval_failed",
@@ -247,53 +247,7 @@ export async function askPreview(
     }
   });
 
-  const systemInstruction = mode === "rag" 
-    ? `
-You are an expert knowledge assistant for "LLM Wiki".
-Your goal is to answer the user's question based on their personal Obsidian vault notes provided as context.
-
-RULES:
-1. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
-2. Provide a helpful, concise "answer".
-3. Provide a "suggested_note" that captures the core knowledge from this interaction.
-4. The "suggested_note" should be structured with a "title", "content" (markdown), and optional "links" (concepts list without brackets) and "tags".
-5. ALWAYS output valid JSON matching the schema below.
-6. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
-
-JSON SCHEMA:
-{
-  "answer": "string",
- "suggested_note": {
-    "title": "string",
-    "content": "string (markdown)",
-    "links": ["string"],
-    "tags": ["string"]
-  },
-  "citations": ["Context number used to support the answer"]
-}
-`.trim()
-    : `
-You are an expert knowledge assistant for "LLM Wiki".
-Your goal is to answer the user's question using general knowledge (and any provided web search context).
-
-RULES:
-1. Provide a helpful, comprehensive yet concise "answer" incorporating relevant facts.
-2. Provide a "suggested_note" that summarizes the core knowledge, concepts, or guidelines discussed so the user can save it as a structured wiki page.
-3. The "suggested_note" should be structured with a "title", "content" (markdown, without frontmatter), and optional "links" (concepts list without brackets) and "tags".
-4. ALWAYS output valid JSON matching the schema below.
-5. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
-
-JSON SCHEMA:
-{
-  "answer": "string",
-  "suggested_note": {
-    "title": "string",
-    "content": "string (markdown)",
-    "links": ["string"],
-    "tags": ["string"]
-  }
-}
-`.trim();
+  const systemInstruction = buildAskSystemInstruction(mode);
 
   const prompt = mode === "rag"
     ? `
@@ -409,6 +363,59 @@ Provide your answer and suggested note in JSON format.
       abstained: false,
     }
   };
+}
+
+export function buildAskSystemInstruction(mode: "rag" | "general"): string {
+  if (mode === "rag") {
+    return `
+You are an expert knowledge assistant for "LLM Wiki".
+Your goal is to answer the user's question based on their personal Obsidian vault notes provided as context.
+
+RULES:
+1. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
+2. Provide a helpful, concise "answer".
+3. Provide a "suggested_note" that captures the core knowledge from this interaction.
+4. The "suggested_note" should be structured with a "title", "content" (markdown), and optional "links" (concepts list without brackets) and "tags".
+5. ALWAYS output valid JSON matching the schema below.
+6. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
+7. "citations" MUST be an array of positive integer context numbers. Do not quote the numbers; use [] when no context supports the answer.
+
+JSON SCHEMA:
+{
+  "answer": "string",
+  "suggested_note": {
+    "title": "string",
+    "content": "string (markdown)",
+    "links": ["string"],
+    "tags": ["string"]
+  },
+  "citations": [1, 2]
+}
+`.trim();
+  }
+
+  return `
+You are an expert knowledge assistant for "LLM Wiki".
+Your goal is to answer the user's question using general knowledge (and any provided web search context).
+
+RULES:
+1. Provide a helpful, comprehensive yet concise "answer" incorporating relevant facts.
+2. Provide a "suggested_note" that summarizes the core knowledge, concepts, or guidelines discussed so the user can save it as a structured wiki page.
+3. The "suggested_note" should be structured with a "title", "content" (markdown, without frontmatter), and optional "links" (concepts list without brackets) and "tags".
+4. ALWAYS output valid JSON matching the schema below.
+5. CRITICAL WIKILINK FORMAT: Always format internal links to other concepts as Obsidian-style wikilinks [[Concept Name]] (e.g., [[Machine Learning]]) directly inside the markdown content text.
+
+JSON SCHEMA:
+{
+  "answer": "string",
+  "suggested_note": {
+    "title": "string",
+    "content": "string (markdown)",
+    "links": ["string"],
+    "tags": ["string"]
+  }
+}
+`.trim();
 }
 
 function filterCitations(citations: number[], allowedCitationIds: Set<number>): number[] {
