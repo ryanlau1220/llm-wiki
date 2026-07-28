@@ -15,6 +15,13 @@
       "when": 1785254400000,
       "tag": "0001_ai_trace_spans",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785258000000,
+      "tag": "0002_ai_evaluation",
+      "breakpoints": true
     }
   ]
 }
