@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { evaluateDeterministicCase, parseJudgeEvaluation, validateAiEvaluationCase, validateEvaluationBudget } from "./evaluation";
+import { compareEvaluationRuns, evaluateDeterministicCase, parseJudgeEvaluation, validateAiEvaluationCase, validateEvaluationBudget } from "./evaluation";
 
 const caseInput = {
   id: "approved-redacted-case",
@@ -30,5 +30,16 @@ describe("AI generator evaluator contract", () => {
   test("enforces bounded judge and token budgets", () => {
     expect(() => validateEvaluationBudget({ caseCount: 2, judgeEnabled: true, maxCases: 2, maxJudgeCalls: 1, maxTotalTokens: 100 })).toThrow("judge-call budget");
     expect(() => validateEvaluationBudget({ caseCount: 1, judgeEnabled: false, maxCases: 1, maxJudgeCalls: 0, maxTotalTokens: 100_001 })).toThrow("token budget");
+  });
+
+  test("compares versioned structured results without accessing case payloads", () => {
+    const baseline = evaluateDeterministicCase({ ...caseInput, retrievedEvidence: [] });
+    const candidate = evaluateDeterministicCase(caseInput);
+    const comparison = compareEvaluationRuns(
+      { id: "baseline", results: [{ status: "succeeded", deterministic: baseline, judgeScore: 0.4 }] },
+      { id: "candidate", results: [{ status: "succeeded", deterministic: candidate, judgeScore: 0.8 }] },
+    );
+    expect(comparison.retrievalRecallDelta).toBe(1);
+    expect(comparison.judgeScoreDelta).toBeCloseTo(0.4);
   });
 });

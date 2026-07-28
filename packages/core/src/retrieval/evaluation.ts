@@ -31,6 +31,32 @@ export type DeterministicEvaluation = {
 
 export type JudgeEvaluation = { score: number; rationale: string };
 
+export type EvaluationRunComparison = {
+  baselineRunId: string;
+  candidateRunId: string;
+  retrievalRecallDelta: number | null;
+  judgeScoreDelta: number | null;
+  failedCaseDelta: number;
+};
+
+/** Compare versioned, structured results without inspecting any case payload. */
+export function compareEvaluationRuns(
+  baseline: { id: string; results: Array<{ status: "succeeded" | "failed"; deterministic: DeterministicEvaluation; judgeScore?: number | null }> },
+  candidate: { id: string; results: Array<{ status: "succeeded" | "failed"; deterministic: DeterministicEvaluation; judgeScore?: number | null }> },
+): EvaluationRunComparison {
+  const candidateRecall = averageOptional(candidate.results.map((result) => result.deterministic.retrieval?.recallAtK));
+  const baselineRecall = averageOptional(baseline.results.map((result) => result.deterministic.retrieval?.recallAtK));
+  const candidateJudge = averageOptional(candidate.results.map((result) => result.judgeScore));
+  const baselineJudge = averageOptional(baseline.results.map((result) => result.judgeScore));
+  return {
+    baselineRunId: baseline.id,
+    candidateRunId: candidate.id,
+    retrievalRecallDelta: candidateRecall === null || baselineRecall === null ? null : candidateRecall - baselineRecall,
+    judgeScoreDelta: candidateJudge === null || baselineJudge === null ? null : candidateJudge - baselineJudge,
+    failedCaseDelta: candidate.results.filter((result) => result.status === "failed").length - baseline.results.filter((result) => result.status === "failed").length,
+  };
+}
+
 export function evaluateDeterministicCase(input: AiEvaluationCaseInput, k = DEFAULT_EVALUATION_K): DeterministicEvaluation {
   validateAiEvaluationCase(input);
   const retrieved = input.retrievedEvidence ?? [];
@@ -240,4 +266,9 @@ function discountedCumulativeGain(relevances: number[]): number {
 
 function average(values: number[]): number {
   return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function averageOptional(values: Array<number | null | undefined>): number | null {
+  const present = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return present.length ? average(present) : null;
 }
