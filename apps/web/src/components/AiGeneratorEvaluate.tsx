@@ -104,6 +104,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
           expectedOutcome: expectedOutcome || undefined,
           candidateOutput: candidateOutput || undefined,
           retrievedEvidence: [],
+          retrievalEvidenceEvaluated: false,
         },
       ],
     });
@@ -359,7 +360,7 @@ function RunHistory({
                 {run.results?.map((result: any) => (
                   <p key={result.id} className="mt-1 text-xs text-sea-ink-soft">
                     Case {result.caseId.slice(0, 8)}: retrieval recall{" "}
-                    {result.deterministic?.retrieval?.recallAtK ?? "n/a"} · judge{" "}
+                    {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)} · judge{" "}
                     {result.judgeScore ?? "n/a"}
                     {result.judgeRationale ? ` — ${result.judgeRationale}` : ""}
                   </p>
@@ -401,4 +402,8 @@ function RunCard({ title, run }: { title: string; run: any }) {
 }
 function formatDelta(value: number | null) {
   return value === null ? "n/a" : `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+export function formatRetrievalRecall(value: number | null | undefined) {
+  return typeof value === "number" ? value.toFixed(2) : "not assessed";
 }

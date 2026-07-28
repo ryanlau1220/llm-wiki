@@ -20,6 +20,8 @@ export type AiEvaluationCaseInput = {
   referenceAnswer?: string | null;
   candidateOutput?: string | null;
   retrievedEvidence?: EvaluationEvidence[];
+  /** True only when retrieved evidence was actually captured for this evaluation case. */
+  retrievalEvaluated?: boolean;
 };
 
 export type DeterministicEvaluation = {
@@ -62,7 +64,8 @@ export function evaluateDeterministicCase(input: AiEvaluationCaseInput, k = DEFA
   const retrieved = input.retrievedEvidence ?? [];
   const expected = input.expectedEvidence;
   const invalidCount = retrieved.filter((item) => !isEvidence(item)).length;
-  const retrieval = expected.length > 0
+  const retrievalEvaluated = input.retrievalEvaluated ?? input.retrievedEvidence !== undefined;
+  const retrieval = retrievalEvaluated && expected.length > 0
     ? evaluateRetrieval([{ id: input.id, query: input.redactedInput, relevant: expected }], new Map([[input.id, retrieved.filter(isEvidence).map((item) => ({ documentPath: item.documentPath, chunkIndex: item.chunkIndex ?? 0 }))]]), k).cases[0]
     : null;
   const expectedAbstention = /\b(abstain|unknown|insufficient|cannot answer|not enough)\b/i.test(input.expectedOutcome ?? "");

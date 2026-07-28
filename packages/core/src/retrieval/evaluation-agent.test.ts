@@ -17,6 +17,16 @@ describe("AI generator evaluator contract", () => {
     expect(result.retrieval?.recallAtK).toBe(1);
   });
 
+  test("does not report a zero recall when retrieval was not evaluated", () => {
+    const result = evaluateDeterministicCase({
+      ...caseInput,
+      retrievedEvidence: [],
+      retrievalEvaluated: false,
+    });
+
+    expect(result.retrieval).toBeNull();
+  });
+
   test("requires an explicit redacted input", () => {
     expect(() => validateAiEvaluationCase({ ...caseInput, redactedInput: " " })).toThrow("user-approved redacted");
   });

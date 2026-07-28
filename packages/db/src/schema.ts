@@ -371,6 +371,7 @@ export const aiEvaluationCases = pgTable(
     reference_answer: text("reference_answer"),
     candidate_output: text("candidate_output"),
     retrieved_evidence: jsonb("retrieved_evidence").notNull().default([]),
+    retrieval_evidence_evaluated: boolean("retrieval_evidence_evaluated").notNull().default(false),
     source_trace_id: uuid("source_trace_id").references(() => retrievalRuns.id, { onDelete: "set null" }),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

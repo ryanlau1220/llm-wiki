@@ -26,7 +26,7 @@ const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } 
 
 type CreateDataset = {
   name: string; description?: string; approved: true;
-  cases: Array<{ label: string; redactedInput: string; expectedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; expectedOutcome?: string; referenceAnswer?: string; candidateOutput?: string; retrievedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; sourceTraceId?: string }>;
+  cases: Array<{ label: string; redactedInput: string; expectedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; expectedOutcome?: string; referenceAnswer?: string; candidateOutput?: string; retrievedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; retrievalEvidenceEvaluated: boolean; sourceTraceId?: string }>;
 };
 
 export async function createAiEvaluationDataset(config: AppConfig, input: CreateDataset) {
@@ -38,7 +38,9 @@ export async function createAiEvaluationDataset(config: AppConfig, input: Create
     dataset_id: dataset.id, label: item.label, redacted_input: item.redactedInput,
     expected_evidence: item.expectedEvidence, expected_outcome: item.expectedOutcome,
     reference_answer: item.referenceAnswer, candidate_output: item.candidateOutput,
-    retrieved_evidence: item.retrievedEvidence, source_trace_id: item.sourceTraceId,
+    retrieved_evidence: item.retrievedEvidence,
+    retrieval_evidence_evaluated: item.retrievalEvidenceEvaluated,
+    source_trace_id: item.sourceTraceId,
   })));
   return formatDataset(dataset, input.cases.length);
 }
@@ -75,7 +77,7 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   for (const evaluationCase of cases) {
     const caseStartedAt = Date.now();
     const caseSpanId = await startSpan(db, run.id, "case", { case_number: judgeCalls + 1 }, rootSpanId);
-    const deterministic = evaluateDeterministicCase({ id: evaluationCase.id, redactedInput: evaluationCase.redacted_input, expectedEvidence: evaluationCase.expected_evidence as Array<{ documentPath: string; chunkIndex?: number }>, expectedOutcome: evaluationCase.expected_outcome, referenceAnswer: evaluationCase.reference_answer, candidateOutput: evaluationCase.candidate_output, retrievedEvidence: evaluationCase.retrieved_evidence as Array<{ documentPath: string; chunkIndex?: number }> });
+    const deterministic = evaluateDeterministicCase({ id: evaluationCase.id, redactedInput: evaluationCase.redacted_input, expectedEvidence: evaluationCase.expected_evidence as Array<{ documentPath: string; chunkIndex?: number }>, expectedOutcome: evaluationCase.expected_outcome, referenceAnswer: evaluationCase.reference_answer, candidateOutput: evaluationCase.candidate_output, retrievedEvidence: evaluationCase.retrieved_evidence as Array<{ documentPath: string; chunkIndex?: number }>, retrievalEvaluated: evaluationCase.retrieval_evidence_evaluated });
     let status: "succeeded" | "failed" = STATUS.SUCCEEDED;
     let judge: { score: number; rationale: string } | null = null;
     let usage: { promptTokens: number; candidatesTokens: number; totalTokens: number } | undefined;
