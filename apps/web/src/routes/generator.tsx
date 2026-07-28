@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 import { AiTraceInspect } from '../components/AiTraceInspect'
+import { AiGeneratorEvaluate } from '../components/AiGeneratorEvaluate'
 
 export const Route = createFileRoute('/generator')({
   validateSearch: z.object({
@@ -23,7 +24,7 @@ export const Route = createFileRoute('/generator')({
     noteIds: z.string().optional(),
     title: z.string().optional(),
     inspect: z.string().uuid().optional(),
-    view: z.enum(['inspect']).optional(),
+    view: z.enum(['inspect', 'evaluate']).optional(),
   }),
   component: GeneratorComponent,
 })
@@ -176,6 +177,7 @@ function GeneratorComponent() {
   }
 
   if (inspectTraceId || view === 'inspect') return <div className="p-5 max-w-5xl mx-auto"><AiTraceInspect traceId={inspectTraceId} onBack={() => window.history.back()} /></div>
+  if (view === 'evaluate') return <div className="p-5 max-w-5xl mx-auto"><AiGeneratorEvaluate onBack={() => window.history.back()} /></div>
 
   return (
     <div className="p-5 max-w-5xl mx-auto">
@@ -184,7 +186,7 @@ function GeneratorComponent() {
           <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">AI Assistant</h1>
           <p className="text-[var(--sea-ink-soft)] text-base">Generate fresh knowledge using local notes or web search.</p>
         </div>
-        <Link to="/generator" search={{ view: 'inspect' }} className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink hover:bg-foam">Inspect runs</Link>
+        <div className="flex gap-2"><Link to="/generator" search={{ view: 'inspect' }} className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink hover:bg-foam">Inspect runs</Link><Link to="/generator" search={{ view: 'evaluate' }} className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink hover:bg-foam">Evaluate</Link></div>
       </header>
 
       {saveStatus && (
