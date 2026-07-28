@@ -2,12 +2,15 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronLeft, ChevronRight, Clock3, FileSearch, GitBranch, RefreshCw } from 'lucide-react'
 import { orpc } from '../lib/orpc'
 import { Link } from '@tanstack/react-router'
+import { useState } from 'react'
 
 type Props = { traceId?: string; onBack: () => void }
 
 export function AiTraceInspect({ traceId, onBack }: Props) {
+  const [cursor, setCursor] = useState<string | undefined>()
+  const [cursorHistory, setCursorHistory] = useState<Array<string | undefined>>([])
   const detailQuery = useQuery(orpc.getAiTrace.queryOptions({ input: { traceId: traceId! }, enabled: Boolean(traceId) } as any))
-  const listQuery = useQuery(orpc.listAiTraces.queryOptions({ input: { limit: 20, includeEvidence: false } } as any))
+  const listQuery = useQuery(orpc.listAiTraces.queryOptions({ input: { limit: 20, cursor, includeEvidence: false } } as any))
   const detail = detailQuery.data
 
   if (traceId) return <section className="space-y-5">
@@ -24,6 +27,7 @@ export function AiTraceInspect({ traceId, onBack }: Props) {
     {listQuery.isError && <InspectUnavailable />}
     {!listQuery.isLoading && !listQuery.isError && listQuery.data?.items.length === 0 && <div className="island-shell rounded-xl p-10 text-center"><FileSearch className="mx-auto mb-3 text-sea-ink-soft" /><h3 className="font-extrabold text-sea-ink">No AI Generator runs yet</h3><p className="mt-1 text-sm text-sea-ink-soft">Run Ask, Synthesize, or Bootstrap to create a trace.</p></div>}
     <div className="space-y-3">{listQuery.data?.items.map((trace: any) => <Link key={trace.id} to="/generator" search={{ inspect: trace.id }} className="island-shell block w-full rounded-xl p-4 text-left transition hover:border-lagoon"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={trace.status === 'failed' ? 'rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700' : 'rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700'}>{trace.status}</span><span className="font-extrabold capitalize text-sea-ink">{trace.operation.replace('_', ' ')}</span><span className="text-xs text-sea-ink-soft">{new Date(trace.createdAt).toLocaleString()}</span></div><span className="font-mono text-xs text-sea-ink-soft">{trace.durationMs === null ? 'pending' : `${trace.durationMs} ms`}</span></div><div className="mt-3 grid grid-cols-3 gap-3 text-xs text-sea-ink-soft"><span>Policy: <b className="text-sea-ink">{trace.policy}</b></span><span>Candidates: <b className="text-sea-ink">{trace.candidateCount}</b></span><span>{trace.errorCode ? `Failure: ${trace.errorCode}` : `Model: ${trace.modelName ?? 'unrecorded'}`}</span></div></Link>)}</div>
+    <div className="flex justify-between gap-3"><button type="button" disabled={cursorHistory.length === 0 || listQuery.isFetching} onClick={() => { const previous = cursorHistory.at(-1); setCursorHistory((history) => history.slice(0, -1)); setCursor(previous) }} className="inline-flex items-center gap-1 rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink disabled:opacity-50"><ChevronLeft size={15} /> Newer</button><button type="button" disabled={!listQuery.data?.nextCursor || listQuery.isFetching} onClick={() => { setCursorHistory((history) => [...history, cursor]); setCursor(listQuery.data?.nextCursor ?? undefined) }} className="inline-flex items-center gap-1 rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink disabled:opacity-50">Older <ChevronRight size={15} /></button></div>
   </section>
 }
 
