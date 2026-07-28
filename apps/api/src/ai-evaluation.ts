@@ -16,6 +16,7 @@ import {
   createDbClient,
 } from "@llm-wiki/db";
 import type { AppConfig } from "./config";
+import { buildAiEvaluationJudgePrompt } from "./ai-evaluation-prompt";
 
 const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } as const;
 
@@ -82,7 +83,7 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
         const judgeStartedAt = Date.now();
         const judgeSpanId = await startSpan(db, run.id, "llm_judge", { rubric_version: input.rubricVersion, max_output_tokens: 512 }, caseSpanId);
         try {
-          const response = await provider.generate({ prompt: judgePrompt(evaluationCase), systemInstruction: "You are a bounded evaluation agent. Score only supplied redacted data. Return JSON with score (0 to 1) and a short rationale. Do not reveal chain-of-thought.", responseMimeType: "application/json", temperature: 0, maxOutputTokens: 512 });
+          const response = await provider.generate({ prompt: buildAiEvaluationJudgePrompt(evaluationCase), systemInstruction: "You are a bounded evaluation agent. Score only supplied redacted data. Return JSON with score (0 to 1) and a short rationale. Do not reveal chain-of-thought.", responseMimeType: "application/json", temperature: 0, maxOutputTokens: 512 });
           judge = parseJudgeEvaluation(response.text); usage = response.usage; judgeCalls += 1; totalTokens += response.usage?.totalTokens ?? 0;
           await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, usage ? { total_tokens: usage.totalTokens } : {});
         } catch (error) {
@@ -129,6 +130,5 @@ function formatDataset(dataset: typeof aiEvaluationDatasets.$inferSelect, caseCo
 function requiredDatabaseUrl(config: AppConfig) { if (!config.databaseUrl) throw new Error("DATABASE_URL is required for AI evaluation"); return config.databaseUrl; }
 function buildProvider(config: AppConfig) { return createLLMProvider({ provider: config.embeddingProvider, geminiGeap: { projectId: config.gcpProjectId, location: config.gcpLocation, model: config.gcpLlmModel }, openai: { apiKey: config.openaiApiKey, baseUrl: config.openaiBaseUrl, model: config.openaiLlmModel }, ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaLlmModel } }); }
 function modelName(provider: LLMProvider) { return typeof (provider as { model?: unknown }).model === "string" ? (provider as { model: string }).model : null; }
-function judgePrompt(item: typeof aiEvaluationCases.$inferSelect) { return JSON.stringify({ redactedInput: item.redacted_input, expectedEvidence: item.expected_evidence, expectedOutcome: item.expected_outcome, referenceAnswer: item.reference_answer, candidateOutput: item.candidate_output, retrievedEvidence: item.retrieved_evidence }); }
 async function startSpan(db: ReturnType<typeof createDbClient>["db"], runId: string, spanType: string, attributes: Record<string, string | number | boolean | null>, parentSpanId?: string) { const [span] = await db.insert(aiEvaluationSpans).values({ evaluation_run_id: runId, parent_span_id: parentSpanId, span_type: spanType, status: STATUS.STARTED, attributes }).returning({ id: aiEvaluationSpans.id }); return span.id; }
 async function completeSpan(db: ReturnType<typeof createDbClient>["db"], spanId: string, status: "succeeded" | "failed", durationMs: number, attributes: Record<string, string | number | boolean | null>, errorCode?: string) { await db.update(aiEvaluationSpans).set({ status, duration_ms: durationMs, completed_at: new Date(), attributes, error_code: errorCode ?? null }).where(eq(aiEvaluationSpans.id, spanId)); }
