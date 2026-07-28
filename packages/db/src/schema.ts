@@ -254,6 +254,7 @@ export const retrievalRuns = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 40 }).notNull(),
+    trace_version: integer("trace_version").notNull().default(1),
     query_hash: varchar("query_hash", { length: 64 }).notNull(),
     query_length: integer("query_length").notNull(),
     policy: varchar("policy", { length: 40 }).notNull(),
@@ -273,6 +274,33 @@ export const retrievalRuns = pgTable(
   (table) => ({
     statusCreatedAtIdx: index("retrieval_runs_status_created_at_idx").on(table.status, table.created_at),
     operationCreatedAtIdx: index("retrieval_runs_operation_created_at_idx").on(table.operation, table.created_at),
+  }),
+);
+
+/**
+ * Versioned, structural execution spans for an AI generator run. Spans contain
+ * decisions and bounded counters only: never prompts, query text, assembled
+ * context, model output, or hidden reasoning.
+ */
+export const aiTraceSpans = pgTable(
+  "ai_trace_spans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    retrieval_run_id: uuid("retrieval_run_id")
+      .notNull()
+      .references(() => retrievalRuns.id, { onDelete: "cascade" }),
+    parent_span_id: uuid("parent_span_id"),
+    span_type: varchar("span_type", { length: 40 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull(),
+    attributes: jsonb("attributes").notNull().default({}),
+    error_code: varchar("error_code", { length: 80 }),
+    started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+    duration_ms: integer("duration_ms"),
+  },
+  (table) => ({
+    runStartedAtIdx: index("ai_trace_spans_run_started_at_idx").on(table.retrieval_run_id, table.started_at),
+    parentIdx: index("ai_trace_spans_parent_span_id_idx").on(table.parent_span_id),
   }),
 );
 

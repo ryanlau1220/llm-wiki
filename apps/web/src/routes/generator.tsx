@@ -15,18 +15,21 @@ import {
   Search
 } from 'lucide-react'
 import { z } from 'zod'
+import { AiTraceInspect } from '../components/AiTraceInspect'
 
 export const Route = createFileRoute('/generator')({
   validateSearch: z.object({
     mode: z.enum(['rag', 'general', 'synthesis', 'bootstrap']).optional(),
     noteIds: z.string().optional(),
     title: z.string().optional(),
+    inspect: z.string().uuid().optional(),
+    view: z.enum(['inspect']).optional(),
   }),
   component: GeneratorComponent,
 })
 
 function GeneratorComponent() {
-  const { mode: queryMode, noteIds: queryNoteIds, title: queryTitle } = Route.useSearch()
+  const { mode: queryMode, noteIds: queryNoteIds, title: queryTitle, inspect: inspectTraceId, view } = Route.useSearch()
   const [activeMode, setActiveMode] = useState<'rag' | 'general' | 'synthesis' | 'bootstrap'>(queryMode || 'rag')
   const [queryText, setQueryText] = useState(queryTitle || '')
   const [result, setResult] = useState<{
@@ -172,6 +175,8 @@ function GeneratorComponent() {
     }
   }
 
+  if (inspectTraceId || view === 'inspect') return <div className="p-5 max-w-5xl mx-auto"><AiTraceInspect traceId={inspectTraceId} onBack={() => window.history.back()} /></div>
+
   return (
     <div className="p-5 max-w-5xl mx-auto">
       <header className="mb-6 flex items-center justify-between">
@@ -179,6 +184,7 @@ function GeneratorComponent() {
           <h1 className="display-title text-3xl font-bold text-[var(--sea-ink)] mb-1">AI Assistant</h1>
           <p className="text-[var(--sea-ink-soft)] text-base">Generate fresh knowledge using local notes or web search.</p>
         </div>
+        <Link to="/generator" search={{ view: 'inspect' }} className="rounded-lg border border-line px-3 py-2 text-sm font-bold text-sea-ink hover:bg-foam">Inspect runs</Link>
       </header>
 
       {saveStatus && (
@@ -522,6 +528,7 @@ function GeneratorComponent() {
                         </div>
                       </div>
                     )}
+                    {result.data.traceId && <Link to="/generator" search={{ inspect: result.data.traceId }} className="inline-flex items-center gap-1.5 text-xs font-bold text-lagoon-deep hover:underline">Inspect this run <ChevronRight size={14} /></Link>}
                   </div>
                 </div>
 

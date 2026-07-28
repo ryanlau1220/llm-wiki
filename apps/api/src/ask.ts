@@ -3,17 +3,20 @@ import { inArray } from "drizzle-orm";
 
 import { createEmbeddingProvider, createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
 import {
-  completeRetrievalRun,
+  completeAiTrace,
+  completeAiTraceSpan,
   createLogger,
   hashRetrievalValue,
   hybridRetrieve,
   packRetrievalContext,
-  recordRetrievalEvidence,
-  RETRIEVAL_OPERATION,
-  RETRIEVAL_RUN_STATUS,
+  recordAiTraceEvidence,
+  AI_TRACE_OPERATION,
+  AI_TRACE_SPAN_TYPE,
+  AI_TRACE_STATUS,
   resolveAskRetrievalPolicy,
   shouldAbstainForMissingEvidence,
-  startRetrievalRun,
+  startAiTrace,
+  startAiTraceSpan,
   type RetrievalResponse,
 } from "@llm-wiki/core";
 import { createDbClient, documents } from "@llm-wiki/db";
@@ -24,6 +27,7 @@ import {
   createInvalidModelResponse,
   parseStructuredModelResponse,
 } from "./model-response";
+import { modelUsageAttributes } from "./trace-usage";
 
 const ASK_PROMPT_VERSION = "ask-v1";
 const ASK_TRACE_ERROR_CODE = {
@@ -54,10 +58,11 @@ export async function askPreview(
   const { db } = createDbClient(config.databaseUrl);
   const requestStartedAt = Date.now();
   const retrievalDecision = resolveAskRetrievalPolicy(mode);
-  let retrievalRunId: string | null = null;
+  let traceId: string | null = null;
+  let requestSpanId: string | null = null;
   try {
-    retrievalRunId = await startRetrievalRun(db, {
-      operation: RETRIEVAL_OPERATION.ASK,
+    traceId = await startAiTrace(db, {
+      operation: AI_TRACE_OPERATION.ASK,
       query,
       policy: retrievalDecision.policy,
       policyReason: retrievalDecision.reason,
@@ -65,6 +70,16 @@ export async function askPreview(
       modelName: resolveLlmModelName(config),
       promptVersion: ASK_PROMPT_VERSION,
     });
+    requestSpanId = await startAiTraceSpan(db, traceId, {
+      spanType: AI_TRACE_SPAN_TYPE.REQUEST,
+      attributes: { mode, input_length: query.length },
+    });
+    const policySpan = await startAiTraceSpan(db, traceId, {
+      spanType: AI_TRACE_SPAN_TYPE.POLICY,
+      parentSpanId: requestSpanId,
+      attributes: { policy: retrievalDecision.policy, reason_code: retrievalDecision.reason },
+    });
+    await completeAiTraceSpan(db, policySpan, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: 0, attributes: { policy: retrievalDecision.policy } });
   } catch (error) {
     logger.error("Failed to start retrieval trace", error);
   }
@@ -91,6 +106,12 @@ export async function askPreview(
       }
     });
 
+    const retrievalStartedAt = Date.now();
+    const retrievalSpanId = traceId ? await startAiTraceSpan(db, traceId, {
+      spanType: AI_TRACE_SPAN_TYPE.RETRIEVAL,
+      parentSpanId: requestSpanId ?? undefined,
+      attributes: { top_k: topK ?? 10, retrieval_mode: "hybrid" },
+    }) : null;
     try {
       retrievalResults = await hybridRetrieve(
         {
@@ -103,30 +124,36 @@ export async function askPreview(
         }
       );
     } catch (error) {
-      await completeAskTrace(db, retrievalRunId, {
-        status: RETRIEVAL_RUN_STATUS.FAILED,
+      if (retrievalSpanId) await completeAiTraceSpan(db, retrievalSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - retrievalStartedAt, errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED });
+      await completeAskTrace(db, traceId, {
+        status: AI_TRACE_STATUS.FAILED,
         candidateCount: 0,
         selectedEvidenceCount: 0,
         contextCharacterCount: 0,
         durationMs: Date.now() - requestStartedAt,
         errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED,
       }, logger);
+      if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - requestStartedAt, errorCode: ASK_TRACE_ERROR_CODE.RETRIEVAL_FAILED });
       throw error;
     }
+    if (retrievalSpanId) await completeAiTraceSpan(db, retrievalSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - retrievalStartedAt, attributes: { candidate_count: retrievalResults.chunks.length, link_count: retrievalResults.links.length } });
 
     logger.debug("Retrieval completed", {
       chunks: retrievalResults.chunks.length,
       links: retrievalResults.links.length
     });
 
+    const packingStartedAt = Date.now();
+    const packingSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.CONTEXT_PACKING, parentSpanId: requestSpanId ?? undefined, attributes: { candidate_count: retrievalResults.chunks.length } }) : null;
     const contextPack = packRetrievalContext(retrievalResults.chunks);
+    if (packingSpanId) await completeAiTraceSpan(db, packingSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - packingStartedAt, attributes: { selected_count: contextPack.chunks.length, packed_characters: contextPack.characterCount } });
     packedCitationChunks = contextPack.chunks;
     packedCitationIds = new Set(contextPack.chunks.map((_chunk, index) => index + 1));
-    if (retrievalRunId) {
+    if (traceId) {
       try {
-        tracedEvidenceCount = await recordRetrievalEvidence(
+        tracedEvidenceCount = await recordAiTraceEvidence(
           db,
-          retrievalRunId,
+          traceId,
           contextPack.chunks.map((chunk, index) => ({
             documentId: chunk.documentId,
             documentPath: chunk.documentPath,
@@ -139,28 +166,30 @@ export async function askPreview(
           })),
         );
       } catch (error) {
-        logger.error("Failed to record retrieval evidence", error, { retrievalRunId });
+        logger.error("Failed to record retrieval evidence", error, { traceId });
       }
     }
 
     contextText = contextPack.text;
     if (shouldAbstainForMissingEvidence(retrievalDecision, contextPack.chunks.length)) {
-      const requestId = retrievalRunId ?? crypto.randomUUID();
+      const requestId = traceId ?? crypto.randomUUID();
       logger.info("Abstained from ungrounded vault answer", {
         requestId,
         candidateCount: retrievalResults.chunks.length,
         policy: retrievalDecision.policy,
         policyReason: retrievalDecision.reason,
       });
-      await completeAskTrace(db, retrievalRunId, {
-        status: RETRIEVAL_RUN_STATUS.SUCCEEDED,
+      await completeAskTrace(db, traceId, {
+        status: AI_TRACE_STATUS.SUCCEEDED,
         candidateCount: retrievalResults.chunks.length,
         selectedEvidenceCount: tracedEvidenceCount,
         contextCharacterCount: contextPack.characterCount,
         durationMs: Date.now() - requestStartedAt,
       }, logger);
+      if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - requestStartedAt, attributes: { abstained: true, citation_count: 0 } });
       return {
         requestId,
+        traceId,
         answer: GROUNDED_ABSTENTION_ANSWER,
         note: null,
         citations: [],
@@ -178,6 +207,9 @@ export async function askPreview(
     // General Knowledge / Web Search mode
     if (config.tavilyApiKey) {
       logger.info("Performing web search via Tavily...");
+      const toolStartedAt = Date.now();
+      const toolSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.TOOL, parentSpanId: requestSpanId ?? undefined, attributes: { tool_name: "web_search", max_results: 5 } }) : null;
+      let webSearchFailed = false;
       try {
         const { createWebSearchProvider } = await import("@llm-wiki/ai");
         const searchProvider = createWebSearchProvider({
@@ -189,7 +221,10 @@ export async function askPreview(
           .join("\n\n");
       } catch (err) {
         logger.error("Tavily search failed, falling back to local weights...", err);
+        webSearchFailed = true;
+        if (toolSpanId) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - toolStartedAt, errorCode: "web_search_failed" });
       }
+      if (toolSpanId && !webSearchFailed) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - toolStartedAt, attributes: { enabled: true } });
     } else if (config.embeddingProvider === "gemini" || config.embeddingProvider === "gemini-geap") {
       logger.info("Using native Gemini search grounding...");
       webSearchEnabled = true;
@@ -279,6 +314,7 @@ Provide your answer and suggested note in JSON format.
 
   logger.debug("Generating LLM answer...");
   const generationStartedAt = Date.now();
+  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json", web_search: webSearchEnabled } }) : null;
   let llmResponse: LLMResponse;
   try {
     llmResponse = await llmProvider.generate({
@@ -289,17 +325,20 @@ Provide your answer and suggested note in JSON format.
       webSearch: webSearchEnabled
     });
   } catch (error) {
-    await completeAskTrace(db, retrievalRunId, {
-      status: RETRIEVAL_RUN_STATUS.FAILED,
+    if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - generationStartedAt, errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED });
+    await completeAskTrace(db, traceId, {
+      status: AI_TRACE_STATUS.FAILED,
       candidateCount: retrievalResults.chunks.length,
       selectedEvidenceCount: tracedEvidenceCount,
       contextCharacterCount: contextText.length,
       durationMs: Date.now() - requestStartedAt,
       errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED,
     }, logger);
+    if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - requestStartedAt, errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED });
     throw error;
   }
   const duration = Date.now() - generationStartedAt;
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, response_format: "json", ...modelUsageAttributes(llmResponse.usage) } });
 
   const parsed = parseStructuredModelResponse(llmResponse.text, askModelResponseSchema);
   if (!parsed.success) {
@@ -307,32 +346,32 @@ Provide your answer and suggested note in JSON format.
       responseLength: llmResponse.text.length,
       reason: parsed.reason,
     });
-    await completeAskTrace(db, retrievalRunId, {
-      status: RETRIEVAL_RUN_STATUS.FAILED,
+    await completeAskTrace(db, traceId, {
+      status: AI_TRACE_STATUS.FAILED,
       candidateCount: retrievalResults.chunks.length,
       selectedEvidenceCount: tracedEvidenceCount,
       contextCharacterCount: contextText.length,
       durationMs: Date.now() - requestStartedAt,
       errorCode: ASK_TRACE_ERROR_CODE.INVALID_MODEL_RESPONSE,
     }, logger);
-    return createInvalidModelResponse();
+    if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - requestStartedAt, errorCode: ASK_TRACE_ERROR_CODE.INVALID_MODEL_RESPONSE });
+    return { ...createInvalidModelResponse(), traceId };
   }
 
-  const requestId = retrievalRunId ?? crypto.randomUUID();
+  const requestId = traceId ?? crypto.randomUUID();
   logger.info("Knowledge answer generated", {
     requestId,
     durationMs: duration,
     title: parsed.data.suggested_note.title,
   });
 
-  await completeAskTrace(db, retrievalRunId, {
-    status: RETRIEVAL_RUN_STATUS.SUCCEEDED,
+  await completeAskTrace(db, traceId, {
+    status: AI_TRACE_STATUS.SUCCEEDED,
     candidateCount: retrievalResults.chunks.length,
     selectedEvidenceCount: tracedEvidenceCount,
     contextCharacterCount: contextText.length,
     durationMs: Date.now() - requestStartedAt,
   }, logger);
-
   const documentIds = [...new Set(retrievalResults.chunks.map((chunk) => chunk.documentId))];
   const sources = documentIds.length
     ? await db
@@ -351,9 +390,13 @@ Provide your answer and suggested note in JSON format.
       chunkIndex: chunk.chunkIndex,
     };
   });
+  const finalAnswerSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.FINAL_ANSWER, parentSpanId: requestSpanId ?? undefined, attributes: { citation_count: citations.length } }) : null;
+  if (finalAnswerSpanId) await completeAiTraceSpan(db, finalAnswerSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: 0, attributes: { citation_count: citations.length } });
+  if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - requestStartedAt, attributes: { citation_count: citations.length } });
 
   return {
     requestId,
+    traceId,
     answer: parsed.data.answer,
     note: parsed.data.suggested_note,
     citations,
@@ -381,15 +424,15 @@ function resolveLlmModelName(config: AppConfig): string | undefined {
 
 async function completeAskTrace(
   db: ReturnType<typeof createDbClient>["db"],
-  retrievalRunId: string | null,
-  input: Parameters<typeof completeRetrievalRun>[2],
+  traceId: string | null,
+  input: Parameters<typeof completeAiTrace>[2],
   logger: ReturnType<typeof createLogger>,
 ): Promise<void> {
-  if (!retrievalRunId) return;
+  if (!traceId) return;
   try {
-    await completeRetrievalRun(db, retrievalRunId, input);
+    await completeAiTrace(db, traceId, input);
   } catch (error) {
-    logger.error("Failed to complete retrieval trace", error, { retrievalRunId });
+    logger.error("Failed to complete AI trace", error, { traceId });
   }
 }
 

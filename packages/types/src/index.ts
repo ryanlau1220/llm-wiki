@@ -14,10 +14,10 @@ import {
   mergeResearchCaptureSchema,
   retryResearchCaptureIndexSchema,
   researchCaptureStatusSchema,
-  listRetrievalTracesSchema,
-  pruneRetrievalTracesSchema,
-  retrievalTracePageSchema,
-  pruneRetrievalTracesResultSchema,
+  listAiTracesSchema,
+  getAiTraceSchema,
+  aiTracePageSchema,
+  aiTraceDetailSchema,
   listOrganizationSuggestionsSchema,
   organizationSuggestionSchema,
   RESEARCH_CAPTURE_ACTIVITY_EVENT,
@@ -237,8 +237,8 @@ export const appContract = oc.router({
   })),
   retryResearchCaptureIndex: oc.input(retryResearchCaptureIndexSchema).output(researchCaptureIndexResultSchema),
   listResearchCaptureActivities: oc.input(z.object({ id: z.string().uuid() })).output(z.array(researchCaptureActivitySchema)),
-  listRetrievalTraces: oc.input(listRetrievalTracesSchema).output(retrievalTracePageSchema),
-  pruneRetrievalTraces: oc.input(pruneRetrievalTracesSchema).output(pruneRetrievalTracesResultSchema),
+  listAiTraces: oc.input(listAiTracesSchema).output(aiTracePageSchema),
+  getAiTrace: oc.input(getAiTraceSchema).output(aiTraceDetailSchema),
 });
 
 export type AppRouter = typeof appContract;
