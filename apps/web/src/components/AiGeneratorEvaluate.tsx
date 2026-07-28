@@ -6,7 +6,6 @@ import {
   Loader2,
   Play,
   Plus,
-  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { orpc } from "../lib/orpc";
@@ -14,21 +13,18 @@ import { orpc } from "../lib/orpc";
 export type EvaluationPrefill = {
   name: string;
   input: string;
-  output: string;
   evidencePaths: string[];
 };
 type Props = { onBack: () => void; prefill?: EvaluationPrefill };
 
 export function reviewResponseToPrefill(
   query: string,
-  output: string,
   sources: Array<{ path?: string }> = [],
 ): EvaluationPrefill {
   const name = query.trim() ? `Review: ${query.trim().slice(0, 72)}` : "Review this response";
   return {
     name,
     input: query,
-    output,
     evidencePaths: sources
       .map((source) => source.path)
       .filter((path): path is string => Boolean(path)),
@@ -40,20 +36,20 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
   const [redactedInput, setRedactedInput] = useState("");
   const [expectedEvidence, setExpectedEvidence] = useState("");
   const [expectedOutcome, setExpectedOutcome] = useState("");
-  const [candidateOutput, setCandidateOutput] = useState("");
   const [selectedDataset, setSelectedDataset] = useState<string>("");
   const [judgeEnabled, setJudgeEnabled] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [targetConfirmed, setTargetConfirmed] = useState(false);
+  const [judgeConfirmed, setJudgeConfirmed] = useState(false);
   const [baselineRunId, setBaselineRunId] = useState("");
   const [candidateRunId, setCandidateRunId] = useState("");
   useEffect(() => {
     if (!prefill) return;
     setName(prefill.name);
     setRedactedInput(prefill.input);
-    setCandidateOutput(prefill.output);
     setExpectedEvidence(prefill.evidencePaths.join("\n"));
   }, [prefill]);
   const datasetsQuery = useQuery(orpc.listAiEvaluationDatasets.queryOptions());
+  const capabilitiesQuery = useQuery(orpc.getAiEvaluationCapabilities.queryOptions());
   const runsQuery = useQuery(
     orpc.listAiEvaluationRuns.queryOptions({
       input: selectedDataset ? { datasetId: selectedDataset } : undefined,
@@ -73,7 +69,6 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
         setRedactedInput("");
         setExpectedEvidence("");
         setExpectedOutcome("");
-        setCandidateOutput("");
         datasetsQuery.refetch();
       },
     }),
@@ -102,7 +97,6 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
           redactedInput,
           expectedEvidence: evidence,
           expectedOutcome: expectedOutcome || undefined,
-          candidateOutput: candidateOutput || undefined,
           retrievedEvidence: [],
           retrievalEvidenceEvaluated: false,
         },
@@ -113,8 +107,10 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
     if (!selectedDataset) return;
     runMutation.mutate({
       datasetId: selectedDataset,
+      confirmTargetExecution: true,
       judgeEnabled,
-      confirmLlmJudge: judgeEnabled ? confirmed : false,
+      confirmLlmJudge: judgeEnabled ? judgeConfirmed : false,
+      topK: 8,
       maxCases: 25,
       maxJudgeCalls: 25,
       maxTotalTokens: 20_000,
@@ -131,11 +127,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
         <ChevronLeft size={16} /> AI Assistant
       </button>
       <header>
-        <h1 className="display-title text-3xl font-bold text-sea-ink">Review AI quality</h1>
-        <p className="mt-1 text-sm text-sea-ink">
-          Save a redacted response as a reusable quality check, then compare it after you change the
-          AI workflow.
-        </p>
+        <h1 className="display-title text-3xl font-bold text-sea-ink">Evaluate AI Generator</h1>
       </header>
       <div className="grid gap-6 lg:grid-cols-2">
         <form onSubmit={submitDataset} className="island-shell space-y-4 rounded-xl p-5">
@@ -143,11 +135,6 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             <Plus size={17} />
             <h2 className="font-extrabold text-sea-ink">Create a quality check</h2>
           </div>
-          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/35 dark:text-amber-100">
-            <ShieldCheck className="mr-1 inline" size={14} />
-            Review and redact every field before saving. Only this edited version is kept;
-            structural traces are never imported.
-          </p>
           <label className="block text-sm font-bold text-sea-ink">
             Check name
             <input
@@ -183,14 +170,6 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
               className="mt-1 min-h-16 w-full rounded-lg border border-line bg-surface p-2 font-normal"
             />
           </label>
-          <label className="block text-sm font-bold text-sea-ink">
-            Response to review <span className="font-normal text-sea-ink-soft">(optional)</span>
-            <textarea
-              value={candidateOutput}
-              onChange={(event) => setCandidateOutput(event.target.value)}
-              className="mt-1 min-h-20 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-            />
-          </label>
           <button
             type="submit"
             disabled={createMutation.isPending}
@@ -211,7 +190,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             <h2 className="font-extrabold text-sea-ink">Run and compare</h2>
           </div>
           <label className="block text-sm font-bold text-sea-ink">
-            Saved quality check
+            Evaluation dataset
             <select
               value={selectedDataset}
               onChange={(event) => {
@@ -221,7 +200,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
               }}
               className="mt-1 w-full rounded-lg border border-line bg-surface p-2 font-normal"
             >
-              <option value="">Select a saved check</option>
+              <option value="">Select a dataset</option>
               {datasetsQuery.data?.map((dataset) => (
                 <option key={dataset.id} value={dataset.id}>
                   {dataset.name} · v{dataset.version} · {dataset.caseCount} case(s)
@@ -232,27 +211,37 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
           <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
             <input
               type="checkbox"
-              checked={judgeEnabled}
-              onChange={(event) => {
-                setJudgeEnabled(event.target.checked);
-                setConfirmed(false);
-              }}
+              checked={targetConfirmed}
+              onChange={(event) => setTargetConfirmed(event.target.checked)}
             />{" "}
-            Use configured LLM evaluator agent
+            I confirm this runs the approved cases with the current Ask/RAG workflow.
           </label>
-          {judgeEnabled && (
-            <label className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/35 dark:text-amber-100">
+          {capabilitiesQuery.data?.localJudgeAvailable && (
+            <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
               <input
                 type="checkbox"
-                checked={confirmed}
-                onChange={(event) => setConfirmed(event.target.checked)}
+                checked={judgeEnabled}
+                onChange={(event) => {
+                  setJudgeEnabled(event.target.checked);
+                  setJudgeConfirmed(false);
+                }}
               />{" "}
-              I confirm this sends the approved redacted check to the configured provider.
+              Use local semantic evaluator
+            </label>
+          )}
+          {judgeEnabled && (
+            <label className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-950/25 p-3 text-sm text-amber-100">
+              <input
+                type="checkbox"
+                checked={judgeConfirmed}
+                onChange={(event) => setJudgeConfirmed(event.target.checked)}
+              />{" "}
+              I confirm the local evaluator may inspect generated output and selected evidence.
             </label>
           )}
           <button
             type="button"
-            disabled={!selectedDataset || runMutation.isPending || (judgeEnabled && !confirmed)}
+            disabled={!selectedDataset || !targetConfirmed || runMutation.isPending || (judgeEnabled && !judgeConfirmed)}
             onClick={run}
             className="inline-flex items-center gap-2 rounded-lg bg-sea-ink px-3 py-2 text-sm font-bold text-bg-base disabled:opacity-50"
           >
@@ -261,7 +250,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             ) : (
               <Play size={15} />
             )}{" "}
-            Run quality check
+            Run Ask/RAG evaluation
           </button>
           {runMutation.isError && (
             <p className="flex gap-1 text-sm text-red-700 dark:text-red-300">
@@ -350,7 +339,7 @@ function RunHistory({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-sea-ink-soft">
-                  {run.evaluatorContractVersion} ·{" "}
+                  {String(run.workflowManifest?.target ?? "ask_rag")} · {run.evaluatorContractVersion} ·{" "}
                   {run.judgeEnabled
                     ? `${run.modelProvider ?? "configured"} / ${run.modelName ?? "model"}`
                     : "deterministic only"}{" "}
@@ -362,7 +351,7 @@ function RunHistory({
                     Case {result.caseId.slice(0, 8)}: retrieval recall{" "}
                     {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)} · judge{" "}
                     {result.judgeScore ?? "n/a"}
-                    {result.judgeRationale ? ` — ${result.judgeRationale}` : ""}
+                    {result.judgeLabels?.length ? ` · ${result.judgeLabels.join(", ")}` : ""}
                   </p>
                 ))}
               </div>
