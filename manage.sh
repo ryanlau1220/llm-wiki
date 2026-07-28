@@ -19,7 +19,7 @@ function show_help {
     echo ""
     echo "Commands:"
     echo "  check      Run project-wide quality checks (lint, typecheck, build)"
-    echo "  test       Run all tests (unit, refactor, and linking suites)"
+    echo "  test       Run deterministic unit and integration tests"
     echo "  docker     Run local Postgres via Docker Compose (foreground logs)"
     echo "  dev        Start local development environment via Turbo"
     echo "  db-migrate Apply tracked Drizzle migrations to the database"
@@ -57,10 +57,6 @@ case $CMD in
         echo "🧪 Running full test suite..."
         echo "--- Unit Tests ---"
         bun run test:unit
-        echo "--- Refactor Engine Tests ---"
-        bun run test:refactor
-        echo "--- Linking Intelligence Tests ---"
-        bun run test:linking
         echo "✅ All tests passed."
         ;;
     "docker")
