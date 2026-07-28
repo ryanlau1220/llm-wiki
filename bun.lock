@@ -115,7 +115,6 @@
         "@llm-wiki/db": "*",
         "@llm-wiki/obsidian": "*",
         "drizzle-orm": "^0.45.2",
-        "google-auth-library": "^9.15.1",
       },
       "devDependencies": {
         "@types/node": "^22.10.1",

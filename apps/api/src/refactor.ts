@@ -3,16 +3,21 @@ import path from "node:path";
 import crypto from "node:crypto";
 import matter from "gray-matter";
 
-import { createLLMProvider, createEmbeddingProvider } from "@llm-wiki/ai";
+import { createLLMProvider, createEmbeddingProvider, type LLMProvider } from "@llm-wiki/ai";
 import { createLogger, ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
 import { sseEmitter } from "./events";
 
+type RefactorPreviewDependencies = {
+  llmProvider?: LLMProvider;
+};
+
 export async function refactorNotePreview(
   config: AppConfig,
-  filePath: string
+  filePath: string,
+  dependencies: RefactorPreviewDependencies = {},
 ) {
   const logger = createLogger("refactor");
   logger.info("New refactor request", { filePath });
@@ -27,7 +32,7 @@ export async function refactorNotePreview(
 
   const content = await fs.readFile(fullPath, "utf8");
 
-  const llmProvider = createLLMProvider({
+  const llmProvider = dependencies.llmProvider ?? createLLMProvider({
     provider: config.embeddingProvider, // Defaulting to the same provider
     geminiGeap: {
       projectId: config.gcpProjectId,
