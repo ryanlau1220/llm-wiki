@@ -80,7 +80,7 @@ export const weakNotesPayloadSchema = z.object({
   maxResults: z.number().int().min(1).max(200).optional(),
 });
 
-const retrievalTraceEvidenceSchema = z.object({
+const aiTraceEvidenceSchema = z.object({
   documentId: z.string().uuid(),
   documentPath: z.string(),
   chunkIndex: z.number().int().nonnegative(),
@@ -90,9 +90,22 @@ const retrievalTraceEvidenceSchema = z.object({
   selectionRank: z.number().int().positive().nullable(),
 });
 
-const retrievalTraceRunSchema = z.object({
+const aiTraceSpanSchema = z.object({
   id: z.string().uuid(),
-  operation: z.enum(["ask", "synthesis"]),
+  parentSpanId: z.string().uuid().nullable(),
+  spanType: z.enum(["request", "policy", "retrieval", "reranking", "context_packing", "model", "tool", "retry", "final_answer"]),
+  status: z.enum(["started", "succeeded", "failed"]),
+  attributes: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  errorCode: z.string().nullable(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+});
+
+const aiTraceRunSchema = z.object({
+  id: z.string().uuid(),
+  traceVersion: z.string(),
+  operation: z.enum(["ask", "synthesis", "bootstrap"]),
   policy: z.enum(["vault_hybrid", "selected_notes", "general_web", "no_retrieval"]),
   policyReason: z.string(),
   status: z.enum(["started", "succeeded", "failed"]),
@@ -106,32 +119,22 @@ const retrievalTraceRunSchema = z.object({
   errorCode: z.string().nullable(),
   createdAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
-  evidence: z.array(retrievalTraceEvidenceSchema).optional(),
+  evidence: z.array(aiTraceEvidenceSchema).optional(),
+  spans: z.array(aiTraceSpanSchema).optional(),
 });
 
-export const listRetrievalTracesSchema = z.object({
+export const listAiTracesSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
   cursor: z.string().min(1).max(512).optional(),
   includeEvidence: z.boolean().optional(),
 }).optional();
-
-export const pruneRetrievalTracesSchema = z.object({
-  olderThanDays: z.number().int().min(1).max(3_650),
-  limit: z.number().int().min(1).max(1_000),
-});
-
-export const retrievalTracePageSchema = z.object({
-  items: z.array(retrievalTraceRunSchema),
+export const getAiTraceSchema = z.object({ traceId: z.string().uuid() });
+export const aiTracePageSchema = z.object({
+  items: z.array(aiTraceRunSchema),
   nextCursor: z.string().nullable(),
 });
-
-export const pruneRetrievalTracesResultSchema = z.object({
-  deletedCount: z.number().int().nonnegative(),
-  cutoff: z.string().datetime(),
-});
-
-export type ListRetrievalTracesInput = z.input<typeof listRetrievalTracesSchema>;
-export type PruneRetrievalTracesInput = z.infer<typeof pruneRetrievalTracesSchema>;
+export const aiTraceDetailSchema = aiTraceRunSchema.nullable();
+export type ListAiTracesInput = z.input<typeof listAiTracesSchema>;
 
 const httpUrlSchema = z.string().url().max(4_000).refine(
   (value) => /^https?:\/\//i.test(value),
