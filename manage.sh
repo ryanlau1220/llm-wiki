@@ -24,7 +24,7 @@ function show_help {
     echo "  dev        Start local development environment via Turbo"
     echo "  db-migrate Apply tracked Drizzle migrations to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
-    echo "  verify-keys Verify all configured API keys & dynamic fallback chains"
+    echo "  verify-keys Verify providers and offer to install missing local Ollama models"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -51,6 +51,7 @@ case $CMD in
         ;;
     "verify-keys")
         echo "🔑 Verifying all configured API keys & dynamic fallback chains..."
+        bun run scripts/ensure-ollama-models.ts
         bun run scripts/verify-keys.ts
         ;;
     "test")

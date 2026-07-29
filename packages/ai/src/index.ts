@@ -7,6 +7,7 @@ export * from "./embedding/providers/gemini-geap";
 export * from "./embedding/providers/ollama";
 export * from "./embedding/providers/openai";
 export * from "./embedding/providers/fallback";
+export * from "./ollama/models";
 export * from "./llm/providers/gemini";
 export * from "./llm/providers/gemini-geap";
 export * from "./llm/providers/ollama";
@@ -14,4 +15,3 @@ export * from "./llm/providers/openai";
 export * from "./llm/providers/fallback";
 export * from "./websearch/types";
 export * from "./websearch/factory";
-

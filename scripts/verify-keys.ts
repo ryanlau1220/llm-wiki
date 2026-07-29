@@ -8,7 +8,9 @@ import {
   GeminiGeapLLMProvider,
   GeminiGeapEmbeddingProvider,
   OllamaLLMProvider,
-  OllamaEmbeddingProvider
+  OllamaEmbeddingProvider,
+  configuredOllamaModels,
+  inspectOllamaModels,
 } from "../packages/ai/src";
 
 function maskKey(key: string | undefined): string {
@@ -17,7 +19,10 @@ function maskKey(key: string | undefined): string {
   return `${key.slice(0, 8)}...${key.slice(-6)}`;
 }
 
-async function runTest(_name: string, action: () => Promise<any>): Promise<{ ok: boolean; message: string }> {
+async function runTest(
+  _name: string,
+  action: () => Promise<any>,
+): Promise<{ ok: boolean; message: string }> {
   try {
     const start = Date.now();
     await action();
@@ -47,10 +52,10 @@ async function verifyKeys() {
     const provider = new OpenAILLMProvider({
       apiKey: groqKey,
       baseUrl: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
-      model: process.env.GROQ_LLM_MODEL || "llama-3.3-70b-versatile"
+      model: process.env.GROQ_LLM_MODEL || "llama-3.3-70b-versatile",
     });
     const res = await runTest("Groq LLM", () =>
-      provider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      provider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("Groq", "LLM", res);
   } else {
@@ -64,10 +69,10 @@ async function verifyKeys() {
     const provider = new OpenAILLMProvider({
       apiKey: openRouterKey,
       baseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-      model: process.env.OPENROUTER_LLM_MODEL || "google/gemma-4-31b-it:free"
+      model: process.env.OPENROUTER_LLM_MODEL || "google/gemma-4-31b-it:free",
     });
     const res = await runTest("OpenRouter LLM", () =>
-      provider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      provider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("OpenRouter", "LLM", res);
   } else {
@@ -78,15 +83,15 @@ async function verifyKeys() {
   const bazaarLinkKey = process.env.BAZAARLINK_API_KEY;
   if (bazaarLinkKey) {
     console.log(`👉 Testing BazaarLink (Key: ${maskKey(bazaarLinkKey)})...`);
-    
+
     // LLM
     const llmProvider = new OpenAILLMProvider({
       apiKey: bazaarLinkKey,
       baseUrl: process.env.BAZAARLINK_BASE_URL || "https://bazaarlink.ai/api/v1",
-      model: process.env.BAZAARLINK_LLM_MODEL || "gpt-4o-mini"
+      model: process.env.BAZAARLINK_LLM_MODEL || "gpt-4o-mini",
     });
     const llmRes = await runTest("BazaarLink LLM", () =>
-      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("BazaarLink", "LLM", llmRes);
 
@@ -95,10 +100,10 @@ async function verifyKeys() {
       apiKey: bazaarLinkKey,
       baseUrl: process.env.BAZAARLINK_BASE_URL || "https://bazaarlink.ai/api/v1",
       model: process.env.BAZAARLINK_EMBEDDING_MODEL || "openai/text-embedding-3-small",
-      dimensions: 768
+      dimensions: 768,
     });
     const embedRes = await runTest("BazaarLink Embedding", () =>
-      embedProvider.embed({ texts: ["Health check."] })
+      embedProvider.embed({ texts: ["Health check."] }),
     );
     addResult("BazaarLink", "Embedding", embedRes);
   } else {
@@ -110,15 +115,15 @@ async function verifyKeys() {
   const gcpProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
   if (gcpProject) {
     console.log(`👉 Testing Gemini GEAP (Project: ${gcpProject})...`);
-    
+
     // LLM
     const llmProvider = new GeminiGeapLLMProvider({
       projectId: gcpProject,
       location: process.env.GEMINI_GCP_LOCATION || "global",
-      model: process.env.GEMINI_GCP_LLM_MODEL || "gemini-2.5-flash"
+      model: process.env.GEMINI_GCP_LLM_MODEL || "gemini-2.5-flash",
     });
     const llmRes = await runTest("Gemini GEAP LLM", () =>
-      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("Gemini GEAP", "LLM", llmRes);
 
@@ -126,10 +131,10 @@ async function verifyKeys() {
     const embedProvider = new GeminiGeapEmbeddingProvider({
       projectId: gcpProject,
       location: process.env.GEMINI_GCP_LOCATION || "global",
-      model: process.env.GEMINI_GCP_EMBEDDING_MODEL || "gemini-embedding-001"
+      model: process.env.GEMINI_GCP_EMBEDDING_MODEL || "gemini-embedding-001",
     });
     const embedRes = await runTest("Gemini GEAP Embedding", () =>
-      embedProvider.embed({ texts: ["Health check."] })
+      embedProvider.embed({ texts: ["Health check."] }),
     );
     addResult("Gemini GEAP", "Embedding", embedRes);
   } else {
@@ -141,22 +146,22 @@ async function verifyKeys() {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     console.log(`👉 Testing Gemini API Key (Key: ${maskKey(geminiKey)})...`);
-    
+
     // LLM
     const llmProvider = new GeminiLLMProvider({
-      apiKey: geminiKey
+      apiKey: geminiKey,
     });
     const llmRes = await runTest("Gemini LLM", () =>
-      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("Gemini", "LLM", llmRes);
 
     // Embedding
     const embedProvider = new GeminiEmbeddingProvider({
-      apiKey: geminiKey
+      apiKey: geminiKey,
     });
     const embedRes = await runTest("Gemini Embedding", () =>
-      embedProvider.embed({ texts: ["Health check."] })
+      embedProvider.embed({ texts: ["Health check."] }),
     );
     addResult("Gemini", "Embedding", embedRes);
   } else {
@@ -168,26 +173,46 @@ async function verifyKeys() {
   const ollamaUrl = process.env.OLLAMA_BASE_URL;
   if (ollamaUrl) {
     console.log(`👉 Testing Ollama (URL: ${ollamaUrl})...`);
-    
-    // LLM
-    const llmProvider = new OllamaLLMProvider({
-      baseUrl: ollamaUrl,
-      model: process.env.OLLAMA_LLM_MODEL || "llama3"
+    const llmModel = process.env.OLLAMA_LLM_MODEL || "llama3";
+    const embeddingModel = process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text";
+    const requiredModels = configuredOllamaModels({
+      OLLAMA_LLM_MODEL: llmModel,
+      OLLAMA_EMBEDDING_MODEL: embeddingModel,
     });
-    const llmRes = await runTest("Ollama LLM", () =>
-      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
-    );
-    addResult("Ollama", "LLM", llmRes);
 
-    // Embedding
-    const embedProvider = new OllamaEmbeddingProvider({
-      baseUrl: ollamaUrl,
-      model: process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text"
-    });
-    const embedRes = await runTest("Ollama Embedding", () =>
-      embedProvider.embed({ texts: ["Health check."] })
-    );
-    addResult("Ollama", "Embedding", embedRes);
+    try {
+      const readiness = await inspectOllamaModels(ollamaUrl, requiredModels);
+      const missingModels = new Set(readiness.missingModels);
+
+      if (missingModels.has(llmModel)) {
+        addResult("Ollama", "LLM", { ok: false, message: `❌ NOT INSTALLED (${llmModel})` });
+      } else {
+        const llmProvider = new OllamaLLMProvider({ baseUrl: ollamaUrl, model: llmModel });
+        const llmRes = await runTest("Ollama LLM", () =>
+          llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
+        );
+        addResult("Ollama", "LLM", llmRes);
+      }
+
+      if (missingModels.has(embeddingModel)) {
+        addResult("Ollama", "Embedding", {
+          ok: false,
+          message: `❌ NOT INSTALLED (${embeddingModel})`,
+        });
+      } else {
+        const embedProvider = new OllamaEmbeddingProvider({
+          baseUrl: ollamaUrl,
+          model: embeddingModel,
+        });
+        const embedRes = await runTest("Ollama Embedding", () =>
+          embedProvider.embed({ texts: ["Health check."] }),
+        );
+        addResult("Ollama", "Embedding", embedRes);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addResult("Ollama", "Connection", { ok: false, message: `❌ UNAVAILABLE: ${message}` });
+    }
   } else {
     console.log(`[Ollama] - LLM: ➖ SKIPPED (OLLAMA_BASE_URL not set)`);
     console.log(`[Ollama] - Embedding: ➖ SKIPPED (OLLAMA_BASE_URL not set)`);
@@ -197,15 +222,15 @@ async function verifyKeys() {
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey) {
     console.log(`👉 Testing OpenAI (Key: ${maskKey(openaiKey)})...`);
-    
+
     // LLM
     const llmProvider = new OpenAILLMProvider({
       apiKey: openaiKey,
       baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-      model: process.env.OPENAI_LLM_MODEL || "gpt-4o-mini"
+      model: process.env.OPENAI_LLM_MODEL || "gpt-4o-mini",
     });
     const llmRes = await runTest("OpenAI LLM", () =>
-      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 })
+      llmProvider.generate({ prompt: "Reply only with the word 'OK'.", temperature: 0.1 }),
     );
     addResult("OpenAI", "LLM", llmRes);
 
@@ -214,10 +239,10 @@ async function verifyKeys() {
       apiKey: openaiKey,
       baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
       model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
-      dimensions: 768
+      dimensions: 768,
     });
     const embedRes = await runTest("OpenAI Embedding", () =>
-      embedProvider.embed({ texts: ["Health check."] })
+      embedProvider.embed({ texts: ["Health check."] }),
     );
     addResult("OpenAI", "Embedding", embedRes);
   } else {
