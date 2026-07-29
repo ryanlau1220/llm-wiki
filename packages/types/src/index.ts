@@ -141,6 +141,8 @@ const researchAutomationRunSchema = z.object({
   newItemCount: z.number().int().nonnegative(),
   captureCount: z.number().int().nonnegative(),
   skippedCount: z.number().int().nonnegative(),
+  sourceTotal: z.number().int().nonnegative(),
+  sourceCompleted: z.number().int().nonnegative(),
   errorMessage: z.string().nullable(),
   startedAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),

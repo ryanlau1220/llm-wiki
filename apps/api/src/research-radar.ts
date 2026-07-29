@@ -71,6 +71,8 @@ function formatRun(run: AutomationRunRow) {
     newItemCount: run.new_item_count,
     captureCount: run.capture_count,
     skippedCount: run.skipped_count,
+    sourceTotal: run.source_total,
+    sourceCompleted: run.source_completed,
     errorMessage: run.error_message,
     startedAt: run.started_at.toISOString(),
     completedAt: run.completed_at?.toISOString() ?? null,

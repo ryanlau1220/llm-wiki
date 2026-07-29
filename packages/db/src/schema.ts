@@ -268,6 +268,8 @@ export const researchAutomationRuns = pgTable(
     new_item_count: integer("new_item_count").notNull().default(0),
     capture_count: integer("capture_count").notNull().default(0),
     skipped_count: integer("skipped_count").notNull().default(0),
+    source_total: integer("source_total").notNull().default(0),
+    source_completed: integer("source_completed").notNull().default(0),
     error_message: text("error_message"),
     started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     completed_at: timestamp("completed_at", { withTimezone: true }),
