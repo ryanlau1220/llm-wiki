@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { scoreFeedItem } from "./research-radar";
+import { mapWithConcurrency, scoreFeedItem } from "./research-radar";
 
 describe("Research Radar relevance fallback", () => {
   test("prioritizes a matching item over unrelated material without a model runtime", () => {
@@ -40,5 +40,20 @@ describe("Research Radar relevance fallback", () => {
     });
 
     expect(score).toBe(0);
+  });
+
+  test("bounds concurrent source work while preserving source order", async () => {
+    let active = 0;
+    let peak = 0;
+    const result = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (value) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, value % 2 ? 6 : 1));
+      active -= 1;
+      return value * 10;
+    });
+
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(result).toEqual([10, 20, 30, 40, 50]);
   });
 });

@@ -5,6 +5,7 @@ export const llmRequestSchema = z.object({
   systemInstruction: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxOutputTokens: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
   responseMimeType: z.enum(["text/plain", "application/json"]).optional(),
   webSearch: z.boolean().optional()
 });

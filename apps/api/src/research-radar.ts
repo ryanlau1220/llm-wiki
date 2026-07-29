@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import {
   createDbClient,
@@ -33,6 +33,11 @@ import { RESEARCH_RADAR_STARTER_SOURCES } from "./research-radar-starter-pack";
 
 const MAX_RECENT_RUNS = 50;
 const AUTOMATION_TICK_MS = 60_000;
+export const RADAR_SOURCE_FETCH_CONCURRENCY = 4;
+export const RADAR_SOURCE_TIMEOUT_MS = 8_000;
+export const RADAR_ITEMS_PER_SOURCE = 12;
+export const RADAR_RANK_CANDIDATE_LIMIT = 48;
+export const RADAR_RANK_TIMEOUT_MS = 20_000;
 const runningAutomationIds = new Set<string>();
 
 type Db = ReturnType<typeof createDbClient>["db"];
@@ -124,7 +129,7 @@ export function scoreFeedItem(topic: string, item: FeedItem): number {
   return Math.min(1, (matches / expected.size) * 0.75 + (titleMatches / expected.size) * 0.25);
 }
 
-type RankedFeedItem = { item: FeedItem; score: number };
+type RankedFeedItem<T = FeedItem> = { item: T; score: number };
 
 function parseLocalRankings(value: string, expectedIds: Set<string>): Map<string, number> | null {
   try {
@@ -153,11 +158,10 @@ async function rankFeedItems(config: AppConfig, topic: string, items: FeedItem[]
   const fallback = items.map((item) => ({ item, score: scoreFeedItem(topic, item) }));
   if (!config.ollamaBaseUrl || !config.ollamaLlmModel || !items.length) return fallback;
   try {
-    const candidates = items.slice(0, 100).map((item, index) => ({
+    const candidates = items.map((item, index) => ({
       id: String(index),
       title: item.title,
-      excerpt: item.content.slice(0, 1_000),
-      categories: item.categories,
+      excerpt: item.content.slice(0, 320),
     }));
     const provider = createLLMProvider({
       provider: "ollama",
@@ -168,6 +172,8 @@ async function rankFeedItems(config: AppConfig, topic: string, items: FeedItem[]
       prompt: `Research brief: ${topic}\n\nScore each candidate from 0 to 1 for direct relevance. Return {"items":[{"id":"0","score":0.0}]}.\n\nCandidates:\n${JSON.stringify(candidates)}`,
       responseMimeType: "application/json",
       temperature: 0,
+      maxOutputTokens: 192,
+      timeoutMs: RADAR_RANK_TIMEOUT_MS,
     });
     const scores = parseLocalRankings(response.text, new Set(candidates.map((candidate) => candidate.id)));
     if (!scores) return fallback;
@@ -175,6 +181,26 @@ async function rankFeedItems(config: AppConfig, topic: string, items: FeedItem[]
   } catch {
     return fallback;
   }
+}
+
+/** Runs independent I/O with a fixed worker count so slow public sources cannot
+ * serialize the entire automation. Results keep the original input order. */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, worker));
+  return results;
 }
 
 async function getAutomationSources(db: Db, automationId: string): Promise<SourceRow[]> {
@@ -401,37 +427,65 @@ function contentForCapture(item: FeedItem): string {
   return [`# ${item.title}`, ...metadata, "", item.content].join("\n");
 }
 
-async function runOneSource(
+type FetchedRadarSource = {
+  source: SourceRow;
+  items: FeedItem[];
+  error: string | null;
+};
+
+type RadarCandidate = {
+  source: SourceRow;
+  item: FeedItem;
+};
+
+async function fetchRadarSource(
   config: AppConfig,
   db: Db,
   source: SourceRow,
+): Promise<FetchedRadarSource> {
+  try {
+    const fetched = await fetchSyndicationFeed({
+      url: source.feed_url,
+      etag: source.etag,
+      lastModified: source.last_modified,
+      timeoutMs: RADAR_SOURCE_TIMEOUT_MS,
+    });
+    const now = new Date();
+    if (fetched.kind === "not_modified") {
+      await db.update(researchSources).set({ last_fetched_at: now, last_error: null, updated_at: now }).where(eq(researchSources.id, source.id));
+      return { source, items: [], error: null };
+    }
+
+    await db.update(researchSources).set({
+      etag: fetched.etag,
+      last_modified: fetched.lastModified,
+      last_fetched_at: now,
+      last_success_at: now,
+      last_error: null,
+      updated_at: now,
+    }).where(eq(researchSources.id, source.id));
+    return { source, items: fetched.feed.items.slice(0, RADAR_ITEMS_PER_SOURCE), error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Feed processing failed";
+    const now = new Date();
+    await db.update(researchSources).set({ last_fetched_at: now, last_error: message, updated_at: now }).where(eq(researchSources.id, source.id));
+    return { source, items: [], error: message };
+  }
+}
+
+async function persistRadarCandidates(
+  config: AppConfig,
+  db: Db,
   topic: string,
   runId: string,
-  remainingCaptures: number,
+  maxCaptures: number,
+  candidates: Array<RankedFeedItem<RadarCandidate>>,
 ) {
-  const fetched = await fetchSyndicationFeed({ url: source.feed_url, etag: source.etag, lastModified: source.last_modified });
-  const now = new Date();
-  if (fetched.kind === "not_modified") {
-    await db.update(researchSources).set({ last_fetched_at: now, last_error: null, updated_at: now }).where(eq(researchSources.id, source.id));
-    return { discovered: 0, fresh: 0, captures: 0, skipped: 0 };
-  }
-
-  await db.update(researchSources).set({
-    etag: fetched.etag,
-    last_modified: fetched.lastModified,
-    last_fetched_at: now,
-    last_success_at: now,
-    last_error: null,
-    updated_at: now,
-  }).where(eq(researchSources.id, source.id));
-
   let fresh = 0;
   let captures = 0;
   let skipped = 0;
-  const scored = (await rankFeedItems(config, topic, fetched.feed.items))
-    .sort((left, right) => right.score - left.score || (right.item.publishedAt?.getTime() ?? 0) - (left.item.publishedAt?.getTime() ?? 0));
-
-  for (const { item, score } of scored) {
+  for (const { item: candidate, score } of candidates) {
+    const { source, item } = candidate;
     const inserted = await db
       .insert(researchSourceItems)
       .values({
@@ -449,7 +503,7 @@ async function runOneSource(
       continue;
     }
     fresh += 1;
-    if (captures >= remainingCaptures || score < 0.2) {
+    if (captures >= maxCaptures || score < 0.2) {
       skipped += 1;
       continue;
     }
@@ -468,12 +522,12 @@ async function runOneSource(
       sourceTitle: item.title,
       topic,
       content: contentForCapture(item),
-      capturedAt: item.publishedAt ?? now,
+      capturedAt: item.publishedAt ?? new Date(),
     });
     await db.update(researchSourceItems).set({ capture_id: capture.id }).where(eq(researchSourceItems.id, inserted[0]!.id));
     captures += 1;
   }
-  return { discovered: fetched.feed.items.length, fresh, captures, skipped };
+  return { fresh, captures, skipped };
 }
 
 export async function runResearchAutomation(
@@ -495,7 +549,8 @@ export async function runResearchAutomation(
       trigger,
       started_at: startedAt,
     }).returning();
-    runId = run!.id;
+    const currentRunId = run!.id;
+    runId = currentRunId;
     const sources = (await getAutomationSources(db, automation.id)).filter((source) => source.is_active);
     if (!sources.length) {
       const completedAt = new Date();
@@ -513,32 +568,38 @@ export async function runResearchAutomation(
       const [completedRun] = await db.select().from(researchAutomationRuns).where(eq(researchAutomationRuns.id, runId)).limit(1);
       return formatRun(completedRun!);
     }
-    let discovered = 0;
-    let fresh = 0;
-    let captures = 0;
-    let skipped = 0;
-    const sourceErrors: string[] = [];
-    for (const source of sources) {
+    await db.update(researchAutomationRuns).set({ source_total: sources.length }).where(eq(researchAutomationRuns.id, currentRunId));
+    const fetchedSources = await mapWithConcurrency(sources, RADAR_SOURCE_FETCH_CONCURRENCY, async (source) => {
       try {
-        const result = await runOneSource(config, db, source, automation.topic, runId, Math.max(0, automation.max_captures_per_run - captures));
-        discovered += result.discovered;
-        fresh += result.fresh;
-        captures += result.captures;
-        skipped += result.skipped;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Feed processing failed";
-        sourceErrors.push(`${source.name}: ${message}`);
-        await db.update(researchSources).set({ last_fetched_at: new Date(), last_error: message, updated_at: new Date() }).where(eq(researchSources.id, source.id));
+        return await fetchRadarSource(config, db, source);
+      } finally {
+        await db.update(researchAutomationRuns).set({
+          source_completed: sql`${researchAutomationRuns.source_completed} + 1`,
+        }).where(eq(researchAutomationRuns.id, currentRunId));
       }
-    }
+    });
+    const sourceErrors = fetchedSources
+      .filter((result) => result.error)
+      .map((result) => `${result.source.name}: ${result.error}`);
+    const discovered = fetchedSources.reduce((count, result) => count + result.items.length, 0);
+    const lexicalCandidates = fetchedSources
+      .flatMap((result) => result.items.map((item) => ({ source: result.source, item })))
+      .map((candidate) => ({ item: candidate, score: scoreFeedItem(automation.topic, candidate.item) }))
+      .sort((left, right) => right.score - left.score || (right.item.item.publishedAt?.getTime() ?? 0) - (left.item.item.publishedAt?.getTime() ?? 0))
+      .slice(0, RADAR_RANK_CANDIDATE_LIMIT);
+    const semanticScores = await rankFeedItems(config, automation.topic, lexicalCandidates.map((candidate) => candidate.item.item));
+    const rankedCandidates = lexicalCandidates
+      .map((candidate, index) => ({ item: candidate.item, score: semanticScores[index]?.score ?? candidate.score }))
+      .sort((left, right) => right.score - left.score || (right.item.item.publishedAt?.getTime() ?? 0) - (left.item.item.publishedAt?.getTime() ?? 0));
+    const persisted = await persistRadarCandidates(config, db, automation.topic, currentRunId, automation.max_captures_per_run, rankedCandidates);
     const completedAt = new Date();
     const errorMessage = sourceErrors.length ? sourceErrors.join(" | ").slice(0, 4_000) : null;
     await db.update(researchAutomationRuns).set({
       status: sourceErrors.length === sources.length && sources.length > 0 ? RESEARCH_AUTOMATION_RUN_STATUS.FAILED : RESEARCH_AUTOMATION_RUN_STATUS.SUCCEEDED,
       discovered_count: discovered,
-      new_item_count: fresh,
-      capture_count: captures,
-      skipped_count: skipped,
+      new_item_count: persisted.fresh,
+      capture_count: persisted.captures,
+      skipped_count: persisted.skipped,
       error_message: errorMessage,
       completed_at: completedAt,
     }).where(eq(researchAutomationRuns.id, runId));

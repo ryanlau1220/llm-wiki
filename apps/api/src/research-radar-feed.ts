@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 const MAX_FEED_BYTES = 1_500_000;
-const FEED_REQUEST_TIMEOUT_MS = 12_000;
+export const FEED_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 3;
 const MAX_ITEM_CONTENT_CHARS = 20_000;
 const MAX_ITEM_CATEGORIES = 6;
@@ -316,6 +316,7 @@ export async function fetchSyndicationFeed(input: {
   url: string;
   etag?: string | null;
   lastModified?: string | null;
+  timeoutMs?: number;
 }): Promise<FeedFetchResult> {
   let url = validateRemoteUrl(input.url);
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
@@ -326,7 +327,11 @@ export async function fetchSyndicationFeed(input: {
     });
     if (input.etag) headers.set("If-None-Match", input.etag);
     if (input.lastModified) headers.set("If-Modified-Since", input.lastModified);
-    const response = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(FEED_REQUEST_TIMEOUT_MS) });
+    const response = await fetch(url, {
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(input.timeoutMs ?? FEED_REQUEST_TIMEOUT_MS),
+    });
     if (response.status === 304) {
       return { kind: "not_modified", etag: input.etag ?? null, lastModified: input.lastModified ?? null };
     }

@@ -30,6 +30,7 @@ export class OllamaLLMProvider implements LLMProvider {
           num_predict: request.maxOutputTokens,
         },
       }),
+      signal: request.timeoutMs ? AbortSignal.timeout(request.timeoutMs) : undefined,
     });
 
     if (!response.ok) {
