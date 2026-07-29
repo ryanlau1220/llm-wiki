@@ -35,6 +35,8 @@ import {
   deleteResearchSourceSchema,
   installResearchRadarStarterPackSchema,
   createResearchAutomationSchema,
+  createResearchAutomationFromSourcesSchema,
+  discoverResearchRadarSourcesSchema,
   updateResearchAutomationSchema,
   deleteResearchAutomationSchema,
   runResearchAutomationSchema,
@@ -122,6 +124,12 @@ const researchSourceSchema = z.object({
 const researchRadarStarterSourceSchema = z.object({
   name: z.string(),
   feedUrl: z.string().url(),
+});
+
+const researchRadarSourceSuggestionSchema = z.object({
+  name: z.string(),
+  feedUrl: z.string().url(),
+  host: z.string(),
 });
 
 const researchAutomationRunSchema = z.object({
@@ -330,8 +338,10 @@ export const appContract = oc.router({
     skipped: z.number().int().nonnegative(),
     failed: z.array(z.object({ name: z.string(), message: z.string() })),
   })),
+  discoverResearchRadarSources: oc.input(discoverResearchRadarSourcesSchema).output(z.array(researchRadarSourceSuggestionSchema)),
   listResearchAutomations: oc.input(z.void().optional()).output(z.array(researchAutomationSchema)),
   createResearchAutomation: oc.input(createResearchAutomationSchema).output(researchAutomationSchema),
+  createResearchAutomationFromSources: oc.input(createResearchAutomationFromSourcesSchema).output(researchAutomationSchema),
   updateResearchAutomation: oc.input(updateResearchAutomationSchema).output(researchAutomationSchema),
   deleteResearchAutomation: oc.input(deleteResearchAutomationSchema).output(z.object({ success: z.literal(true) })),
   runResearchAutomation: oc.input(runResearchAutomationSchema).output(researchAutomationRunSchema),

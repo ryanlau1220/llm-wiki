@@ -21,6 +21,7 @@ import { compareAiEvaluationRuns, createAiEvaluationDataset, getAiEvaluationCapa
 import { listOrganizationSuggestions } from "./organization-suggestions";
 import {
   createResearchAutomation,
+  createResearchAutomationFromSources,
   createResearchSource,
   deleteResearchAutomation,
   deleteResearchSource,
@@ -34,6 +35,7 @@ import {
   updateResearchAutomation,
   updateResearchSource,
 } from "./research-radar";
+import { discoverResearchRadarSources } from "./research-radar-discovery";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -581,6 +583,8 @@ export const router = os.router({
   installResearchRadarStarterPack: os.installResearchRadarStarterPack.use(authMiddleware).handler(async () => installResearchRadarStarterPack(config)),
   listResearchAutomations: os.listResearchAutomations.use(authMiddleware).handler(async () => listResearchAutomations(config)),
   createResearchAutomation: os.createResearchAutomation.use(authMiddleware).handler(async ({ input }) => createResearchAutomation(config, input)),
+  createResearchAutomationFromSources: os.createResearchAutomationFromSources.use(authMiddleware).handler(async ({ input }) => createResearchAutomationFromSources(config, input)),
+  discoverResearchRadarSources: os.discoverResearchRadarSources.use(authMiddleware).handler(async ({ input }) => discoverResearchRadarSources(config, input.topic)),
   updateResearchAutomation: os.updateResearchAutomation.use(authMiddleware).handler(async ({ input }) => updateResearchAutomation(config, input)),
   deleteResearchAutomation: os.deleteResearchAutomation.use(authMiddleware).handler(async ({ input }) => deleteResearchAutomation(config, input.id)),
   runResearchAutomation: os.runResearchAutomation.use(authMiddleware).handler(async ({ input }) => runResearchAutomation(config, input.id)),

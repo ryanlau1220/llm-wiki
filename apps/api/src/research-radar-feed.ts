@@ -6,6 +6,8 @@ import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 const MAX_FEED_BYTES = 1_500_000;
 export const FEED_REQUEST_TIMEOUT_MS = 12_000;
+const MAX_DISCOVERY_PAGE_BYTES = 250_000;
+const DISCOVERY_PAGE_TIMEOUT_MS = 8_000;
 const MAX_REDIRECTS = 3;
 const MAX_ITEM_CONTENT_CHARS = 20_000;
 const MAX_ITEM_CATEGORIES = 6;
@@ -286,9 +288,9 @@ async function assertPublicResolution(url: URL): Promise<void> {
   }
 }
 
-async function readLimitedBody(response: Response): Promise<string> {
+async function readLimitedBody(response: Response, maxBytes = MAX_FEED_BYTES): Promise<string> {
   const declaredLength = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_FEED_BYTES) throw new Error("Feed response exceeds the size limit");
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new Error("Response exceeds the size limit");
   if (!response.body) return "";
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -297,9 +299,9 @@ async function readLimitedBody(response: Response): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     received += value.byteLength;
-    if (received > MAX_FEED_BYTES) {
+    if (received > maxBytes) {
       await reader.cancel();
-      throw new Error("Feed response exceeds the size limit");
+      throw new Error("Response exceeds the size limit");
     }
     chunks.push(value);
   }
@@ -310,6 +312,57 @@ async function readLimitedBody(response: Response): Promise<string> {
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(body);
+}
+
+function htmlAttribute(tag: string, name: string): string | null {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+  return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim() || null;
+}
+
+/** Extracts only declared public RSS, Atom, or JSON Feed alternatives; it does
+ * not trust page scripts or arbitrary links as sources. */
+export function discoverSyndicationFeedUrls(page: string, pageUrl: string): string[] {
+  const found: string[] = [];
+  for (const match of page.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = match[0];
+    const rel = htmlAttribute(tag, "rel")?.toLowerCase().split(/\s+/) ?? [];
+    const type = htmlAttribute(tag, "type")?.toLowerCase() ?? "";
+    const href = htmlAttribute(tag, "href");
+    if (!rel.includes("alternate") || !href) continue;
+    if (!/(application\/(rss|atom)\+xml|application\/feed\+json|application\/json|text\/xml)/.test(type)) continue;
+    try {
+      found.push(validateRemoteUrl(new URL(href, pageUrl).toString()).toString());
+    } catch {
+      // A web page can contain malformed or non-public alternates; ignore it.
+    }
+  }
+  return [...new Set(found)];
+}
+
+/** Reads a small public HTML page only to locate its advertised syndication
+ * alternatives. The resulting feeds are fetched and validated separately. */
+export async function discoverSyndicationFeedUrlsFromPage(pageUrl: string): Promise<string[]> {
+  let url = validateRemoteUrl(pageUrl);
+  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+    await assertPublicResolution(url);
+    const response = await fetch(url, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.1",
+        "User-Agent": "LLM-Wiki-Radar/1.0 (+local research automation)",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(DISCOVERY_PAGE_TIMEOUT_MS),
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location || redirectCount === MAX_REDIRECTS) throw new Error("Source page redirect could not be followed safely");
+      url = validateRemoteUrl(new URL(location, url).toString());
+      continue;
+    }
+    if (!response.ok) throw new Error(`Source page request failed with HTTP ${response.status}`);
+    return discoverSyndicationFeedUrls(await readLimitedBody(response, MAX_DISCOVERY_PAGE_BYTES), url.toString());
+  }
+  return [];
 }
 
 export async function fetchSyndicationFeed(input: {

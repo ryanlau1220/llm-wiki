@@ -15,6 +15,7 @@ import {
   RESEARCH_AUTOMATION_STATUS,
   RESEARCH_AUTOMATION_TRIGGER,
   type CreateResearchAutomation,
+  type CreateResearchAutomationFromSources,
   type CreateResearchSource,
   type UpdateResearchAutomation,
   type UpdateResearchSource,
@@ -374,6 +375,19 @@ export async function createResearchAutomation(config: AppConfig, input: CreateR
     .returning();
   await db.insert(researchAutomationSources).values(input.sourceIds.map((sourceId) => ({ automation_id: automation!.id, source_id: sourceId })));
   return getAutomationView(db, automation!.id);
+}
+
+/** Creates a Radar from the feed suggestions the user explicitly selected.
+ * Sources are independently validated before they can be attached to a job. */
+export async function createResearchAutomationFromSources(config: AppConfig, input: CreateResearchAutomationFromSources) {
+  const sources = await mapWithConcurrency(input.sources, 3, (source) => createResearchSource(config, source));
+  return createResearchAutomation(config, {
+    name: input.name,
+    topic: input.topic,
+    sourceIds: [...new Set(sources.map((source) => source.id))],
+    scheduleMinutes: input.scheduleMinutes,
+    maxCapturesPerRun: input.maxCapturesPerRun,
+  });
 }
 
 export async function updateResearchAutomation(config: AppConfig, input: UpdateResearchAutomation) {

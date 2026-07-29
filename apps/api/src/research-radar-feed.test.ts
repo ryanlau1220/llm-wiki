@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { contentFingerprint, parseOpmlFeeds, parseSyndicationFeed } from "./research-radar-feed";
+import { contentFingerprint, discoverSyndicationFeedUrls, parseOpmlFeeds, parseSyndicationFeed } from "./research-radar-feed";
 
 describe("Research Radar feed normalization", () => {
   test("normalizes RSS items with stable source data", () => {
@@ -44,5 +44,21 @@ describe("Research Radar feed normalization", () => {
       content: "One ‘detail’ & more",
       categories: ["one", "two", "three", "four", "five", "six"],
     });
+  });
+
+  test("finds only advertised public syndication alternatives from a source page", () => {
+    const sources = discoverSyndicationFeedUrls(`
+      <html><head>
+        <link rel="alternate" type="application/rss+xml" href="/feed.xml">
+        <link rel="alternate" type="application/atom+xml" href="https://updates.example.com/atom.xml">
+        <link rel="stylesheet" href="/app.css">
+        <link rel="alternate" type="application/rss+xml" href="http://127.0.0.1/private.xml">
+      </head></html>
+    `, "https://example.com/articles/latest");
+
+    expect(sources).toEqual([
+      "https://example.com/feed.xml",
+      "https://updates.example.com/atom.xml",
+    ]);
   });
 });

@@ -336,6 +336,19 @@ export const createResearchAutomationSchema = z.object({
   maxCapturesPerRun: z.number().int().min(1).max(50).default(10),
 });
 
+const radarSourceSuggestionInputSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  feedUrl: httpUrlSchema,
+});
+
+export const discoverResearchRadarSourcesSchema = z.object({
+  topic: z.string().trim().min(1).max(2_000),
+});
+
+export const createResearchAutomationFromSourcesSchema = createResearchAutomationSchema
+  .omit({ sourceIds: true })
+  .extend({ sources: z.array(radarSourceSuggestionInputSchema).min(1).max(8) });
+
 export const updateResearchAutomationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(160).optional(),
@@ -356,6 +369,7 @@ export const listResearchAutomationRunsSchema = z.object({
 export type CreateResearchSource = z.infer<typeof createResearchSourceSchema>;
 export type UpdateResearchSource = z.infer<typeof updateResearchSourceSchema>;
 export type CreateResearchAutomation = z.infer<typeof createResearchAutomationSchema>;
+export type CreateResearchAutomationFromSources = z.infer<typeof createResearchAutomationFromSourcesSchema>;
 export type UpdateResearchAutomation = z.infer<typeof updateResearchAutomationSchema>;
 
 export const researchSourceSchema = z.object({
