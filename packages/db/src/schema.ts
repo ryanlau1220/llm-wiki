@@ -193,6 +193,112 @@ export const extensionDevices = pgTable(
   })
 );
 
+/** A trusted, user-configured syndication source. The source content is never
+ * written to the vault until a capture is explicitly approved. */
+export const researchSources = pgTable(
+  "research_sources",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    feed_url: text("feed_url").notNull(),
+    source_type: varchar("source_type", { length: 20 }).notNull().default("feed"),
+    is_active: boolean("is_active").notNull().default(true),
+    etag: varchar("etag", { length: 512 }),
+    last_modified: varchar("last_modified", { length: 512 }),
+    last_fetched_at: timestamp("last_fetched_at", { withTimezone: true }),
+    last_success_at: timestamp("last_success_at", { withTimezone: true }),
+    last_error: text("last_error"),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    feedUrlUnique: uniqueIndex("research_sources_feed_url_unique").on(table.feed_url),
+    activeIdx: index("research_sources_active_idx").on(table.is_active),
+  }),
+);
+
+/** A local, bounded automation. The first supported kind is an RSS Radar. */
+export const researchAutomations = pgTable(
+  "research_automations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    kind: varchar("kind", { length: 40 }).notNull().default("rss_radar"),
+    topic: text("topic").notNull(),
+    schedule_minutes: integer("schedule_minutes").notNull(),
+    max_captures_per_run: integer("max_captures_per_run").notNull().default(10),
+    is_active: boolean("is_active").notNull().default(true),
+    last_run_at: timestamp("last_run_at", { withTimezone: true }),
+    next_run_at: timestamp("next_run_at", { withTimezone: true }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    activeNextRunIdx: index("research_automations_active_next_run_idx").on(table.is_active, table.next_run_at),
+  }),
+);
+
+export const researchAutomationSources = pgTable(
+  "research_automation_sources",
+  {
+    automation_id: uuid("automation_id")
+      .notNull()
+      .references(() => researchAutomations.id, { onDelete: "cascade" }),
+    source_id: uuid("source_id")
+      .notNull()
+      .references(() => researchSources.id, { onDelete: "cascade" }),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sourceUnique: uniqueIndex("research_automation_sources_unique").on(table.automation_id, table.source_id),
+    sourceIdx: index("research_automation_sources_source_idx").on(table.source_id),
+  }),
+);
+
+export const researchAutomationRuns = pgTable(
+  "research_automation_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    automation_id: uuid("automation_id")
+      .notNull()
+      .references(() => researchAutomations.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull(),
+    trigger: varchar("trigger", { length: 20 }).notNull(),
+    discovered_count: integer("discovered_count").notNull().default(0),
+    new_item_count: integer("new_item_count").notNull().default(0),
+    capture_count: integer("capture_count").notNull().default(0),
+    skipped_count: integer("skipped_count").notNull().default(0),
+    error_message: text("error_message"),
+    started_at: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completed_at: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    automationStartedIdx: index("research_automation_runs_automation_started_idx").on(table.automation_id, table.started_at),
+    statusIdx: index("research_automation_runs_status_idx").on(table.status),
+  }),
+);
+
+export const researchSourceItems = pgTable(
+  "research_source_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    source_id: uuid("source_id")
+      .notNull()
+      .references(() => researchSources.id, { onDelete: "cascade" }),
+    external_id: varchar("external_id", { length: 1_000 }).notNull(),
+    canonical_url: text("canonical_url").notNull(),
+    content_hash: varchar("content_hash", { length: 64 }).notNull(),
+    title: varchar("title", { length: 500 }).notNull(),
+    published_at: timestamp("published_at", { withTimezone: true }),
+    capture_id: uuid("capture_id").references(() => researchCaptures.id, { onDelete: "set null" }),
+    first_seen_at: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sourceExternalUnique: uniqueIndex("research_source_items_source_external_unique").on(table.source_id, table.external_id),
+    sourceCanonicalIdx: index("research_source_items_source_canonical_idx").on(table.source_id, table.canonical_url),
+  }),
+);
+
 /**
  * Raw research capture awaiting a deliberate review decision. Approved content
  * is written to the vault; the inbox remains an operational queue, not a
@@ -203,6 +309,9 @@ export const researchCaptures = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     extension_device_id: uuid("extension_device_id").references(() => extensionDevices.id, {
+      onDelete: "set null"
+    }),
+    automation_run_id: uuid("automation_run_id").references(() => researchAutomationRuns.id, {
       onDelete: "set null"
     }),
     source_url: text("source_url").notNull(),
@@ -227,7 +336,8 @@ export const researchCaptures = pgTable(
       table.status,
       table.captured_at
     ),
-    deviceIdx: index("research_captures_extension_device_id_idx").on(table.extension_device_id)
+    deviceIdx: index("research_captures_extension_device_id_idx").on(table.extension_device_id),
+    automationRunIdx: index("research_captures_automation_run_id_idx").on(table.automation_run_id)
   })
 );
 

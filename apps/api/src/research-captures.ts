@@ -217,6 +217,44 @@ export async function createResearchCapture(
   return { id: capture!.id, status: capture!.status };
 }
 
+/**
+ * Internal-only ingestion boundary for a local research automation. It keeps
+ * automated collection in the same explicit review queue as extension
+ * captures; no automation is allowed to write directly into the vault.
+ */
+export async function createAutomationResearchCapture(
+  config: AppConfig,
+  input: {
+    automationRunId: string;
+    sourceUrl: string;
+    sourceTitle: string;
+    topic: string;
+    content: string;
+    capturedAt: Date;
+  },
+) {
+  const { db } = createDbClient(requireDatabase(config));
+  const sourceUrl = canonicalizeCaptureUrl(input.sourceUrl);
+  const [capture] = await db
+    .insert(researchCaptures)
+    .values({
+      automation_run_id: input.automationRunId,
+      source_url: sourceUrl,
+      source_title: input.sourceTitle.slice(0, 500),
+      query: input.topic,
+      content: input.content.slice(0, 100_000),
+      sources: [{ title: input.sourceTitle.slice(0, 500), url: sourceUrl }],
+      captured_at: input.capturedAt,
+    })
+    .returning({ id: researchCaptures.id, status: researchCaptures.status });
+
+  await recordCaptureActivity(db, capture!.id, RESEARCH_CAPTURE_ACTIVITY_EVENT.CAPTURED, {
+    automationRunId: input.automationRunId,
+  });
+  sseEmitter.emit("change", { type: "research_capture_changed", id: capture!.id });
+  return { id: capture!.id, status: capture!.status };
+}
+
 export async function listResearchCaptureInbox(
   config: AppConfig,
   status: ResearchCaptureStatus | "all" = RESEARCH_CAPTURE_STATUS.INBOX,

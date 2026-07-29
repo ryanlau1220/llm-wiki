@@ -19,6 +19,19 @@ import {
 import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
 import { compareAiEvaluationRuns, createAiEvaluationDataset, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationDatasets, listAiEvaluationRuns, runAiEvaluation } from "./ai-evaluation";
 import { listOrganizationSuggestions } from "./organization-suggestions";
+import {
+  createResearchAutomation,
+  createResearchSource,
+  deleteResearchAutomation,
+  deleteResearchSource,
+  importResearchSources,
+  listResearchAutomationRuns,
+  listResearchAutomations,
+  listResearchSources,
+  runResearchAutomation,
+  updateResearchAutomation,
+  updateResearchSource,
+} from "./research-radar";
 
 const config = loadConfig();
 const os = implement(appContract);
@@ -557,6 +570,17 @@ export const router = os.router({
   listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
     return listResearchCaptureActivities(config, input.id);
   }),
+  listResearchSources: os.listResearchSources.use(authMiddleware).handler(async () => listResearchSources(config)),
+  createResearchSource: os.createResearchSource.use(authMiddleware).handler(async ({ input }) => createResearchSource(config, input)),
+  importResearchSources: os.importResearchSources.use(authMiddleware).handler(async ({ input }) => importResearchSources(config, input.opml)),
+  updateResearchSource: os.updateResearchSource.use(authMiddleware).handler(async ({ input }) => updateResearchSource(config, input)),
+  deleteResearchSource: os.deleteResearchSource.use(authMiddleware).handler(async ({ input }) => deleteResearchSource(config, input.id)),
+  listResearchAutomations: os.listResearchAutomations.use(authMiddleware).handler(async () => listResearchAutomations(config)),
+  createResearchAutomation: os.createResearchAutomation.use(authMiddleware).handler(async ({ input }) => createResearchAutomation(config, input)),
+  updateResearchAutomation: os.updateResearchAutomation.use(authMiddleware).handler(async ({ input }) => updateResearchAutomation(config, input)),
+  deleteResearchAutomation: os.deleteResearchAutomation.use(authMiddleware).handler(async ({ input }) => deleteResearchAutomation(config, input.id)),
+  runResearchAutomation: os.runResearchAutomation.use(authMiddleware).handler(async ({ input }) => runResearchAutomation(config, input.id)),
+  listResearchAutomationRuns: os.listResearchAutomationRuns.use(authMiddleware).handler(async ({ input }) => listResearchAutomationRuns(config, input.automationId, input.limit)),
   listAiTraces: os.listAiTraces.use(authMiddleware).handler(async ({ input }) => {
     return listAiTracePage(config, input);
   }),

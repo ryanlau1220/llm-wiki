@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import path from "node:path";
 import { setWatcher, getWatcher } from "./watcher-manager";
 import { researchCaptureExtensionRoutes } from "./extension-routes";
+import { startResearchRadarScheduler } from "./research-radar";
 
 const config = loadConfig();
 
@@ -158,11 +159,14 @@ if (config.embeddingProvider === "gemini-geap") {
 const watcher = await startIngestionWatcher(config);
 setWatcher(watcher);
 console.log("Vault watcher active on:", config.vaultPath);
+const radarScheduler = config.databaseUrl ? await startResearchRadarScheduler(config) : null;
+if (radarScheduler) console.log("Research Radar scheduler active");
 
 process.on("SIGINT", async () => {
   const activeWatcher = getWatcher();
   if (activeWatcher) {
     await activeWatcher.stop();
   }
+  radarScheduler?.stop();
   process.exit(0);
 });

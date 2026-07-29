@@ -29,8 +29,20 @@ import {
   aiEvaluationComparisonSchema,
   listOrganizationSuggestionsSchema,
   organizationSuggestionSchema,
+  createResearchSourceSchema,
+  importResearchSourcesSchema,
+  updateResearchSourceSchema,
+  deleteResearchSourceSchema,
+  createResearchAutomationSchema,
+  updateResearchAutomationSchema,
+  deleteResearchAutomationSchema,
+  runResearchAutomationSchema,
+  listResearchAutomationRunsSchema,
   RESEARCH_CAPTURE_ACTIVITY_EVENT,
-  RESEARCH_CAPTURE_STATUS
+  RESEARCH_CAPTURE_STATUS,
+  RESEARCH_AUTOMATION_RUN_STATUS,
+  RESEARCH_AUTOMATION_STATUS,
+  RESEARCH_AUTOMATION_TRIGGER,
 } from "./schemas";
 
 export {
@@ -92,6 +104,56 @@ const researchCaptureActivitySchema = z.object({
   ]),
   detail: z.record(z.string(), z.string()),
   createdAt: z.string(),
+});
+
+const researchSourceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  feedUrl: z.string().url(),
+  sourceType: z.literal("feed"),
+  isActive: z.boolean(),
+  lastFetchedAt: z.string().datetime().nullable(),
+  lastSuccessAt: z.string().datetime().nullable(),
+  lastError: z.string().nullable(),
+  createdAt: z.string().datetime(),
+});
+
+const researchAutomationRunSchema = z.object({
+  id: z.string().uuid(),
+  automationId: z.string().uuid(),
+  status: z.enum([
+    RESEARCH_AUTOMATION_RUN_STATUS.RUNNING,
+    RESEARCH_AUTOMATION_RUN_STATUS.SUCCEEDED,
+    RESEARCH_AUTOMATION_RUN_STATUS.FAILED,
+  ]),
+  trigger: z.enum([
+    RESEARCH_AUTOMATION_TRIGGER.SCHEDULE,
+    RESEARCH_AUTOMATION_TRIGGER.MANUAL,
+    RESEARCH_AUTOMATION_TRIGGER.CATCH_UP,
+  ]),
+  discoveredCount: z.number().int().nonnegative(),
+  newItemCount: z.number().int().nonnegative(),
+  captureCount: z.number().int().nonnegative(),
+  skippedCount: z.number().int().nonnegative(),
+  errorMessage: z.string().nullable(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+});
+
+const researchAutomationSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  kind: z.literal("rss_radar"),
+  topic: z.string(),
+  scheduleMinutes: z.number().int().positive(),
+  maxCapturesPerRun: z.number().int().positive(),
+  status: z.enum([RESEARCH_AUTOMATION_STATUS.ACTIVE, RESEARCH_AUTOMATION_STATUS.PAUSED]),
+  sourceIds: z.array(z.string().uuid()),
+  sourceCount: z.number().int().nonnegative(),
+  lastRunAt: z.string().datetime().nullable(),
+  nextRunAt: z.string().datetime().nullable(),
+  latestRun: researchAutomationRunSchema.nullable(),
+  createdAt: z.string().datetime(),
 });
 
 export const appContract = oc.router({
@@ -246,6 +308,20 @@ export const appContract = oc.router({
   })),
   retryResearchCaptureIndex: oc.input(retryResearchCaptureIndexSchema).output(researchCaptureIndexResultSchema),
   listResearchCaptureActivities: oc.input(z.object({ id: z.string().uuid() })).output(z.array(researchCaptureActivitySchema)),
+  listResearchSources: oc.input(z.void().optional()).output(z.array(researchSourceSchema)),
+  createResearchSource: oc.input(createResearchSourceSchema).output(researchSourceSchema),
+  importResearchSources: oc.input(importResearchSourcesSchema).output(z.object({
+    added: z.array(researchSourceSchema),
+    skipped: z.number().int().nonnegative(),
+  })),
+  updateResearchSource: oc.input(updateResearchSourceSchema).output(researchSourceSchema),
+  deleteResearchSource: oc.input(deleteResearchSourceSchema).output(z.object({ success: z.literal(true) })),
+  listResearchAutomations: oc.input(z.void().optional()).output(z.array(researchAutomationSchema)),
+  createResearchAutomation: oc.input(createResearchAutomationSchema).output(researchAutomationSchema),
+  updateResearchAutomation: oc.input(updateResearchAutomationSchema).output(researchAutomationSchema),
+  deleteResearchAutomation: oc.input(deleteResearchAutomationSchema).output(z.object({ success: z.literal(true) })),
+  runResearchAutomation: oc.input(runResearchAutomationSchema).output(researchAutomationRunSchema),
+  listResearchAutomationRuns: oc.input(listResearchAutomationRunsSchema).output(z.array(researchAutomationRunSchema)),
   listAiTraces: oc.input(listAiTracesSchema).output(aiTracePageSchema),
   getAiTrace: oc.input(getAiTraceSchema).output(aiTraceDetailSchema),
   createAiEvaluationDataset: oc.input(createAiEvaluationDatasetSchema).output(aiEvaluationDatasetSchema),

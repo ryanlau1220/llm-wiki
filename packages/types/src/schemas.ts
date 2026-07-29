@@ -291,6 +291,72 @@ const httpUrlSchema = z
   .max(4_000)
   .refine((value) => /^https?:\/\//i.test(value), "Only http(s) URLs are allowed");
 
+export const RESEARCH_AUTOMATION_STATUS = {
+  ACTIVE: "active",
+  PAUSED: "paused",
+} as const;
+
+export const RESEARCH_AUTOMATION_RUN_STATUS = {
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+} as const;
+
+export const RESEARCH_AUTOMATION_TRIGGER = {
+  SCHEDULE: "schedule",
+  MANUAL: "manual",
+  CATCH_UP: "catch_up",
+} as const;
+
+export const createResearchSourceSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  feedUrl: httpUrlSchema,
+});
+
+export const importResearchSourcesSchema = z.object({
+  opml: z.string().trim().min(1).max(1_000_000),
+});
+
+export const updateResearchSourceSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(160).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const deleteResearchSourceSchema = z.object({ id: z.string().uuid() });
+
+const sourceIdsSchema = z.array(z.string().uuid()).min(1).max(100);
+
+export const createResearchAutomationSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  topic: z.string().trim().min(1).max(2_000),
+  sourceIds: sourceIdsSchema,
+  scheduleMinutes: z.number().int().min(15).max(10_080),
+  maxCapturesPerRun: z.number().int().min(1).max(50).default(10),
+});
+
+export const updateResearchAutomationSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(160).optional(),
+  topic: z.string().trim().min(1).max(2_000).optional(),
+  sourceIds: sourceIdsSchema.optional(),
+  scheduleMinutes: z.number().int().min(15).max(10_080).optional(),
+  maxCapturesPerRun: z.number().int().min(1).max(50).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const deleteResearchAutomationSchema = z.object({ id: z.string().uuid() });
+export const runResearchAutomationSchema = z.object({ id: z.string().uuid() });
+export const listResearchAutomationRunsSchema = z.object({
+  automationId: z.string().uuid(),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
+export type CreateResearchSource = z.infer<typeof createResearchSourceSchema>;
+export type UpdateResearchSource = z.infer<typeof updateResearchSourceSchema>;
+export type CreateResearchAutomation = z.infer<typeof createResearchAutomationSchema>;
+export type UpdateResearchAutomation = z.infer<typeof updateResearchAutomationSchema>;
+
 export const researchSourceSchema = z.object({
   title: z.string().trim().min(1).max(500),
   url: httpUrlSchema,
