@@ -101,8 +101,7 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
   );
   const discoverSources = useMutation(
     orpc.discoverResearchRadarSources.mutationOptions({
-      onSuccess: (suggestions) =>
-        setSelectedSuggestionUrls(suggestions.map((suggestion) => suggestion.feedUrl)),
+      onSuccess: () => setSelectedSuggestionUrls([]),
     }),
   );
   const createAutomation = useMutation(
