@@ -395,7 +395,6 @@ function contentForCapture(item: FeedItem): string {
   const metadata = [
     item.author ? `Author: ${item.author}` : null,
     item.publishedAt ? `Published: ${item.publishedAt.toISOString()}` : null,
-    item.categories.length ? `Categories: ${item.categories.join(", ")}` : null,
   ].filter(Boolean);
   return [`# ${item.title}`, ...metadata, "", item.content].join("\n");
 }

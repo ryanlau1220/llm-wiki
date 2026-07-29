@@ -8,6 +8,16 @@ const MAX_FEED_BYTES = 1_500_000;
 const FEED_REQUEST_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 3;
 const MAX_ITEM_CONTENT_CHARS = 20_000;
+const MAX_ITEM_CATEGORIES = 6;
+const MAX_CATEGORY_CHARS = 80;
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  quot: '"',
+};
 
 export type FeedItem = {
   externalId: string;
@@ -36,18 +46,41 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
 }
 
+function decodeHtmlEntity(entity: string): string {
+  if (entity.startsWith("#")) {
+    const numeric = entity.slice(1);
+    const codePoint = /^x[0-9a-f]+$/i.test(numeric) ? Number.parseInt(numeric.slice(1), 16) : Number.parseInt(numeric, 10);
+    if (Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return String.fromCodePoint(codePoint);
+    }
+    return `&${entity};`;
+  }
+  return NAMED_HTML_ENTITIES[entity.toLowerCase()] ?? `&${entity};`;
+}
+
+/** Decodes ordinary HTML character entities without enabling XML entities. */
+export function normalizeSyndicationText(value: string): string {
+  let normalized = value;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const decoded = normalized.replace(/&(#(?:x[0-9a-f]+|\d+)|amp|apos|gt|lt|nbsp|quot);/gi, (_, entity: string) => decodeHtmlEntity(entity));
+    if (decoded === normalized) break;
+    normalized = decoded;
+  }
+  return normalized;
+}
+
 function asText(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (typeof value === "string" || typeof value === "number") return normalizeSyndicationText(String(value)).trim();
   if (!isObject(value)) return "";
   for (const key of ["#text", "#cdata", "__cdata", "_text"]) {
     const candidate = value[key];
-    if (typeof candidate === "string" || typeof candidate === "number") return String(candidate).trim();
+    if (typeof candidate === "string" || typeof candidate === "number") return normalizeSyndicationText(String(candidate)).trim();
   }
   return "";
 }
 
 function stripHtml(value: string): string {
-  return value
+  return normalizeSyndicationText(value)
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -83,15 +116,15 @@ function itemId(value: string, url: string, title: string): string {
 }
 
 function categoryTexts(value: unknown): string[] {
-  return asArray(value)
+  return [...new Set(asArray(value)
     .flatMap((entry) => {
       if (typeof entry === "string") return [entry];
       if (!isObject(entry)) return [];
       return [asText(entry), asText(entry["@_term"]), asText(entry["@_label"])];
     })
-    .map((entry) => entry.trim())
+    .map((entry) => entry.trim().slice(0, MAX_CATEGORY_CHARS))
     .filter(Boolean)
-    .slice(0, 20);
+  )].slice(0, MAX_ITEM_CATEGORIES);
 }
 
 function feedItemFromRss(value: unknown): FeedItem | null {

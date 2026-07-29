@@ -34,4 +34,15 @@ describe("Research Radar feed normalization", () => {
     const [item] = parseSyndicationFeed(`<?xml version="1.0"?><rss><channel><title>Example</title><item><guid>x</guid><title>Same</title><link>https://example.com/item</link><description>Body</description></item></channel></rss>`).items;
     expect(contentFingerprint(item!)).toBe(contentFingerprint(item!));
   });
+
+  test("decodes safely preserved HTML entities and bounds noisy feed categories", () => {
+    const feed = parseSyndicationFeed(`<?xml version="1.0"?><rss><channel><title>Example</title><item><guid>x</guid><title>&amp;#8216;Popa&amp;#8217; Botnet &amp;amp; Defenses</title><link>https://example.com/item</link><description>One &amp;#8216;detail&amp;#8217; &amp;amp; more</description><category>one</category><category>two</category><category>three</category><category>four</category><category>five</category><category>six</category><category>seven</category></item></channel></rss>`);
+    const [item] = feed.items;
+
+    expect(item).toMatchObject({
+      title: "‘Popa’ Botnet & Defenses",
+      content: "One ‘detail’ & more",
+      categories: ["one", "two", "three", "four", "five", "six"],
+    });
+  });
 });
