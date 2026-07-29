@@ -45,8 +45,10 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [starterPackMessage, setStarterPackMessage] = useState<string | null>(null);
 
   const sourcesQuery = useQuery(orpc.listResearchSources.queryOptions());
+  const starterSourcesQuery = useQuery(orpc.listResearchRadarStarterSources.queryOptions());
   const automationsQuery = useQuery(orpc.listResearchAutomations.queryOptions());
   const selectedAutomation = useMemo(
     () => automationsQuery.data?.find((automation) => automation.id === selectedAutomationId) ?? null,
@@ -84,6 +86,14 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
     },
   }));
   const deleteSource = useMutation(orpc.deleteResearchSource.mutationOptions({ onSuccess: invalidate }));
+  const installStarterPack = useMutation(orpc.installResearchRadarStarterPack.mutationOptions({
+    onSuccess: (result) => {
+      setSelectedSourceIds((ids) => [...new Set([...ids, ...result.added.map((source) => source.id)])]);
+      const failed = result.failed.length ? ` ${result.failed.length} source${result.failed.length === 1 ? "" : "s"} need attention.` : "";
+      setStarterPackMessage(`${result.added.length} added, ${result.skipped} already configured.${failed}`);
+      invalidate();
+    },
+  }));
   const createAutomation = useMutation(orpc.createResearchAutomation.mutationOptions({
     onSuccess: (automation) => {
       setSelectedAutomationId(automation.id);
@@ -151,6 +161,17 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
         <section className="space-y-5">
           <div className="island-shell rounded-2xl border border-[var(--line)] p-5">
             <div className="mb-4 flex items-center gap-2"><Rss size={17} className="text-[var(--lagoon)]" /><h2 className="font-bold text-[var(--sea-ink)]">Feed sources</h2></div>
+            <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--foam)] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div><p className="text-xs font-bold text-[var(--sea-ink)]">Recommended starter sources</p><p className="mt-0.5 text-[10px] text-[var(--sea-ink-soft)]">Curated from the shared HN popular-blog OPML.</p></div>
+                <button type="button" onClick={() => installStarterPack.mutate({})} disabled={installStarterPack.isPending} className="shrink-0 rounded-lg border border-[var(--lagoon)] px-2.5 py-1.5 text-xs font-bold text-[var(--lagoon)] hover:bg-[var(--surface)] disabled:opacity-50">{installStarterPack.isPending ? "Adding…" : "Add sources"}</button>
+              </div>
+              <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                {starterSourcesQuery.data?.map((source) => <li key={source.feedUrl} className="min-w-0 rounded-md bg-[var(--surface)] px-2 py-1.5"><p className="truncate text-[10px] font-bold text-[var(--sea-ink)]">{source.name}</p><p className="truncate font-mono text-[9px] text-[var(--sea-ink-soft)]">{new URL(source.feedUrl).hostname}</p></li>)}
+              </ul>
+              {starterPackMessage && <p className="mt-2 text-[10px] font-semibold text-[var(--sea-ink-soft)]">{starterPackMessage}</p>}
+              {installStarterPack.isError && <p className="mt-2 text-[10px] font-semibold text-red-500">{installStarterPack.error.message}</p>}
+            </div>
             <form onSubmit={(event) => { event.preventDefault(); if (feedUrl.trim()) addSource.mutate({ feedUrl: feedUrl.trim() }); }} className="flex gap-2">
               <input value={feedUrl} onChange={(event) => setFeedUrl(event.target.value)} placeholder="https://example.com/feed.xml" className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--sea-ink)] outline-none focus:border-[var(--lagoon)]" />
               <button type="submit" disabled={addSource.isPending} className="rounded-lg bg-[var(--lagoon)] px-3 text-sm font-bold text-[var(--lagoon-text)] disabled:opacity-50"><Plus size={17} /></button>
