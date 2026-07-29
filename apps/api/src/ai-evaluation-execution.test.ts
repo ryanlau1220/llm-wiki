@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildLocalJudgePrompt, parseLocalJudgeResult } from "./ai-evaluation-execution";
+import { buildLocalJudgePrompt, classifyLocalJudgeFailure, parseLocalJudgeResult } from "./ai-evaluation-execution";
 
 describe("local evaluation execution boundary", () => {
   test("keeps local judge output compact and rejects free-form results", () => {
@@ -21,5 +21,10 @@ describe("local evaluation execution boundary", () => {
 
     expect(prompt).toContain("Private local evidence");
     expect(prompt).not.toContain("traceId");
+  });
+
+  test("keeps local judge failure codes structural", () => {
+    expect(classifyLocalJudgeFailure(new Error("Local evaluator returned invalid JSON"))).toBe("local_judge_invalid_response");
+    expect(classifyLocalJudgeFailure(new Error("Ollama generation failed: 404"))).toBe("local_judge_unavailable");
   });
 });

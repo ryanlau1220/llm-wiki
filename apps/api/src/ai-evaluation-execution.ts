@@ -14,6 +14,7 @@ const LOCAL_JUDGE_MAX_OUTPUT_TOKENS = 256;
 
 export type EvaluationEvidence = { documentPath: string; chunkIndex?: number };
 export type LocalJudgeResult = { score: number; labels: string[] };
+export type LocalJudgeFailureCode = "local_judge_invalid_response" | "local_judge_unavailable";
 
 export type AskEvaluationExecution = {
   traceId: string | null;
@@ -147,6 +148,13 @@ export function parseLocalJudgeResult(text: string): LocalJudgeResult {
     throw new Error("Local evaluator labels must be compact identifiers");
   }
   return { score: candidate.score, labels: [...new Set(candidate.labels)] };
+}
+
+export function classifyLocalJudgeFailure(error: unknown): LocalJudgeFailureCode {
+  if (error instanceof Error && error.message.startsWith("Local evaluator")) {
+    return "local_judge_invalid_response";
+  }
+  return "local_judge_unavailable";
 }
 
 export function buildLocalJudgePrompt(input: {

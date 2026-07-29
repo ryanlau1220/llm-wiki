@@ -352,6 +352,9 @@ function RunHistory({
                     {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)} · judge{" "}
                     {result.judgeScore ?? "n/a"}
                     {result.judgeLabels?.length ? ` · ${result.judgeLabels.join(", ")}` : ""}
+                    {result.errorCode && (
+                      <span className="text-red-300"> · {formatEvaluationError(result.errorCode)}</span>
+                    )}
                   </p>
                 ))}
               </div>
@@ -395,4 +398,10 @@ function formatDelta(value: number | null) {
 
 export function formatRetrievalRecall(value: number | null | undefined) {
   return typeof value === "number" ? value.toFixed(2) : "not assessed";
+}
+
+export function formatEvaluationError(errorCode: string) {
+  if (errorCode === "local_judge_invalid_response") return "local judge returned invalid structured output";
+  if (errorCode === "local_judge_unavailable") return "local judge unavailable";
+  return errorCode.replaceAll("_", " ");
 }
