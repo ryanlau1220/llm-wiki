@@ -332,7 +332,7 @@ export const createResearchAutomationSchema = z.object({
   name: z.string().trim().min(1).max(160),
   topic: z.string().trim().min(1).max(2_000),
   sourceIds: sourceIdsSchema,
-  scheduleMinutes: z.number().int().min(15).max(10_080),
+  scheduleMinutes: z.number().int().min(20).max(10_080),
   maxCapturesPerRun: z.number().int().min(1).max(50).default(10),
 });
 
@@ -354,7 +354,7 @@ export const updateResearchAutomationSchema = z.object({
   name: z.string().trim().min(1).max(160).optional(),
   topic: z.string().trim().min(1).max(2_000).optional(),
   sourceIds: sourceIdsSchema.optional(),
-  scheduleMinutes: z.number().int().min(15).max(10_080).optional(),
+  scheduleMinutes: z.number().int().min(20).max(10_080).optional(),
   maxCapturesPerRun: z.number().int().min(1).max(50).optional(),
   isActive: z.boolean().optional(),
 });

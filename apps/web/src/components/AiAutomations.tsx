@@ -174,7 +174,7 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
 
   const saveAutomation = () => {
     const scheduleMinutes = Math.max(
-      15,
+      20,
       Math.min(10_080, Math.round(Number(intervalHours || 0) * 60)),
     );
     if (selectedAutomation && editing) {
