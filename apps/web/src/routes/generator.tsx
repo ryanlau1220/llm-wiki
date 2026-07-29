@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 import { z } from "zod";
 import { AiGeneratorEvaluate, reviewResponseToPrefill } from "../components/AiGeneratorEvaluate";
+import { AiAutomations } from "../components/AiAutomations";
 import { AiTraceInspect } from "../components/AiTraceInspect";
 import { orpc } from "../lib/orpc";
 
@@ -38,7 +39,7 @@ function GeneratorComponent() {
     inspect: inspectTraceId,
     view,
   } = Route.useSearch();
-  const [activeMode, setActiveMode] = useState<"rag" | "general" | "synthesis" | "bootstrap">(
+  const [activeMode, setActiveMode] = useState<"rag" | "general" | "synthesis" | "bootstrap" | "automations">(
     queryMode || "rag",
   );
   const [queryText, setQueryText] = useState(queryTitle || "");
@@ -75,7 +76,7 @@ function GeneratorComponent() {
     orpc.askPreview.mutationOptions({
       onSuccess: (data) => {
         setResult({
-          mode: activeMode, // 'rag' or 'general'
+          mode: activeMode as "rag" | "general",
           query: queryText,
           data,
         });
@@ -169,6 +170,7 @@ function GeneratorComponent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (activeMode === "automations") return;
     if (!queryText.trim()) return;
 
     if (activeMode === "synthesis") {
@@ -268,7 +270,9 @@ function GeneratorComponent() {
         </div>
       )}
 
-      {!result ? (
+      {!result && activeMode === "automations" ? (
+        <AiAutomations onBack={() => setActiveMode("rag")} />
+      ) : !result ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto text-center rise-in">
           <h2 className="display-title text-4xl font-extrabold text-[var(--sea-ink)] mb-3 leading-tight tracking-tight">
             What would you like to generate today?
@@ -295,6 +299,7 @@ function GeneratorComponent() {
                 <option value="general">Ask AI (Web Search)</option>
                 <option value="synthesis">Synthesize Topic</option>
                 <option value="bootstrap">AI Bootstrapper (Unresolved Link)</option>
+                <option value="automations">Automations</option>
               </select>
             </div>
 
@@ -309,7 +314,7 @@ function GeneratorComponent() {
                     ? "Ask general knowledge or browse the web..."
                     : activeMode === "synthesis"
                       ? "Enter a topic to synthesize (e.g. 'Drizzle ORM')"
-                      : "Enter concept or select unresolved link below..."
+                    : "Enter concept or select unresolved link below..."
               }
               className="flex-1 bg-transparent px-4 py-3 text-base text-[var(--sea-ink)] focus:outline-none placeholder:text-[var(--sea-ink-soft)]"
             />
@@ -487,6 +492,7 @@ function GeneratorComponent() {
                   <option value="general">Ask AI (Web Search)</option>
                   <option value="synthesis">Synthesize Topic</option>
                   <option value="bootstrap">AI Bootstrapper (Unresolved Link)</option>
+                  <option value="automations">Automations</option>
                 </select>
               </div>
 
