@@ -41,6 +41,17 @@ export function fallbackTopicFeedUrl(topic: string): string {
   return `https://news.google.com/rss/search?q=${encodeURIComponent(topic)}`;
 }
 
+async function fallbackTopicFeed(topic: string): Promise<RadarSourceSuggestion[]> {
+  const feedUrl = fallbackTopicFeedUrl(topic);
+  const result = await fetchSyndicationFeed({ url: feedUrl, timeoutMs: 8_000 });
+  if (result.kind !== "feed") throw new Error("The topic feed did not return readable content");
+  return [{
+    name: `News: ${topic}`.slice(0, 160),
+    feedUrl,
+    host: "news.google.com",
+  }];
+}
+
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
@@ -58,16 +69,7 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
 /** Searches only when the user asks to find public sources for a Radar. The
  * result is transient: no source is persisted until the user selects it. */
 export async function discoverResearchRadarSources(config: AppConfig, topic: string): Promise<RadarSourceSuggestion[]> {
-  if (!config.tavilyApiKey) {
-    const feedUrl = fallbackTopicFeedUrl(topic);
-    const result = await fetchSyndicationFeed({ url: feedUrl, timeoutMs: 8_000 });
-    if (result.kind !== "feed") throw new Error("The topic feed did not return readable content");
-    return [{
-      name: `News: ${topic}`.slice(0, 160),
-      feedUrl,
-      host: "news.google.com",
-    }];
-  }
+  if (!config.tavilyApiKey) return fallbackTopicFeed(topic);
   const search = createWebSearchProvider({ tavily: { apiKey: config.tavilyApiKey, searchDepth: "basic" } });
   const response = await search.search({
     query: `${topic} (RSS OR Atom OR \"JSON Feed\")`,
@@ -96,5 +98,8 @@ export async function discoverResearchRadarSources(config: AppConfig, topic: str
       return null;
     }
   });
-  return validated.filter((suggestion): suggestion is RadarSourceSuggestion => Boolean(suggestion)).slice(0, SUGGESTION_LIMIT);
+  const suggestions = validated
+    .filter((suggestion): suggestion is RadarSourceSuggestion => Boolean(suggestion))
+    .slice(0, SUGGESTION_LIMIT);
+  return suggestions.length ? suggestions : fallbackTopicFeed(topic);
 }
