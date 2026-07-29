@@ -19,6 +19,7 @@ import type { AppConfig } from "./config";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
 import {
   executeAskEvaluation,
+  classifyLocalJudgeFailure,
   getLocalJudgeCapability,
   runLocalJudge,
 } from "./ai-evaluation-execution";
@@ -154,8 +155,9 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
           totalTokens += localResult.totalTokens ?? 0;
           await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, localResult.totalTokens === null ? {} : { total_tokens: localResult.totalTokens });
         } catch (error) {
-          await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, error instanceof Error ? error.message : "local_judge_failed");
-          throw error;
+          const errorCode = classifyLocalJudgeFailure(error);
+          await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, errorCode);
+          throw new Error(errorCode);
         }
       }
     } catch (error) {
@@ -172,8 +174,10 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
       status = STATUS.FAILED;
       errorCode = error instanceof Error && error.message === "judge_budget_exhausted"
         ? "judge_budget_exhausted"
-        : judgeAttempted
-          ? "local_judge_failed"
+        : error instanceof Error && (error.message === "local_judge_invalid_response" || error.message === "local_judge_unavailable")
+          ? error.message
+          : judgeAttempted
+            ? "local_judge_unavailable"
           : "target_execution_failed";
       failedCases += 1;
     }

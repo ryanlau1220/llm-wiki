@@ -22,6 +22,8 @@ export class OllamaLLMProvider implements LLMProvider {
       body: JSON.stringify({
         model: this.model,
         prompt: request.prompt,
+        system: request.systemInstruction,
+        format: request.responseMimeType === "application/json" ? "json" : undefined,
         stream: false,
         options: {
           temperature: request.temperature,
@@ -35,10 +37,25 @@ export class OllamaLLMProvider implements LLMProvider {
       throw new Error(`Ollama generation failed: ${response.status} - ${errorText}`);
     }
 
-    const data = (await response.json()) as { response: string };
+    const data = (await response.json()) as {
+      response: string;
+      prompt_eval_count?: number;
+      eval_count?: number;
+    };
+    const promptTokens = usageCount(data.prompt_eval_count);
+    const candidatesTokens = usageCount(data.eval_count);
     
     return {
       text: data.response,
+      usage: {
+        promptTokens,
+        candidatesTokens,
+        totalTokens: promptTokens + candidatesTokens,
+      },
     };
   }
+}
+
+function usageCount(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
 }
