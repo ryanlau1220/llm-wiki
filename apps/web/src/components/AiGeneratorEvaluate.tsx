@@ -1,12 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ChevronLeft,
-  FlaskConical,
-  Loader2,
-  Play,
-  Plus,
-} from "lucide-react";
+import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { orpc } from "../lib/orpc";
 
@@ -241,7 +234,12 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
           )}
           <button
             type="button"
-            disabled={!selectedDataset || !targetConfirmed || runMutation.isPending || (judgeEnabled && !judgeConfirmed)}
+            disabled={
+              !selectedDataset ||
+              !targetConfirmed ||
+              runMutation.isPending ||
+              (judgeEnabled && !judgeConfirmed)
+            }
             onClick={run}
             className="inline-flex items-center gap-2 rounded-lg bg-sea-ink px-3 py-2 text-sm font-bold text-bg-base disabled:opacity-50"
           >
@@ -332,14 +330,15 @@ function RunHistory({
               <div key={run.id} className="rounded-lg bg-foam p-3 text-sm">
                 <div className="flex justify-between gap-2">
                   <b className="text-sea-ink">
-                    Dataset v{run.datasetVersion} · {run.rubricVersion}
+                    {formatDatasetRunTitle(run.datasetName, run.datasetVersion, run.rubricVersion)}
                   </b>
                   <span className={run.status === "succeeded" ? "text-green-700" : "text-red-700"}>
                     {run.status}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-sea-ink-soft">
-                  {String(run.workflowManifest?.target ?? "ask_rag")} · {run.evaluatorContractVersion} ·{" "}
+                  {String(run.workflowManifest?.target ?? "ask_rag")} ·{" "}
+                  {run.evaluatorContractVersion} ·{" "}
                   {run.judgeEnabled
                     ? `${run.modelProvider ?? "configured"} / ${run.modelName ?? "model"}`
                     : "deterministic only"}{" "}
@@ -348,12 +347,15 @@ function RunHistory({
                 </p>
                 {run.results?.map((result: any) => (
                   <p key={result.id} className="mt-1 text-xs text-sea-ink-soft">
-                    Case {result.caseId.slice(0, 8)}: retrieval recall{" "}
+                    Case {result.caseId.slice(0, 8)}:{" "}
                     {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)} · judge{" "}
                     {result.judgeScore ?? "n/a"}
                     {result.judgeLabels?.length ? ` · ${result.judgeLabels.join(", ")}` : ""}
                     {result.errorCode && (
-                      <span className="text-red-300"> · {formatEvaluationError(result.errorCode)}</span>
+                      <span className="text-red-300">
+                        {" "}
+                        · {formatEvaluationError(result.errorCode)}
+                      </span>
                     )}
                   </p>
                 ))}
@@ -396,12 +398,23 @@ function formatDelta(value: number | null) {
   return value === null ? "n/a" : `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 
+export function formatDatasetRunTitle(
+  datasetName: string | null | undefined,
+  datasetVersion: number,
+  rubricVersion: string,
+) {
+  return `${datasetName || "Dataset"} · v${datasetVersion} · ${rubricVersion}`;
+}
+
 export function formatRetrievalRecall(value: number | null | undefined) {
-  return typeof value === "number" ? value.toFixed(2) : "not assessed";
+  return typeof value === "number"
+    ? `${Math.round(value * 100)}% expected sources retrieved`
+    : "expected sources not assessed";
 }
 
 export function formatEvaluationError(errorCode: string) {
-  if (errorCode === "local_judge_invalid_response") return "local judge returned invalid structured output";
+  if (errorCode === "local_judge_invalid_response")
+    return "local judge returned invalid structured output";
   if (errorCode === "local_judge_unavailable") return "local judge unavailable";
   return errorCode.replaceAll("_", " ");
 }
