@@ -324,6 +324,7 @@ export const updateResearchSourceSchema = z.object({
 });
 
 export const deleteResearchSourceSchema = z.object({ id: z.string().uuid() });
+export const installResearchRadarStarterPackSchema = z.object({}).optional();
 
 const sourceIdsSchema = z.array(z.string().uuid()).min(1).max(100);
 

@@ -29,6 +29,7 @@ import {
   parseOpmlFeeds,
   type FeedItem,
 } from "./research-radar-feed";
+import { RESEARCH_RADAR_STARTER_SOURCES } from "./research-radar-starter-pack";
 
 const MAX_RECENT_RUNS = 50;
 const AUTOMATION_TICK_MS = 60_000;
@@ -272,6 +273,37 @@ export async function deleteResearchSource(config: AppConfig, id: string) {
   const deleted = await db.delete(researchSources).where(eq(researchSources.id, id)).returning({ id: researchSources.id });
   if (!deleted.length) throw new Error("Research source not found");
   return { success: true as const };
+}
+
+export function listResearchRadarStarterSources() {
+  return RESEARCH_RADAR_STARTER_SOURCES.map((source) => ({ ...source }));
+}
+
+/** Adds the small starter pack idempotently, validating every feed before it
+ * becomes an active source. A transient feed failure never rolls back valid
+ * sources or hides the failure from the caller. */
+export async function installResearchRadarStarterPack(config: AppConfig) {
+  const { db } = createDbClient(requireDatabase(config));
+  const existing = new Set((await db.select({ feedUrl: researchSources.feed_url }).from(researchSources)).map((source) => source.feedUrl));
+  const added: Awaited<ReturnType<typeof createResearchSource>>[] = [];
+  const failed: Array<{ name: string; message: string }> = [];
+  let skipped = 0;
+
+  for (const source of RESEARCH_RADAR_STARTER_SOURCES) {
+    if (existing.has(source.feedUrl)) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      added.push(await createResearchSource(config, source));
+    } catch (error) {
+      failed.push({
+        name: source.name,
+        message: error instanceof Error ? error.message.slice(0, 500) : "Source setup failed",
+      });
+    }
+  }
+  return { added, skipped, failed };
 }
 
 export async function listResearchAutomations(config: AppConfig) {
