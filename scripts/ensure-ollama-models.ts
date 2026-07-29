@@ -60,13 +60,28 @@ async function ensureOllamaModels(): Promise<void> {
   }
 
   for (const model of readiness.missingModels) {
-    process.stdout.write(`[Ollama] Downloading ${model}... `);
+    let lastProgress = "";
     try {
-      await pullOllamaModel(baseUrl, model);
-      console.log("done.");
+      await pullOllamaModel(baseUrl, model, {
+        onProgress: ({ completed, status, total }) => {
+          const percentage =
+            total && completed !== undefined
+              ? `${Math.floor((completed / total) * 100)}%`
+              : status || "starting";
+          const nextProgress = `[Ollama] Downloading ${model}: ${percentage}`;
+          if (nextProgress === lastProgress) {
+            return;
+          }
+          lastProgress = nextProgress;
+          output.write(`\r${nextProgress}`);
+        },
+      });
+      output.write("\n");
+      console.log(`[Ollama] Downloaded ${model}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.log(`failed (${message}).`);
+      output.write("\n");
+      console.log(`[Ollama] Downloading ${model} failed (${message}).`);
     }
   }
 }

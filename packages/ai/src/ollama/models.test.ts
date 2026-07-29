@@ -44,18 +44,36 @@ describe("Ollama model readiness", () => {
     });
   });
 
-  test("downloads a model through Ollama's non-streaming pull endpoint", async () => {
+  test("streams pull progress from Ollama's model download endpoint", async () => {
     let request: RequestInit | undefined;
+    const progress: Array<{ completed?: number; status?: string; total?: number }> = [];
     globalThis.fetch = (async (_input, init) => {
       request = init;
-      return new Response(JSON.stringify({ status: "success" }));
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `${JSON.stringify({ status: "pulling", completed: 25, total: 100 })}\n${JSON.stringify({ status: "success" })}\n`,
+              ),
+            );
+            controller.close();
+          },
+        }),
+      );
     }) as typeof fetch;
 
-    await pullOllamaModel("http://ollama.test", "llama3");
+    await pullOllamaModel("http://ollama.test", "llama3", {
+      onProgress: (event) => progress.push(event),
+    });
 
     expect(request).toMatchObject({
       method: "POST",
-      body: JSON.stringify({ model: "llama3", stream: false }),
+      body: JSON.stringify({ model: "llama3", stream: true }),
     });
+    expect(progress).toEqual([
+      { status: "pulling", completed: 25, total: 100 },
+      { status: "success" },
+    ]);
   });
 });

@@ -13,6 +13,17 @@ export type OllamaModelReadiness = {
   missingModels: string[];
 };
 
+export type OllamaPullProgress = {
+  completed?: number;
+  status?: string;
+  total?: number;
+};
+
+type OllamaPullOptions = {
+  fetchImpl?: typeof fetch;
+  onProgress?: (progress: OllamaPullProgress) => void;
+};
+
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}${path}`;
 }
@@ -61,15 +72,52 @@ export async function inspectOllamaModels(
 export async function pullOllamaModel(
   baseUrl: string,
   model: string,
-  fetchImpl: typeof fetch = fetch,
+  { fetchImpl = fetch, onProgress }: OllamaPullOptions = {},
 ): Promise<void> {
   const response = await fetchImpl(endpoint(baseUrl, "/api/pull"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, stream: false }),
+    body: JSON.stringify({ model, stream: true }),
   });
 
   if (!response.ok) {
     throw new Error(`Ollama model download failed with status ${response.status}`);
   }
+
+  if (!response.body) {
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) {
+      return;
+    }
+
+    const progress = JSON.parse(line) as OllamaPullProgress & { error?: string };
+    if (progress.error) {
+      throw new Error(`Ollama model download failed: ${progress.error}`);
+    }
+    onProgress?.(progress);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffered += decoder.decode(value, { stream: !done });
+
+    const lines = buffered.split("\n");
+    buffered = lines.pop() || "";
+    for (const line of lines) {
+      handleLine(line);
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  handleLine(buffered);
 }
