@@ -14,7 +14,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { orpc } from "../lib/orpc";
 
@@ -45,10 +45,9 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [starterPackMessage, setStarterPackMessage] = useState<string | null>(null);
+  const automationFormRef = useRef<HTMLDivElement>(null);
 
   const sourcesQuery = useQuery(orpc.listResearchSources.queryOptions());
-  const starterSourcesQuery = useQuery(orpc.listResearchRadarStarterSources.queryOptions());
   const automationsQuery = useQuery(orpc.listResearchAutomations.queryOptions());
   const selectedAutomation = useMemo(
     () => automationsQuery.data?.find((automation) => automation.id === selectedAutomationId) ?? null,
@@ -86,14 +85,6 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
     },
   }));
   const deleteSource = useMutation(orpc.deleteResearchSource.mutationOptions({ onSuccess: invalidate }));
-  const installStarterPack = useMutation(orpc.installResearchRadarStarterPack.mutationOptions({
-    onSuccess: (result) => {
-      setSelectedSourceIds((ids) => [...new Set([...ids, ...result.added.map((source) => source.id)])]);
-      const failed = result.failed.length ? ` ${result.failed.length} source${result.failed.length === 1 ? "" : "s"} need attention.` : "";
-      setStarterPackMessage(`${result.added.length} added, ${result.skipped} already configured.${failed}`);
-      invalidate();
-    },
-  }));
   const createAutomation = useMutation(orpc.createResearchAutomation.mutationOptions({
     onSuccess: (automation) => {
       setSelectedAutomationId(automation.id);
@@ -103,7 +94,12 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
       invalidate();
     },
   }));
-  const updateAutomation = useMutation(orpc.updateResearchAutomation.mutationOptions({ onSuccess: invalidate }));
+  const updateAutomation = useMutation(orpc.updateResearchAutomation.mutationOptions({
+    onSuccess: () => {
+      setEditing(false);
+      invalidate();
+    },
+  }));
   const runAutomation = useMutation(orpc.runResearchAutomation.mutationOptions({ onSuccess: invalidate }));
   const deleteAutomation = useMutation(orpc.deleteResearchAutomation.mutationOptions({
     onSuccess: () => {
@@ -132,13 +128,22 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
     const scheduleMinutes = Math.max(15, Math.min(10_080, Math.round(Number(intervalHours || 0) * 60)));
     if (selectedAutomation && editing) {
       updateAutomation.mutate({ id: selectedAutomation.id, name, topic, sourceIds: selectedSourceIds, scheduleMinutes });
-      setEditing(false);
       return;
     }
     createAutomation.mutate({ name, topic, sourceIds: selectedSourceIds, scheduleMinutes, maxCapturesPerRun: 10 });
   };
 
   const isSaving = createAutomation.isPending || updateAutomation.isPending;
+
+  const beginEditing = () => {
+    if (!selectedAutomation) return;
+    setName(selectedAutomation.name);
+    setTopic(selectedAutomation.topic);
+    setIntervalHours(intervalToHours(selectedAutomation.scheduleMinutes));
+    setSelectedSourceIds(selectedAutomation.sourceIds);
+    setEditing(true);
+    requestAnimationFrame(() => automationFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   return (
     <div className="space-y-6 rise-in">
@@ -161,17 +166,6 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
         <section className="space-y-5">
           <div className="island-shell rounded-2xl border border-[var(--line)] p-5">
             <div className="mb-4 flex items-center gap-2"><Rss size={17} className="text-[var(--lagoon)]" /><h2 className="font-bold text-[var(--sea-ink)]">Feed sources</h2></div>
-            <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--foam)] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div><p className="text-xs font-bold text-[var(--sea-ink)]">Recommended starter sources</p><p className="mt-0.5 text-[10px] text-[var(--sea-ink-soft)]">Curated from the shared HN popular-blog OPML.</p></div>
-                <button type="button" onClick={() => installStarterPack.mutate({})} disabled={installStarterPack.isPending} className="shrink-0 rounded-lg border border-[var(--lagoon)] px-2.5 py-1.5 text-xs font-bold text-[var(--lagoon)] hover:bg-[var(--surface)] disabled:opacity-50">{installStarterPack.isPending ? "Adding…" : "Add sources"}</button>
-              </div>
-              <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-                {starterSourcesQuery.data?.map((source) => <li key={source.feedUrl} className="min-w-0 rounded-md bg-[var(--surface)] px-2 py-1.5"><p className="truncate text-[10px] font-bold text-[var(--sea-ink)]">{source.name}</p><p className="truncate font-mono text-[9px] text-[var(--sea-ink-soft)]">{new URL(source.feedUrl).hostname}</p></li>)}
-              </ul>
-              {starterPackMessage && <p className="mt-2 text-[10px] font-semibold text-[var(--sea-ink-soft)]">{starterPackMessage}</p>}
-              {installStarterPack.isError && <p className="mt-2 text-[10px] font-semibold text-red-500">{installStarterPack.error.message}</p>}
-            </div>
             <form onSubmit={(event) => { event.preventDefault(); if (feedUrl.trim()) addSource.mutate({ feedUrl: feedUrl.trim() }); }} className="flex gap-2">
               <input value={feedUrl} onChange={(event) => setFeedUrl(event.target.value)} placeholder="https://example.com/feed.xml" className="min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--sea-ink)] outline-none focus:border-[var(--lagoon)]" />
               <button type="submit" disabled={addSource.isPending} className="rounded-lg bg-[var(--lagoon)] px-3 text-sm font-bold text-[var(--lagoon-text)] disabled:opacity-50"><Plus size={17} /></button>
@@ -187,7 +181,7 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
               {sourcesQuery.data?.map((source) => (
                 <div key={source.id} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-[var(--foam)]">
                   <input type="checkbox" checked={selectedSourceIds.includes(source.id)} onChange={() => toggleSource(source)} className="h-4 w-4 accent-[var(--lagoon)]" aria-label={`Use ${source.name}`} />
-                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-[var(--sea-ink)]">{source.name}</p><p className="truncate text-[10px] text-[var(--sea-ink-soft)]">{source.lastError ? "Needs attention" : source.lastSuccessAt ? "Connected" : "Awaiting first run"}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-[var(--sea-ink)]">{source.name}</p><p className="truncate text-[10px] text-[var(--sea-ink-soft)]">{new URL(source.feedUrl).hostname.replace(/^www\./, "")}</p></div>
                   <button type="button" onClick={() => deleteSource.mutate({ id: source.id })} className="rounded p-1.5 text-[var(--sea-ink-soft)] hover:bg-red-500/10 hover:text-red-500" aria-label={`Delete ${source.name}`}><Trash2 size={14} /></button>
                 </div>
               ))}
@@ -195,7 +189,7 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          <div className="island-shell rounded-2xl border border-[var(--line)] p-5">
+          <div ref={automationFormRef} className="island-shell rounded-2xl border border-[var(--line)] p-5">
             <div className="mb-4 flex items-center gap-2"><Plus size={17} className="text-[var(--lagoon)]" /><h2 className="font-bold text-[var(--sea-ink)]">{selectedAutomation && editing ? "Edit Radar" : "Create Radar"}</h2></div>
             <div className="space-y-3">
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Radar name" className="w-full rounded-lg border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--sea-ink)] outline-none focus:border-[var(--lagoon)]" />
@@ -216,7 +210,7 @@ export function AiAutomations({ onBack }: { onBack: () => void }) {
               {!automationsQuery.isLoading && !automationsQuery.data?.length && <p className="py-12 text-center text-sm text-[var(--sea-ink-soft)]">Create a Radar after choosing feeds.</p>}
             </div>
 
-            {selectedAutomation ? <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-[var(--sea-ink)]">{selectedAutomation.name}</h3><p className="mt-1 text-xs text-[var(--sea-ink-soft)]">{selectedAutomation.topic}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${selectedAutomation.status === "active" ? "bg-emerald-500/15 text-emerald-500" : "bg-[var(--foam)] text-[var(--sea-ink-soft)]"}`}>{selectedAutomation.status}</span></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-[var(--foam)] p-2"><p className="text-[var(--sea-ink-soft)]">Next run</p><p className="mt-1 font-bold text-[var(--sea-ink)]">{formatTime(selectedAutomation.nextRunAt)}</p></div><div className="rounded-lg bg-[var(--foam)] p-2"><p className="text-[var(--sea-ink-soft)]">Sources</p><p className="mt-1 font-bold text-[var(--sea-ink)]">{selectedAutomation.sourceCount}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => runAutomation.mutate({ id: selectedAutomation.id })} disabled={runAutomation.isPending} className="inline-flex items-center gap-2 rounded-lg bg-[var(--lagoon)] px-3 py-2 text-xs font-bold text-[var(--lagoon-text)] disabled:opacity-50">{runAutomation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Play size={14} />} Run now</button><button type="button" onClick={() => updateAutomation.mutate({ id: selectedAutomation.id, isActive: selectedAutomation.status !== "active" })} className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-bold text-[var(--sea-ink)]">{selectedAutomation.status === "active" ? <Pause size={14} /> : <Play size={14} />}{selectedAutomation.status === "active" ? "Pause" : "Resume"}</button><button type="button" onClick={() => { setEditing(true); }} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-bold text-[var(--sea-ink)]">Edit</button><button type="button" onClick={() => { if (window.confirm(`Delete ${selectedAutomation.name}?`)) deleteAutomation.mutate({ id: selectedAutomation.id }); }} className="rounded-lg border border-red-500/30 px-3 py-2 text-xs font-bold text-red-500"><Trash2 size={14} /></button></div>{runAutomation.isError && <p className="mt-3 text-xs font-semibold text-red-500">{runAutomation.error.message}</p>}<div className="mt-5 border-t border-[var(--line)] pt-4"><p className="island-kicker">Recent runs</p><ol className="mt-2 space-y-2">{runsQuery.data?.map((run) => <li key={run.id} className="flex items-center justify-between gap-3 text-xs"><div className="min-w-0"><p className="font-bold text-[var(--sea-ink)]">{run.status === "succeeded" ? `${run.captureCount} sent to Inbox` : run.errorMessage ?? "Run failed"}</p><p className="truncate text-[10px] text-[var(--sea-ink-soft)]">{formatTime(run.startedAt)} · {run.discoveredCount} discovered · {run.newItemCount} new</p></div><span className={run.status === "succeeded" ? "text-emerald-500" : run.status === "running" ? "text-[var(--lagoon)]" : "text-red-500"}>{run.status}</span></li>)}{!runsQuery.isLoading && !runsQuery.data?.length && <li className="text-xs text-[var(--sea-ink-soft)]">No runs yet.</li>}</ol></div></div> : <div className="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-[var(--line)] p-6 text-center text-sm text-[var(--sea-ink-soft)]">Select a Radar to inspect its schedule and runs.</div>}
+            {selectedAutomation ? <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-[var(--sea-ink)]">{selectedAutomation.name}</h3><p className="mt-1 text-xs text-[var(--sea-ink-soft)]">{selectedAutomation.topic}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${selectedAutomation.status === "active" ? "bg-emerald-500/15 text-emerald-500" : "bg-[var(--foam)] text-[var(--sea-ink-soft)]"}`}>{selectedAutomation.status}</span><button type="button" onClick={() => { if (window.confirm(`Delete ${selectedAutomation.name}?`)) deleteAutomation.mutate({ id: selectedAutomation.id }); }} className="rounded-lg border border-red-500/30 p-1.5 text-red-500" aria-label={`Delete ${selectedAutomation.name}`}><Trash2 size={14} /></button></div></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-[var(--foam)] p-2"><p className="text-[var(--sea-ink-soft)]">Next run</p><p className="mt-1 font-bold text-[var(--sea-ink)]">{formatTime(selectedAutomation.nextRunAt)}</p></div><div className="rounded-lg bg-[var(--foam)] p-2"><p className="text-[var(--sea-ink-soft)]">Sources</p><p className="mt-1 font-bold text-[var(--sea-ink)]">{selectedAutomation.sourceCount}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => runAutomation.mutate({ id: selectedAutomation.id })} disabled={runAutomation.isPending} className="inline-flex items-center gap-2 rounded-lg bg-[var(--lagoon)] px-3 py-2 text-xs font-bold text-[var(--lagoon-text)] disabled:opacity-50">{runAutomation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Play size={14} />} Run now</button><button type="button" onClick={() => updateAutomation.mutate({ id: selectedAutomation.id, isActive: selectedAutomation.status !== "active" })} className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-bold text-[var(--sea-ink)]">{selectedAutomation.status === "active" ? <Pause size={14} /> : <Play size={14} />}{selectedAutomation.status === "active" ? "Pause" : "Resume"}</button><button type="button" onClick={beginEditing} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs font-bold text-[var(--sea-ink)]">Edit</button></div>{runAutomation.isError && <p className="mt-3 text-xs font-semibold text-red-500">{runAutomation.error.message}</p>}<div className="mt-5 border-t border-[var(--line)] pt-4"><p className="island-kicker">Recent runs</p><ol className="mt-2 space-y-2">{runsQuery.data?.map((run) => <li key={run.id} className="flex items-center justify-between gap-3 text-xs"><div className="min-w-0"><p className="font-bold text-[var(--sea-ink)]">{run.status === "succeeded" ? `${run.captureCount} sent to Inbox` : run.status === "running" ? "Running…" : run.errorMessage ?? "Run failed"}</p><p className="truncate text-[10px] text-[var(--sea-ink-soft)]">{formatTime(run.startedAt)} · {run.discoveredCount} discovered · {run.newItemCount} new</p></div><span className={`shrink-0 ${run.status === "succeeded" ? "text-emerald-500" : run.status === "running" ? "text-[var(--lagoon)]" : "text-red-500"}`}>{run.status}</span></li>)}{!runsQuery.isLoading && !runsQuery.data?.length && <li className="text-xs text-[var(--sea-ink-soft)]">No runs yet.</li>}</ol></div></div> : <div className="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-[var(--line)] p-6 text-center text-sm text-[var(--sea-ink-soft)]">Select a Radar to inspect its schedule and runs.</div>}
           </div>
         </section>
       </div>
