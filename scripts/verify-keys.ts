@@ -174,9 +174,11 @@ async function verifyKeys() {
   if (ollamaUrl) {
     console.log(`👉 Testing Ollama (URL: ${ollamaUrl})...`);
     const llmModel = process.env.OLLAMA_LLM_MODEL || "llama3";
+    const evaluatorModel = process.env.OLLAMA_EVALUATOR_MODEL;
     const embeddingModel = process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text";
     const requiredModels = configuredOllamaModels({
       OLLAMA_LLM_MODEL: llmModel,
+      OLLAMA_EVALUATOR_MODEL: evaluatorModel,
       OLLAMA_EMBEDDING_MODEL: embeddingModel,
     });
 
