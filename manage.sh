@@ -25,6 +25,7 @@ function show_help {
     echo "  db-migrate Apply tracked Drizzle migrations to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
     echo "  verify-keys Verify providers and offer to install missing local Ollama models"
+    echo "  eval       Run local Promptfoo Ask/RAG regressions (optional dataset UUID)"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -59,6 +60,22 @@ case $CMD in
         echo "--- Unit Tests ---"
         bun run test:unit
         echo "✅ All tests passed."
+        ;;
+    "eval")
+        echo "🧪 Running local Ask/RAG regression checks..."
+        if ! command -v node >/dev/null 2>&1 || ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 22) ? 0 : 1)'; then
+            echo "❌ Promptfoo evaluation requires Node.js >= 22.22.0. Bun remains the application runtime."
+            exit 1
+        fi
+        if [ ! -f "tools/promptfoo/package-lock.json" ]; then
+            echo "❌ Missing tools/promptfoo/package-lock.json. Run npm install --prefix tools/promptfoo first."
+            exit 1
+        fi
+        if [ ! -x "tools/promptfoo/node_modules/.bin/promptfoo" ]; then
+            echo "📦 Installing the pinned local evaluation runner..."
+            npm ci --prefix tools/promptfoo
+        fi
+        node tools/promptfoo/src/run-evaluation.mjs "$@"
         ;;
     "docker")
         echo "🐳 Starting local database via Docker Compose..."
