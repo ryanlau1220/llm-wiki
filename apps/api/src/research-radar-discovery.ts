@@ -72,7 +72,7 @@ export async function discoverResearchRadarSources(config: AppConfig, topic: str
   if (!config.tavilyApiKey) return fallbackTopicFeed(topic);
   const search = createWebSearchProvider({ tavily: { apiKey: config.tavilyApiKey, searchDepth: "basic" } });
   const response = await search.search({
-    query: `${topic} (RSS OR Atom OR \"JSON Feed\")`,
+    query: `${topic} (RSS OR Atom OR "JSON Feed")`,
     maxResults: SEARCH_RESULT_LIMIT,
   });
   const pages = sourceDiscoveryPages(response.results);

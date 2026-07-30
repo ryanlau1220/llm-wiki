@@ -453,7 +453,7 @@ type RadarCandidate = {
 };
 
 async function fetchRadarSource(
-  config: AppConfig,
+  _config: AppConfig,
   db: Db,
   source: SourceRow,
 ): Promise<FetchedRadarSource> {
