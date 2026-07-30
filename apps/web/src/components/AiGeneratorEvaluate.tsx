@@ -266,7 +266,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             />{" "}
             I confirm this runs the approved cases with the current Ask/RAG workflow.
           </label>
-          {capabilitiesQuery.data?.localJudgeAvailable && (
+          {capabilitiesQuery.data?.semanticJudgeAvailable && (
             <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
               <input
                 type="checkbox"
@@ -276,7 +276,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
                   setJudgeConfirmed(false);
                 }}
               />{" "}
-              Use local semantic evaluator
+              Use semantic evaluator
             </label>
           )}
           {judgeEnabled && (
@@ -286,7 +286,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
                 checked={judgeConfirmed}
                 onChange={(event) => setJudgeConfirmed(event.target.checked)}
               />{" "}
-              I confirm the local evaluator may inspect generated output and selected evidence.
+              I confirm the {capabilitiesQuery.data?.semanticJudgeKind === "cloud" ? "configured cloud" : "local"} evaluator may inspect generated output and selected evidence.
             </label>
           )}
           <button
@@ -310,7 +310,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
           {runMutation.isError && (
             <p className="flex gap-1 text-sm text-red-700 dark:text-red-300">
               <AlertTriangle size={16} /> Evaluation could not run. Confirm the local database and
-              provider configuration.
+              evaluator configuration.
             </p>
           )}
           <RunHistory
@@ -473,5 +473,8 @@ export function formatEvaluationError(errorCode: string) {
   if (errorCode === "local_judge_invalid_response")
     return "local judge returned invalid structured output";
   if (errorCode === "local_judge_unavailable") return "local judge unavailable";
+  if (errorCode === "cloud_judge_invalid_response")
+    return "cloud judge returned invalid structured output";
+  if (errorCode === "cloud_judge_unavailable") return "cloud judge unavailable";
   return errorCode.replaceAll("_", " ");
 }
