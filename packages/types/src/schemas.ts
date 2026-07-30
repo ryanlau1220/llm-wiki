@@ -201,6 +201,12 @@ export const runAiEvaluationSchema = z
       });
   });
 
+/** Local-only generation creates reviewable silver candidates; it never calls an external model. */
+export const generateAiEvaluationCandidatesSchema = z.object({
+  maxCases: z.number().int().min(1).max(12).default(6),
+});
+export const promoteAiEvaluationCaseSchema = z.object({ caseId: z.string().uuid() });
+
 export const listAiEvaluationRunsSchema = z
   .object({ datasetId: z.string().uuid().optional() })
   .optional();
@@ -245,6 +251,8 @@ export const aiEvaluationDatasetSchema = z.object({
   approvedAt: z.string().datetime(),
   createdAt: z.string().datetime(),
   caseCount: z.number().int(),
+  goldCaseCount: z.number().int(),
+  silverCaseCount: z.number().int(),
 });
 export const aiEvaluationRunSchema = z.object({
   id: z.string().uuid(),

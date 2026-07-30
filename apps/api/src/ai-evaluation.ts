@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import {
   AI_EVALUATOR_CONTRACT_VERSION,
   compareEvaluationRuns,
@@ -23,6 +23,7 @@ import {
   getLocalJudgeCapability,
   runLocalJudge,
 } from "./ai-evaluation-execution";
+import { generateLocalSilverCases } from "./ai-evaluation-synthetic";
 import { buildAskWorkflowManifest } from "./ask";
 
 const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } as const;
@@ -45,16 +46,54 @@ export async function createAiEvaluationDataset(config: AppConfig, input: Create
     retrieval_evidence_evaluated: item.retrievalEvidenceEvaluated,
     source_trace_id: item.sourceTraceId,
   })));
-  return formatDataset(dataset, input.cases.length);
+  return formatDataset(dataset, { caseCount: input.cases.length, goldCaseCount: input.cases.length, silverCaseCount: 0 });
 }
 
 export async function listAiEvaluationDatasets(config: AppConfig) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const datasets = await db.select().from(aiEvaluationDatasets).orderBy(desc(aiEvaluationDatasets.approved_at));
   return Promise.all(datasets.map(async (dataset) => {
-    const cases = await db.select({ id: aiEvaluationCases.id }).from(aiEvaluationCases).where(eq(aiEvaluationCases.dataset_id, dataset.id));
-    return formatDataset(dataset, cases.length);
+    const cases = await db.select({ lifecycle: aiEvaluationCases.lifecycle }).from(aiEvaluationCases).where(eq(aiEvaluationCases.dataset_id, dataset.id));
+    return formatDataset(dataset, {
+      caseCount: cases.length,
+      goldCaseCount: cases.filter((item) => item.lifecycle === "gold").length,
+      silverCaseCount: cases.filter((item) => item.lifecycle === "silver").length,
+    });
   }));
+}
+
+/** Generates local-only candidates. They are never release-gating until explicitly promoted. */
+export async function generateAiEvaluationCandidates(config: AppConfig, input: { maxCases: number }) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const candidates = await generateLocalSilverCases(config, db, input.maxCases);
+  const [dataset] = await db.insert(aiEvaluationDatasets).values({
+    name: `Local candidates ${new Date().toISOString().slice(0, 10)}`,
+    description: null,
+  }).returning();
+  await db.insert(aiEvaluationCases).values(candidates.map((candidate) => ({
+    dataset_id: dataset.id,
+    label: candidate.label,
+    redacted_input: candidate.redactedInput,
+    expected_evidence: candidate.expectedEvidence,
+    expected_outcome: candidate.expectedOutcome,
+    retrieved_evidence: [],
+    retrieval_evidence_evaluated: false,
+    lifecycle: "silver",
+    generation_metadata: candidate.generationMetadata,
+  })));
+  return formatDataset(dataset, { caseCount: candidates.length, goldCaseCount: 0, silverCaseCount: candidates.length });
+}
+
+export async function promoteAiEvaluationCase(config: AppConfig, input: { caseId: string }) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const [evaluationCase] = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.id, input.caseId)).limit(1);
+  if (!evaluationCase) throw new Error("Evaluation case not found");
+  if (evaluationCase.lifecycle === "gold") return { datasetId: evaluationCase.dataset_id, lifecycle: "gold" as const };
+  await db.transaction(async (transaction) => {
+    await transaction.update(aiEvaluationCases).set({ lifecycle: "gold", updated_at: new Date() }).where(eq(aiEvaluationCases.id, evaluationCase.id));
+    await transaction.update(aiEvaluationDatasets).set({ version: sql`${aiEvaluationDatasets.version} + 1`, updated_at: new Date() }).where(eq(aiEvaluationDatasets.id, evaluationCase.dataset_id));
+  });
+  return { datasetId: evaluationCase.dataset_id, lifecycle: "gold" as const };
 }
 
 export async function runAiEvaluation(config: AppConfig, input: { datasetId: string; confirmTargetExecution: true; judgeEnabled: boolean; confirmLlmJudge: boolean; topK: number; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number; rubricVersion: string }) {
@@ -236,7 +275,20 @@ export function isPresent<T>(value: T | null): value is T {
   return value !== null;
 }
 
-function formatDataset(dataset: typeof aiEvaluationDatasets.$inferSelect, caseCount: number) { return { id: dataset.id, name: dataset.name, description: dataset.description, version: dataset.version, approvedAt: dataset.approved_at.toISOString(), createdAt: dataset.created_at.toISOString(), caseCount }; }
+function formatDataset(
+  dataset: typeof aiEvaluationDatasets.$inferSelect,
+  counts: { caseCount: number; goldCaseCount: number; silverCaseCount: number },
+) {
+  return {
+    id: dataset.id,
+    name: dataset.name,
+    description: dataset.description,
+    version: dataset.version,
+    approvedAt: dataset.approved_at.toISOString(),
+    createdAt: dataset.created_at.toISOString(),
+    ...counts,
+  };
+}
 function failedExecutionDeterministic(evaluationCase: typeof aiEvaluationCases.$inferSelect) {
   return {
     ...evaluateDeterministicCase({

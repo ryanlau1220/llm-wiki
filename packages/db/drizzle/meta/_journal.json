@@ -50,6 +50,13 @@
       "when": 1785504000000,
       "tag": "0006_radar_run_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785672000000,
+      "tag": "0007_evaluation_case_lifecycle",
+      "breakpoints": true
     }
   ]
 }

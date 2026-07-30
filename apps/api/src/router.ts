@@ -17,7 +17,7 @@ import {
   retryResearchCaptureIndex,
 } from "./research-captures";
 import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
-import { compareAiEvaluationRuns, createAiEvaluationDataset, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationDatasets, listAiEvaluationRuns, runAiEvaluation } from "./ai-evaluation";
+import { compareAiEvaluationRuns, createAiEvaluationDataset, generateAiEvaluationCandidates, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationDatasets, listAiEvaluationRuns, promoteAiEvaluationCase, runAiEvaluation } from "./ai-evaluation";
 import { listOrganizationSuggestions } from "./organization-suggestions";
 import {
   createResearchAutomation,
@@ -597,6 +597,12 @@ export const router = os.router({
   }),
   createAiEvaluationDataset: os.createAiEvaluationDataset.use(authMiddleware).handler(async ({ input }) => {
     return createAiEvaluationDataset(config, input);
+  }),
+  generateAiEvaluationCandidates: os.generateAiEvaluationCandidates.use(authMiddleware).handler(async ({ input }) => {
+    return generateAiEvaluationCandidates(config, input);
+  }),
+  promoteAiEvaluationCase: os.promoteAiEvaluationCase.use(authMiddleware).handler(async ({ input }) => {
+    return promoteAiEvaluationCase(config, input);
   }),
   listAiEvaluationDatasets: os.listAiEvaluationDatasets.use(authMiddleware).handler(async () => {
     return listAiEvaluationDatasets(config);

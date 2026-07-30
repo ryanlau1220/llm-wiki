@@ -484,12 +484,17 @@ export const aiEvaluationCases = pgTable(
     candidate_output: text("candidate_output"),
     retrieved_evidence: jsonb("retrieved_evidence").notNull().default([]),
     retrieval_evidence_evaluated: boolean("retrieval_evidence_evaluated").notNull().default(false),
+    /** Silver cases are local synthetic candidates; only gold cases are release-gating regressions. */
+    lifecycle: varchar("lifecycle", { length: 16 }).notNull().default("gold"),
+    /** Structural provenance for local generation; it never contains source text or model output. */
+    generation_metadata: jsonb("generation_metadata").notNull().default({}),
     source_trace_id: uuid("source_trace_id").references(() => retrievalRuns.id, { onDelete: "set null" }),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     datasetIdx: index("ai_evaluation_cases_dataset_id_idx").on(table.dataset_id),
+    datasetLifecycleIdx: index("ai_evaluation_cases_dataset_lifecycle_idx").on(table.dataset_id, table.lifecycle),
     traceIdx: index("ai_evaluation_cases_source_trace_id_idx").on(table.source_trace_id),
   }),
 );
