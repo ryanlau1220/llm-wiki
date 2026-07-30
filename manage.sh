@@ -25,7 +25,7 @@ function show_help {
     echo "  db-migrate Apply tracked Drizzle migrations to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
     echo "  verify-keys Verify providers and offer to install missing local Ollama models"
-    echo "  eval       Run local Promptfoo Ask/RAG regressions (optional dataset UUID)"
+    echo "  eval       Run Promptfoo Ask/RAG regressions: local target by default; --current uses app provider"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -62,7 +62,21 @@ case $CMD in
         echo "✅ All tests passed."
         ;;
     "eval")
-        echo "🧪 Running local Ask/RAG regression checks..."
+        EVAL_TARGET_MODE="${EVALUATION_TARGET_MODE:-local}"
+        if [ "${1:-}" = "--current" ]; then
+            EVAL_TARGET_MODE="current"
+        elif [ "${1:-}" = "--local" ]; then
+            EVAL_TARGET_MODE="local"
+        fi
+        if [ "$EVAL_TARGET_MODE" != "local" ] && [ "$EVAL_TARGET_MODE" != "current" ]; then
+            echo "❌ EVALUATION_TARGET_MODE must be local or current."
+            exit 1
+        fi
+        if [ "$EVAL_TARGET_MODE" = "local" ]; then
+            echo "🧪 Running Ask/RAG regressions with local Ollama generation and judging..."
+        else
+            echo "🧪 Running Ask/RAG regressions with the current application provider..."
+        fi
         if ! command -v node >/dev/null 2>&1 || ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 22) ? 0 : 1)'; then
             echo "❌ Promptfoo evaluation requires Node.js >= 22.22.0. Bun remains the application runtime."
             exit 1
@@ -75,7 +89,7 @@ case $CMD in
             echo "📦 Installing the pinned local evaluation runner..."
             npm ci --prefix tools/promptfoo
         fi
-        node tools/promptfoo/src/run-evaluation.mjs "$@"
+        EVALUATION_TARGET_MODE="$EVAL_TARGET_MODE" node tools/promptfoo/src/run-evaluation.mjs "$@"
         ;;
     "docker")
         echo "🐳 Starting local database via Docker Compose..."
