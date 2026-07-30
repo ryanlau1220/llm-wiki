@@ -19,9 +19,10 @@ import type { AppConfig } from "./config";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
 import {
   executeAskEvaluation,
-  classifyLocalJudgeFailure,
-  getLocalJudgeCapability,
+  classifySemanticJudgeFailure,
+  getSemanticJudgeCapability,
   runLocalJudge,
+  runCloudJudge,
 } from "./ai-evaluation-execution";
 import { generateLocalSilverCases } from "./ai-evaluation-synthetic";
 import { buildAskWorkflowManifest } from "./ask";
@@ -113,8 +114,9 @@ export async function promoteAiEvaluationCase(config: AppConfig, input: { caseId
 export async function runAiEvaluation(config: AppConfig, input: { datasetId: string; confirmTargetExecution: true; judgeEnabled: boolean; confirmLlmJudge: boolean; topK: number; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number; rubricVersion: string }) {
   if (input.confirmTargetExecution !== true) throw new Error("Ask/RAG evaluation runs require explicit confirmation");
   if (input.judgeEnabled && !input.confirmLlmJudge) throw new Error("LLM judge runs require explicit confirmation");
-  if (input.judgeEnabled && !getLocalJudgeCapability(config).localJudgeAvailable) {
-    throw new Error("A configured local Ollama model is required for semantic evaluation");
+  const judgeCapability = getSemanticJudgeCapability(config);
+  if (input.judgeEnabled && !judgeCapability.semanticJudgeAvailable) {
+    throw new Error("No permitted semantic evaluator is configured");
   }
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const [dataset] = await db.select().from(aiEvaluationDatasets).where(eq(aiEvaluationDatasets.id, input.datasetId)).limit(1);
@@ -122,19 +124,26 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   const cases = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.dataset_id, dataset.id)).orderBy(asc(aiEvaluationCases.created_at));
   validateEvaluationBudget({ caseCount: cases.length, judgeEnabled: input.judgeEnabled, maxCases: input.maxCases, maxJudgeCalls: input.maxJudgeCalls, maxTotalTokens: input.maxTotalTokens });
 
-  const localJudge = getLocalJudgeCapability(config);
   const workflowManifest = buildAskWorkflowManifest(config, input.topK);
   const [run] = await db.insert(aiEvaluationRuns).values({
     dataset_id: dataset.id, dataset_version: dataset.version, evaluator_contract_version: AI_EVALUATOR_CONTRACT_VERSION,
     rubric_version: input.rubricVersion, judge_enabled: input.judgeEnabled,
-    model_provider: input.judgeEnabled ? "ollama" : null, model_name: input.judgeEnabled ? localJudge.localJudgeModel : null,
+    model_provider: input.judgeEnabled ? judgeCapability.semanticJudgeProvider : null,
+    model_name: input.judgeEnabled ? judgeCapability.semanticJudgeModel : null,
     max_cases: input.maxCases, max_judge_calls: input.maxJudgeCalls, max_total_tokens: input.maxTotalTokens,
     workflow_manifest: workflowManifest, status: STATUS.STARTED,
   }).returning();
   const startedAt = Date.now();
-  const rootSpanId = await startSpan(db, run.id, "evaluation", { case_count: cases.length, judge_enabled: input.judgeEnabled, contract_version: AI_EVALUATOR_CONTRACT_VERSION });
+  const rootSpanId = await startSpan(db, run.id, "evaluation", {
+    case_count: cases.length,
+    judge_enabled: input.judgeEnabled,
+    judge_kind: input.judgeEnabled ? judgeCapability.semanticJudgeKind : null,
+    judge_provider: input.judgeEnabled ? judgeCapability.semanticJudgeProvider : null,
+    contract_version: AI_EVALUATOR_CONTRACT_VERSION,
+  });
   let totalTokens = 0;
   let judgeCalls = 0;
+  let cloudFallbacks = 0;
   let failedCases = 0;
   for (const [caseIndex, evaluationCase] of cases.entries()) {
     const caseStartedAt = Date.now();
@@ -193,24 +202,59 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
           throw new Error("judge_budget_exhausted");
         }
         const judgeStartedAt = Date.now();
-        const judgeSpanId = await startSpan(db, run.id, "local_judge", { rubric_version: input.rubricVersion, max_output_tokens: 256 }, caseSpanId);
+        const judgeKind = judgeCapability.semanticJudgeKind;
+        if (!judgeKind) throw new Error("semantic_judge_unavailable");
+        const judgeSpanId = await startSpan(db, run.id, `${judgeKind}_judge`, {
+          rubric_version: input.rubricVersion,
+          max_output_tokens: 256,
+          provider: judgeCapability.semanticJudgeProvider,
+          model: judgeCapability.semanticJudgeModel,
+        }, caseSpanId);
         judgeAttempted = true;
+        const judgeInput = {
+          redactedInput: evaluationCase.redacted_input,
+          expectedOutcome: evaluationCase.expected_outcome,
+          candidateOutput: execution.candidateOutput,
+          evidence: execution.localJudgeEvidence,
+        };
         try {
-          const localResult = await runLocalJudge(config, {
-            redactedInput: evaluationCase.redacted_input,
-            expectedOutcome: evaluationCase.expected_outcome,
-            candidateOutput: execution.candidateOutput,
-            evidence: execution.localJudgeEvidence,
-          });
-          judge = localResult.result;
+          const judgeResult = judgeKind === "cloud"
+            ? await runCloudJudge(config, judgeInput)
+            : await runLocalJudge(config, judgeInput);
+          judge = judgeResult.result;
           judgeCalls += 1;
-          totalCaseTokens = (totalCaseTokens ?? 0) + (localResult.totalTokens ?? 0);
-          totalTokens += localResult.totalTokens ?? 0;
-          await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, localResult.totalTokens === null ? {} : { total_tokens: localResult.totalTokens });
+          totalCaseTokens = (totalCaseTokens ?? 0) + (judgeResult.totalTokens ?? 0);
+          totalTokens += judgeResult.totalTokens ?? 0;
+          await completeSpan(db, judgeSpanId, STATUS.SUCCEEDED, Date.now() - judgeStartedAt, judgeResult.totalTokens === null ? {} : { total_tokens: judgeResult.totalTokens });
         } catch (error) {
-          const errorCode = classifyLocalJudgeFailure(error);
+          const errorCode = classifySemanticJudgeFailure(error, judgeKind);
           await completeSpan(db, judgeSpanId, STATUS.FAILED, Date.now() - judgeStartedAt, {}, errorCode);
-          throw new Error(errorCode);
+          if (judgeKind !== "cloud" || !judgeCapability.localJudgeAvailable) {
+            throw new Error(errorCode);
+          }
+          const fallbackStartedAt = Date.now();
+          const fallbackSpanId = await startSpan(db, run.id, "local_judge_fallback", {
+            rubric_version: input.rubricVersion,
+            fallback_from: "cloud",
+            failure_code: errorCode,
+            model: judgeCapability.localJudgeModel,
+          }, caseSpanId);
+          try {
+            const fallbackResult = await runLocalJudge(config, judgeInput);
+            judge = {
+              ...fallbackResult.result,
+              labels: [...new Set([...fallbackResult.result.labels, "cloud_fallback_local"])],
+            };
+            judgeCalls += 1;
+            cloudFallbacks += 1;
+            totalCaseTokens = (totalCaseTokens ?? 0) + (fallbackResult.totalTokens ?? 0);
+            totalTokens += fallbackResult.totalTokens ?? 0;
+            await completeSpan(db, fallbackSpanId, STATUS.SUCCEEDED, Date.now() - fallbackStartedAt, fallbackResult.totalTokens === null ? {} : { total_tokens: fallbackResult.totalTokens });
+          } catch (fallbackError) {
+            const fallbackErrorCode = classifySemanticJudgeFailure(fallbackError, "local");
+            await completeSpan(db, fallbackSpanId, STATUS.FAILED, Date.now() - fallbackStartedAt, {}, fallbackErrorCode);
+            throw new Error(fallbackErrorCode);
+          }
         }
       }
     } catch (error) {
@@ -227,10 +271,15 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
       status = STATUS.FAILED;
       errorCode = error instanceof Error && error.message === "judge_budget_exhausted"
         ? "judge_budget_exhausted"
-        : error instanceof Error && (error.message === "local_judge_invalid_response" || error.message === "local_judge_unavailable")
+        : error instanceof Error && (
+          error.message === "local_judge_invalid_response"
+          || error.message === "local_judge_unavailable"
+          || error.message === "cloud_judge_invalid_response"
+          || error.message === "cloud_judge_unavailable"
+        )
           ? error.message
           : judgeAttempted
-            ? "local_judge_unavailable"
+            ? judgeCapability.semanticJudgeKind === "cloud" ? "cloud_judge_unavailable" : "local_judge_unavailable"
           : "target_execution_failed";
       failedCases += 1;
     }
@@ -239,13 +288,13 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   }
   const durationMs = Date.now() - startedAt;
   const runStatus = failedCases > 0 ? STATUS.FAILED : STATUS.SUCCEEDED;
-  await completeSpan(db, rootSpanId, runStatus, durationMs, { judge_calls: judgeCalls, total_tokens: totalTokens, failed_cases: failedCases }, runStatus === STATUS.FAILED ? "case_evaluation_failed" : undefined);
-  const [completed] = await db.update(aiEvaluationRuns).set({ status: runStatus, error_code: runStatus === STATUS.FAILED ? "case_evaluation_failed" : null, summary: { caseCount: cases.length, judgeCalls, totalTokens, failedCases }, completed_at: new Date(), duration_ms: durationMs }).where(eq(aiEvaluationRuns.id, run.id)).returning();
+  await completeSpan(db, rootSpanId, runStatus, durationMs, { judge_calls: judgeCalls, cloud_fallbacks: cloudFallbacks, total_tokens: totalTokens, failed_cases: failedCases }, runStatus === STATUS.FAILED ? "case_evaluation_failed" : undefined);
+  const [completed] = await db.update(aiEvaluationRuns).set({ status: runStatus, error_code: runStatus === STATUS.FAILED ? "case_evaluation_failed" : null, summary: { caseCount: cases.length, judgeCalls, cloudFallbacks, totalTokens, failedCases }, completed_at: new Date(), duration_ms: durationMs }).where(eq(aiEvaluationRuns.id, run.id)).returning();
   return getAiEvaluationRunFromDb(db, completed.id) as Promise<NonNullable<Awaited<ReturnType<typeof getAiEvaluationRunFromDb>>>>;
 }
 
 export function getAiEvaluationCapabilities(config: AppConfig) {
-  return getLocalJudgeCapability(config);
+  return getSemanticJudgeCapability(config);
 }
 
 export async function listAiEvaluationRuns(config: AppConfig, datasetId?: string) {

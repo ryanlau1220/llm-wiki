@@ -18,9 +18,10 @@ describe("Ollama model readiness", () => {
     expect(
       configuredOllamaModels({
         OLLAMA_LLM_MODEL: "llama3",
+        OLLAMA_EVALUATOR_MODEL: "qwen3:4b",
         OLLAMA_EMBEDDING_MODEL: "llama3",
       }),
-    ).toEqual(["llama3"]);
+    ).toEqual(["llama3", "qwen3:4b"]);
   });
 
   test("treats the implicit latest tag as the configured model", () => {

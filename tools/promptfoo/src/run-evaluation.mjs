@@ -77,7 +77,7 @@ function buildConfig(cases) {
       options: {
         provider: {
           text: {
-            id: `ollama:chat:${process.env.OLLAMA_LLM_MODEL ?? "llama3"}`,
+            id: `ollama:chat:${process.env.OLLAMA_EVALUATOR_MODEL ?? process.env.OLLAMA_LLM_MODEL ?? "llama3"}`,
             config: { temperature: 0 },
           },
         },

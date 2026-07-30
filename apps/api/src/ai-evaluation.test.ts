@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isPresent } from "./ai-evaluation";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
-import { getLocalJudgeCapability } from "./ai-evaluation-execution";
+import { getLocalJudgeCapability, getSemanticJudgeCapability } from "./ai-evaluation-execution";
 
 describe("AI evaluation API privacy boundary", () => {
   test("enables semantic evaluation only when an Ollama runtime is configured", () => {
@@ -17,6 +17,32 @@ describe("AI evaluation API privacy boundary", () => {
       localJudgeAvailable: true,
       localJudgeModel: "llama3",
     });
+  });
+
+  test("keeps cloud judging disabled until vault sharing is explicitly approved", () => {
+    const withoutApproval = getSemanticJudgeCapability({
+      evaluatorMode: "auto",
+      cloudEvaluatorProvider: "gemini",
+      geminiApiKey: "test-key",
+      ollamaBaseUrl: "http://127.0.0.1:11434",
+      ollamaLlmModel: "llama3",
+    });
+    expect(withoutApproval.semanticJudgeKind).toBe("local");
+    expect(withoutApproval.cloudJudgeAvailable).toBe(false);
+
+    const approved = getSemanticJudgeCapability({
+      evaluatorMode: "auto",
+      allowCloudVaultEvaluation: true,
+      cloudEvaluatorProvider: "gemini",
+      cloudEvaluatorModel: "gemini-2.5-flash",
+      geminiApiKey: "test-key",
+      ollamaBaseUrl: "http://127.0.0.1:11434",
+      ollamaLlmModel: "llama3",
+      ollamaEvaluatorModel: "qwen3:4b",
+    });
+    expect(approved.semanticJudgeKind).toBe("cloud");
+    expect(approved.semanticJudgeModel).toBe("gemini-2.5-flash");
+    expect(approved.localJudgeModel).toBe("qwen3:4b");
   });
 
   test("returns the selected baseline and candidate beside structured deltas", () => {

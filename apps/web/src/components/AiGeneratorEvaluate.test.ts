@@ -38,5 +38,6 @@ describe("evaluation metric presentation", () => {
       "local judge returned invalid structured output",
     );
     expect(formatEvaluationError("local_judge_unavailable")).toBe("local judge unavailable");
+    expect(formatEvaluationError("cloud_judge_unavailable")).toBe("cloud judge unavailable");
   });
 });

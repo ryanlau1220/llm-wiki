@@ -41,6 +41,7 @@ export function configuredOllamaModels(environment: NodeJS.ProcessEnv = process.
   return [
     ...new Set([
       environment.OLLAMA_LLM_MODEL || DEFAULT_OLLAMA_LLM_MODEL,
+      ...(environment.OLLAMA_EVALUATOR_MODEL ? [environment.OLLAMA_EVALUATOR_MODEL] : []),
       environment.OLLAMA_EMBEDDING_MODEL || DEFAULT_OLLAMA_EMBEDDING_MODEL,
     ]),
   ];

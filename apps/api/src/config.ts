@@ -8,9 +8,17 @@ export type AppConfig = {
   gcpLocation?: string;
   gcpLlmModel?: string;
   gcpEmbeddingModel?: string;
+  geminiApiKey?: string;
   ollamaBaseUrl?: string;
   ollamaEmbeddingModel?: string;
   ollamaLlmModel?: string;
+  /** Kept separate from the target model so a local model does not grade itself by default. */
+  ollamaEvaluatorModel?: string;
+  evaluatorMode: "auto" | "local" | "cloud";
+  cloudEvaluatorProvider?: "gemini" | "gemini-geap" | "openai";
+  cloudEvaluatorModel?: string;
+  /** Explicit owner consent before vault-derived output or evidence can leave this machine. */
+  allowCloudVaultEvaluation: boolean;
   openaiApiKey?: string;
   openaiBaseUrl?: string;
   openaiLlmModel?: string;
@@ -46,6 +54,30 @@ function readApiPort(rawPort: string | undefined): number {
   return port;
 }
 
+function readEvaluatorMode(value: string | undefined): AppConfig["evaluatorMode"] {
+  if (!value || value === "auto") return "auto";
+  if (value === "local" || value === "cloud") return value;
+  throw new Error("EVALUATOR_MODE must be one of: auto, local, cloud");
+}
+
+function readCloudEvaluatorProvider(value: string | undefined): AppConfig["cloudEvaluatorProvider"] {
+  if (!value) return undefined;
+  if (value === "gemini" || value === "gemini-geap" || value === "openai") return value;
+  throw new Error("CLOUD_EVALUATOR_PROVIDER must be one of: gemini, gemini-geap, openai");
+}
+
+function readBoolean(value: string | undefined, name: string): boolean {
+  if (!value) return false;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false`);
+}
+
+function optionalValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function loadConfig(): AppConfig {
   if (cachedConfig) {
     return cachedConfig;
@@ -70,9 +102,15 @@ export function loadConfig(): AppConfig {
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
     gcpLlmModel: process.env.GEMINI_GCP_LLM_MODEL,
     gcpEmbeddingModel: process.env.GEMINI_GCP_EMBEDDING_MODEL,
+    geminiApiKey: process.env.GEMINI_API_KEY,
     ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
     ollamaEmbeddingModel: process.env.OLLAMA_EMBEDDING_MODEL,
     ollamaLlmModel: process.env.OLLAMA_LLM_MODEL,
+    ollamaEvaluatorModel: optionalValue(process.env.OLLAMA_EVALUATOR_MODEL),
+    evaluatorMode: readEvaluatorMode(process.env.EVALUATOR_MODE),
+    cloudEvaluatorProvider: readCloudEvaluatorProvider(process.env.CLOUD_EVALUATOR_PROVIDER),
+    cloudEvaluatorModel: optionalValue(process.env.CLOUD_EVALUATOR_MODEL),
+    allowCloudVaultEvaluation: readBoolean(process.env.ALLOW_CLOUD_VAULT_EVALUATION, "ALLOW_CLOUD_VAULT_EVALUATION"),
     openaiApiKey: process.env.OPENAI_API_KEY,
     openaiBaseUrl: process.env.OPENAI_BASE_URL,
     openaiLlmModel: process.env.OPENAI_LLM_MODEL,

@@ -286,6 +286,14 @@ export const aiEvaluationRunSchema = z.object({
 export const aiEvaluationCapabilitiesSchema = z.object({
   localJudgeAvailable: z.boolean(),
   localJudgeModel: z.string().nullable(),
+  cloudJudgeAvailable: z.boolean(),
+  cloudJudgeProvider: z.enum(["gemini", "gemini-geap", "openai"]).nullable(),
+  cloudJudgeModel: z.string().nullable(),
+  cloudVaultSharingEnabled: z.boolean(),
+  semanticJudgeAvailable: z.boolean(),
+  semanticJudgeKind: z.enum(["local", "cloud"]).nullable(),
+  semanticJudgeProvider: z.string().nullable(),
+  semanticJudgeModel: z.string().nullable(),
 });
 export const aiEvaluationComparisonSchema = z.object({
   baseline: aiEvaluationRunSchema,

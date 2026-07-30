@@ -15,6 +15,24 @@ const LOCAL_JUDGE_MAX_OUTPUT_TOKENS = 256;
 export type EvaluationEvidence = { documentPath: string; chunkIndex?: number };
 export type LocalJudgeResult = { score: number; labels: string[] };
 export type LocalJudgeFailureCode = "local_judge_invalid_response" | "local_judge_unavailable";
+export type CloudJudgeFailureCode = "cloud_judge_invalid_response" | "cloud_judge_unavailable";
+export type SemanticJudgeFailureCode = LocalJudgeFailureCode | CloudJudgeFailureCode;
+export type SemanticJudgeKind = "local" | "cloud";
+
+type JudgeConfig = Partial<Pick<
+  AppConfig,
+  | "ollamaBaseUrl"
+  | "ollamaLlmModel"
+  | "ollamaEvaluatorModel"
+  | "evaluatorMode"
+  | "cloudEvaluatorProvider"
+  | "cloudEvaluatorModel"
+  | "allowCloudVaultEvaluation"
+  | "gcpProjectId"
+  | "gcpLocation"
+  | "openaiApiKey"
+  | "openaiBaseUrl"
+>> & { geminiApiKey?: string };
 
 export type AskEvaluationExecution = {
   traceId: string | null;
@@ -102,9 +120,63 @@ export function getLocalJudgeCapability(config: Pick<AppConfig, "ollamaBaseUrl" 
   };
 }
 
+export function getSemanticJudgeCapability(config: JudgeConfig) {
+  const localJudgeAvailable = Boolean(config.ollamaBaseUrl || config.ollamaLlmModel);
+  const localJudgeModel = localJudgeAvailable
+    ? config.ollamaEvaluatorModel ?? config.ollamaLlmModel ?? "llama3"
+    : null;
+  const cloudJudgeAvailable = Boolean(
+    config.allowCloudVaultEvaluation
+      && config.cloudEvaluatorProvider
+      && hasCloudProviderCredentials(config),
+  );
+  const cloudJudgeModel = cloudJudgeAvailable ? config.cloudEvaluatorModel ?? defaultCloudModel(config.cloudEvaluatorProvider!) : null;
+  const mode = config.evaluatorMode ?? "auto";
+  const selected = mode === "cloud"
+    ? cloudJudgeAvailable ? { kind: "cloud" as const, provider: config.cloudEvaluatorProvider!, model: cloudJudgeModel! } : null
+    : mode === "local"
+      ? localJudgeAvailable ? { kind: "local" as const, provider: "ollama", model: localJudgeModel! } : null
+      : cloudJudgeAvailable
+        ? { kind: "cloud" as const, provider: config.cloudEvaluatorProvider!, model: cloudJudgeModel! }
+        : localJudgeAvailable
+          ? { kind: "local" as const, provider: "ollama", model: localJudgeModel! }
+          : null;
+
+  return {
+    localJudgeAvailable,
+    localJudgeModel,
+    cloudJudgeAvailable,
+    cloudJudgeProvider: cloudJudgeAvailable ? config.cloudEvaluatorProvider! : null,
+    cloudJudgeModel,
+    cloudVaultSharingEnabled: Boolean(config.allowCloudVaultEvaluation),
+    semanticJudgeAvailable: Boolean(selected),
+    semanticJudgeKind: selected?.kind ?? null,
+    semanticJudgeProvider: selected?.provider ?? null,
+    semanticJudgeModel: selected?.model ?? null,
+  };
+}
+
+function hasCloudProviderCredentials(config: JudgeConfig): boolean {
+  switch (config.cloudEvaluatorProvider) {
+    case "gemini":
+      return Boolean(config.geminiApiKey);
+    case "gemini-geap":
+      return Boolean(config.gcpProjectId);
+    case "openai":
+      return Boolean(config.openaiApiKey);
+    default:
+      return false;
+  }
+}
+
+function defaultCloudModel(provider: NonNullable<AppConfig["cloudEvaluatorProvider"]>): string {
+  if (provider === "openai") return "gpt-4o-mini";
+  return "gemini-2.5-flash";
+}
+
 /** Never falls back: vault-derived output is evaluated only by an explicitly configured local Ollama model. */
 export async function runLocalJudge(
-  config: AppConfig,
+  config: JudgeConfig,
   input: {
     redactedInput: string;
     expectedOutcome: string | null;
@@ -118,11 +190,50 @@ export async function runLocalJudge(
 
   const provider = createLLMProvider({
     provider: "ollama",
-    ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaLlmModel },
+    ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaEvaluatorModel ?? config.ollamaLlmModel },
   });
   const response = await provider.generate({
-    prompt: buildLocalJudgePrompt(input),
+    prompt: buildSemanticJudgePrompt(input),
     systemInstruction: "You are a local evaluation component. Return only JSON. Do not quote, summarize, or retain source material. Do not provide chain-of-thought.",
+    responseMimeType: "application/json",
+    temperature: 0,
+    maxOutputTokens: LOCAL_JUDGE_MAX_OUTPUT_TOKENS,
+  });
+  return { result: parseLocalJudgeResult(response.text), totalTokens: response.usage?.totalTokens ?? null };
+}
+
+/** Cloud evaluation is possible only after the process-wide vault-sharing opt-in is enabled. */
+export async function runCloudJudge(
+  config: JudgeConfig,
+  input: {
+    redactedInput: string;
+    expectedOutcome: string | null;
+    candidateOutput: string;
+    evidence: Array<{ documentPath: string; chunkIndex: number; text: string }>;
+  },
+): Promise<{ result: LocalJudgeResult; totalTokens: number | null }> {
+  const capability = getSemanticJudgeCapability(config);
+  if (!capability.cloudJudgeAvailable || !config.cloudEvaluatorProvider) {
+    throw new Error("A configured cloud evaluator with vault-sharing approval is required for cloud semantic evaluation");
+  }
+  const provider = createLLMProvider({
+    provider: config.cloudEvaluatorProvider,
+    geminiApiKey: config.geminiApiKey,
+    geminiGeap: {
+      projectId: config.gcpProjectId,
+      location: config.gcpLocation,
+      model: config.cloudEvaluatorModel,
+    },
+    openai: {
+      apiKey: config.openaiApiKey,
+      baseUrl: config.openaiBaseUrl,
+      model: config.cloudEvaluatorModel,
+    },
+    model: config.cloudEvaluatorModel,
+  });
+  const response = await provider.generate({
+    prompt: buildSemanticJudgePrompt(input),
+    systemInstruction: "You are an evaluation component. Return only JSON. Do not quote, summarize, or retain source material. Do not provide chain-of-thought.",
     responseMimeType: "application/json",
     temperature: 0,
     maxOutputTokens: LOCAL_JUDGE_MAX_OUTPUT_TOKENS,
@@ -157,7 +268,22 @@ export function classifyLocalJudgeFailure(error: unknown): LocalJudgeFailureCode
   return "local_judge_unavailable";
 }
 
+export function classifySemanticJudgeFailure(error: unknown, kind: SemanticJudgeKind): SemanticJudgeFailureCode {
+  if (kind === "local") return classifyLocalJudgeFailure(error);
+  if (error instanceof Error && error.message.startsWith("Local evaluator")) return "cloud_judge_invalid_response";
+  return "cloud_judge_unavailable";
+}
+
 export function buildLocalJudgePrompt(input: {
+  redactedInput: string;
+  expectedOutcome: string | null;
+  candidateOutput: string;
+  evidence: Array<{ documentPath: string; chunkIndex: number; text: string }>;
+}): string {
+  return buildSemanticJudgePrompt(input);
+}
+
+export function buildSemanticJudgePrompt(input: {
   redactedInput: string;
   expectedOutcome: string | null;
   candidateOutput: string;
