@@ -59,7 +59,7 @@ describeWithDatabase('research capture duplicates', () => {
     })
     createdCaptureIds.push(inboxCapture.id)
 
-    const [capture] = await listResearchCaptureInbox(config)
+    const capture = (await listResearchCaptureInbox(config)).find((item) => item.id === inboxCapture.id)
 
     expect(capture).toMatchObject({
       id: inboxCapture.id,
