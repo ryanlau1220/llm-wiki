@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Plus } from "lucide-react";
+import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Plus, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { orpc } from "../lib/orpc";
 
@@ -54,6 +54,12 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
       enabled: Boolean(baselineRunId && candidateRunId && baselineRunId !== candidateRunId),
     } as any),
   );
+  const casesQuery = useQuery(
+    orpc.listAiEvaluationCases.queryOptions({
+      input: { datasetId: selectedDataset },
+      enabled: Boolean(selectedDataset),
+    } as any),
+  );
   const createMutation = useMutation(
     orpc.createAiEvaluationDataset.mutationOptions({
       onSuccess: (dataset) => {
@@ -68,6 +74,22 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
   );
   const runMutation = useMutation(
     orpc.runAiEvaluation.mutationOptions({ onSuccess: () => runsQuery.refetch() }),
+  );
+  const generateMutation = useMutation(
+    orpc.generateAiEvaluationCandidates.mutationOptions({
+      onSuccess: (dataset) => {
+        setSelectedDataset(dataset.id);
+        datasetsQuery.refetch();
+      },
+    }),
+  );
+  const promoteMutation = useMutation(
+    orpc.promoteAiEvaluationCase.mutationOptions({
+      onSuccess: () => {
+        casesQuery.refetch();
+        datasetsQuery.refetch();
+      },
+    }),
   );
   const evidence = useMemo(
     () =>
@@ -128,6 +150,17 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             <Plus size={17} />
             <h2 className="font-extrabold text-sea-ink">Create a quality check</h2>
           </div>
+          {capabilitiesQuery.data?.localJudgeAvailable && (
+            <button
+              type="button"
+              onClick={() => generateMutation.mutate({ maxCases: 6 })}
+              disabled={generateMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg border border-lagoon bg-lagoon/10 px-3 py-2 text-sm font-bold text-lagoon-deep disabled:opacity-50"
+            >
+              {generateMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+              Generate local cases
+            </button>
+          )}
           <label className="block text-sm font-bold text-sea-ink">
             Check name
             <input
@@ -176,6 +209,9 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
               Could not save the quality check.
             </p>
           )}
+          {generateMutation.isError && (
+            <p className="text-sm text-red-700 dark:text-red-300">Could not generate local cases.</p>
+          )}
         </form>
         <div className="island-shell space-y-4 rounded-xl p-5">
           <div className="flex items-center gap-2">
@@ -196,11 +232,32 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
               <option value="">Select a dataset</option>
               {datasetsQuery.data?.map((dataset) => (
                 <option key={dataset.id} value={dataset.id}>
-                  {dataset.name} · v{dataset.version} · {dataset.caseCount} case(s)
+                  {dataset.name} · v{dataset.version} · {dataset.goldCaseCount} gold · {dataset.silverCaseCount} silver
                 </option>
               ))}
             </select>
           </label>
+          {selectedDataset && casesQuery.data && (
+            <div className="space-y-2 rounded-lg border border-line p-3">
+              {casesQuery.data.map((evaluationCase) => (
+                <div key={evaluationCase.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-sea-ink">{evaluationCase.label}</span>
+                  {evaluationCase.lifecycle === "silver" ? (
+                    <button
+                      type="button"
+                      onClick={() => promoteMutation.mutate({ caseId: evaluationCase.id })}
+                      disabled={promoteMutation.isPending}
+                      className="shrink-0 rounded border border-line px-2 py-1 text-xs font-bold text-sea-ink hover:border-lagoon disabled:opacity-50"
+                    >
+                      Promote
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-xs font-bold text-lagoon-deep">Gold</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
             <input
               type="checkbox"

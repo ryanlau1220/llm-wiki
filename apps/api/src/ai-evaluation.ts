@@ -62,6 +62,20 @@ export async function listAiEvaluationDatasets(config: AppConfig) {
   }));
 }
 
+export async function listAiEvaluationCases(config: AppConfig, input: { datasetId: string }) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const cases = await db
+    .select({ id: aiEvaluationCases.id, label: aiEvaluationCases.label, lifecycle: aiEvaluationCases.lifecycle })
+    .from(aiEvaluationCases)
+    .where(eq(aiEvaluationCases.dataset_id, input.datasetId))
+    .orderBy(asc(aiEvaluationCases.created_at));
+  return cases.map((evaluationCase) => ({
+    id: evaluationCase.id,
+    label: evaluationCase.label,
+    lifecycle: evaluationCase.lifecycle === "silver" ? "silver" as const : "gold" as const,
+  }));
+}
+
 /** Generates local-only candidates. They are never release-gating until explicitly promoted. */
 export async function generateAiEvaluationCandidates(config: AppConfig, input: { maxCases: number }) {
   const { db } = createDbClient(requiredDatabaseUrl(config));

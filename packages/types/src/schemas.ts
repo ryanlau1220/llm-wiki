@@ -206,6 +206,7 @@ export const generateAiEvaluationCandidatesSchema = z.object({
   maxCases: z.number().int().min(1).max(12).default(6),
 });
 export const promoteAiEvaluationCaseSchema = z.object({ caseId: z.string().uuid() });
+export const listAiEvaluationCasesSchema = z.object({ datasetId: z.string().uuid() });
 
 export const listAiEvaluationRunsSchema = z
   .object({ datasetId: z.string().uuid().optional() })
@@ -253,6 +254,11 @@ export const aiEvaluationDatasetSchema = z.object({
   caseCount: z.number().int(),
   goldCaseCount: z.number().int(),
   silverCaseCount: z.number().int(),
+});
+export const aiEvaluationCaseSummarySchema = z.object({
+  id: z.string().uuid(),
+  label: z.string(),
+  lifecycle: z.enum(["silver", "gold"]),
 });
 export const aiEvaluationRunSchema = z.object({
   id: z.string().uuid(),
