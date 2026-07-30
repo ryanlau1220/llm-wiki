@@ -19,6 +19,7 @@ function createConfig(vaultPath: string): AppConfig {
   return {
     apiPort: 3001,
     embeddingProvider: "fallback",
+    llmProvider: "fallback",
     evaluatorMode: "auto",
     allowCloudVaultEvaluation: false,
     jwtSecret: "test-secret",

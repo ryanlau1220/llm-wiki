@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 export type AppConfig = {
   apiPort: number;
   embeddingProvider: "gemini-geap" | "gemini" | "ollama" | "openai" | "fallback";
+  llmProvider: "gemini-geap" | "gemini" | "ollama" | "openai" | "fallback";
   gcpProjectId?: string;
   gcpLocation?: string;
   gcpLlmModel?: string;
@@ -98,6 +99,10 @@ export function loadConfig(): AppConfig {
   cachedConfig = {
     apiPort: readApiPort(process.env.API_PORT),
     embeddingProvider: (process.env.EMBEDDING_PROVIDER as AppConfig["embeddingProvider"]) ?? "fallback",
+    // Preserve existing installations until they explicitly set LLM_PROVIDER.
+    llmProvider: (process.env.LLM_PROVIDER as AppConfig["llmProvider"])
+      ?? (process.env.EMBEDDING_PROVIDER as AppConfig["llmProvider"])
+      ?? "fallback",
     gcpProjectId,
     gcpLocation: process.env.GEMINI_GCP_LOCATION,
     gcpLlmModel: process.env.GEMINI_GCP_LLM_MODEL,

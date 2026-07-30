@@ -28,7 +28,7 @@ describe("Ask Flow", () => {
 
   test("freezes the Ask/RAG target identity into an evaluation manifest", () => {
     const manifest = buildAskWorkflowManifest(
-      { embeddingProvider: "ollama", ollamaLlmModel: "local-judge" } as any,
+      { embeddingProvider: "fallback", llmProvider: "ollama", ollamaLlmModel: "local-judge" } as any,
       8,
     );
 

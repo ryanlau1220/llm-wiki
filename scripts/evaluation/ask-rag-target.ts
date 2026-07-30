@@ -6,7 +6,13 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("LLM_WIKI_EVALUATION_TARGET_PORT must be a valid TCP port");
 }
 
-const config = loadConfig();
+const targetMode = readTargetMode(process.env.LLM_WIKI_EVALUATION_TARGET_MODE);
+const applicationConfig = loadConfig();
+// Retrieval remains on the configured embedding provider so the evaluation uses the same index
+// representation as the application. Local mode changes only answer generation.
+const config = targetMode === "local"
+  ? { ...applicationConfig, llmProvider: "ollama" as const }
+  : applicationConfig;
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port,
@@ -35,7 +41,13 @@ const server = Bun.serve({
   },
 });
 
-console.log(`LLM_WIKI_EVALUATION_TARGET_READY:${server.port}`);
+console.log(`LLM_WIKI_EVALUATION_TARGET_READY:${server.port}:${targetMode}`);
+
+function readTargetMode(value: string | undefined): "local" | "current" {
+  if (!value || value === "local") return "local";
+  if (value === "current") return "current";
+  throw new Error("LLM_WIKI_EVALUATION_TARGET_MODE must be local or current");
+}
 
 function stop() {
   server.stop(true);

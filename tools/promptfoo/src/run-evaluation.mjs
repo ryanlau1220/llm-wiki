@@ -12,7 +12,7 @@ const MIN_NODE_MAJOR = 22;
 const MIN_NODE_MINOR = 22;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const toolRoot = resolve(root, "tools/promptfoo");
-const datasetId = process.argv[2];
+const { datasetId, targetMode } = parseArguments(process.argv.slice(2));
 
 assertNodeVersion();
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for local evaluation");
@@ -22,7 +22,7 @@ let target;
 try {
   const cases = await loadGoldCases(datasetId);
   if (!cases.length) throw new Error("No gold evaluation cases are available");
-  target = await startTarget();
+  target = await startTarget(targetMode);
   const configPath = join(temporaryDir, "promptfoo.json");
   const resultPath = join(temporaryDir, "results.json");
   await writeFile(configPath, JSON.stringify(buildConfig(cases), null, 2));
@@ -41,6 +41,30 @@ function assertNodeVersion() {
   if (major < MIN_NODE_MAJOR || (major === MIN_NODE_MAJOR && minor < MIN_NODE_MINOR)) {
     throw new Error(`Promptfoo evaluation requires Node >=${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}.0; found ${process.versions.node}`);
   }
+}
+
+function parseArguments(arguments_) {
+  let datasetId;
+  let targetMode = process.env.EVALUATION_TARGET_MODE || "local";
+  for (const argument of arguments_) {
+    if (argument === "--current") {
+      targetMode = "current";
+      continue;
+    }
+    if (argument === "--local") {
+      targetMode = "local";
+      continue;
+    }
+    if (!datasetId) {
+      datasetId = argument;
+      continue;
+    }
+    throw new Error("Usage: ./manage.sh eval [--local|--current] [dataset UUID]");
+  }
+  if (targetMode !== "local" && targetMode !== "current") {
+    throw new Error("EVALUATION_TARGET_MODE must be local or current");
+  }
+  return { datasetId, targetMode };
 }
 
 async function loadGoldCases(selectedDatasetId) {
@@ -128,11 +152,15 @@ async function runPromptfoo(configPath, resultPath, targetUrl) {
   });
 }
 
-async function startTarget() {
+async function startTarget(targetMode) {
   const port = await findOpenPort();
   const child = spawn("bun", ["scripts/evaluation/ask-rag-target.ts"], {
     cwd: root,
-    env: { ...process.env, LLM_WIKI_EVALUATION_TARGET_PORT: String(port) },
+    env: {
+      ...process.env,
+      LLM_WIKI_EVALUATION_TARGET_PORT: String(port),
+      LLM_WIKI_EVALUATION_TARGET_MODE: targetMode,
+    },
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolvePromise, reject) => {

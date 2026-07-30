@@ -68,7 +68,7 @@ export async function askPreview(
       query,
       policy: retrievalDecision.policy,
       policyReason: retrievalDecision.reason,
-      modelProvider: config.embeddingProvider,
+      modelProvider: config.llmProvider,
       modelName: resolveLlmModelName(config),
       promptVersion: ASK_PROMPT_VERSION,
     });
@@ -227,7 +227,7 @@ export async function askPreview(
         if (toolSpanId) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - toolStartedAt, errorCode: "web_search_failed" });
       }
       if (toolSpanId && !webSearchFailed) await completeAiTraceSpan(db, toolSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - toolStartedAt, attributes: { enabled: true } });
-    } else if (config.embeddingProvider === "gemini" || config.embeddingProvider === "gemini-geap") {
+    } else if (config.llmProvider === "gemini" || config.llmProvider === "gemini-geap") {
       logger.info("Using native Gemini search grounding...");
       webSearchEnabled = true;
     } else {
@@ -236,7 +236,7 @@ export async function askPreview(
   }
 
   const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider,
+    provider: config.llmProvider,
     geminiGeap: {
       projectId: config.gcpProjectId,
       location: config.gcpLocation,
@@ -270,7 +270,7 @@ Provide your answer and suggested note in JSON format.
 
   logger.debug("Generating LLM answer...");
   const generationStartedAt = Date.now();
-  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json", web_search: webSearchEnabled } }) : null;
+  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.llmProvider, response_format: "json", web_search: webSearchEnabled } }) : null;
   let llmResponse: LLMResponse;
   try {
     llmResponse = await llmProvider.generate({
@@ -294,7 +294,7 @@ Provide your answer and suggested note in JSON format.
     throw error;
   }
   const duration = Date.now() - generationStartedAt;
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, response_format: "json", ...modelUsageAttributes(llmResponse.usage) } });
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.llmProvider, response_format: "json", ...modelUsageAttributes(llmResponse.usage) } });
 
   const parsed = parseStructuredModelResponse(llmResponse.text, askModelResponseSchema);
   if (!parsed.success) {
@@ -429,7 +429,7 @@ export function buildAskWorkflowManifest(config: AppConfig, topK: number) {
     policy: "vault_hybrid",
     topK,
     contextCharacterBudget: DEFAULT_CONTEXT_CHARACTER_BUDGET,
-    modelProvider: config.embeddingProvider,
+    modelProvider: config.llmProvider,
     modelName: resolveLlmModelName(config) ?? null,
   };
 }
@@ -440,8 +440,8 @@ function filterCitations(citations: number[], allowedCitationIds: Set<number>): 
 }
 
 function resolveLlmModelName(config: AppConfig): string | undefined {
-  if (config.embeddingProvider === "openai") return config.openaiLlmModel;
-  if (config.embeddingProvider === "ollama") return config.ollamaLlmModel;
+  if (config.llmProvider === "openai") return config.openaiLlmModel;
+  if (config.llmProvider === "ollama") return config.ollamaLlmModel;
   return config.gcpLlmModel;
 }
 
