@@ -57,6 +57,41 @@
       "when": 1785672000000,
       "tag": "0007_evaluation_case_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785672060000,
+      "tag": "0008_baseline_evaluation_cases",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785672120000,
+      "tag": "0009_schema_snapshot_checkpoint",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785672180000,
+      "tag": "0010_remove_evaluation_output_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785672240000,
+      "tag": "0011_gifted_rogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785672300000,
+      "tag": "0012_smart_baron_zemo",
+      "breakpoints": true
     }
   ]
 }

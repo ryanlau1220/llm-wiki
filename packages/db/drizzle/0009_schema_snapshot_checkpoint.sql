@@ -1,0 +1,3 @@
+-- Schema snapshot checkpoint. The preceding 0008 migration contains the
+-- only database change; this checkpoint prevents Drizzle from regenerating
+-- historical tables whose snapshots predate the tracked migrations.
