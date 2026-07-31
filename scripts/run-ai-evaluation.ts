@@ -1,4 +1,4 @@
-import { getAiEvaluationRun, listAiEvaluationDatasets, runAiEvaluation } from "../apps/api/src/ai-evaluation";
+import { ensureAiEvaluationBaseline, getAiEvaluationRun, listAiEvaluationDatasets, runAiEvaluation } from "../apps/api/src/ai-evaluation";
 import { loadConfig } from "../apps/api/src/config";
 
 const POLL_INTERVAL_MS = 1_000;
@@ -6,13 +6,12 @@ const DEFAULT_SMOKE_CASES = 3;
 
 const { datasetId, full } = parseArguments(process.argv.slice(2));
 const config = loadConfig();
-const datasets = await listAiEvaluationDatasets(config);
 const dataset = datasetId
-  ? datasets.find((item) => item.id === datasetId)
-  : datasets.find((item) => item.name === "Golden Suite v1");
+  ? (await listAiEvaluationDatasets(config)).find((item) => item.id === datasetId)
+  : await ensureAiEvaluationBaseline(config, { maxCases: 6 });
 
-if (!dataset) throw new Error("Create and activate Golden Suite v1 in the app before running CLI verification");
-if (!dataset.goldCaseCount) throw new Error("Golden Suite v1 has no active gold cases");
+if (!dataset) throw new Error("Evaluation dataset was not found");
+if (!dataset.caseCount) throw new Error("The automatic smoke suite has no cases");
 
 const run = await runAiEvaluation(config, {
   datasetId: dataset.id,
@@ -20,7 +19,7 @@ const run = await runAiEvaluation(config, {
   judgeEnabled: false,
   confirmLlmJudge: false,
   topK: 8,
-  maxCases: full ? dataset.goldCaseCount : Math.min(DEFAULT_SMOKE_CASES, dataset.goldCaseCount),
+  maxCases: full ? dataset.caseCount : Math.min(DEFAULT_SMOKE_CASES, dataset.caseCount),
   maxJudgeCalls: 0,
   maxTotalTokens: 20_000,
   rubricVersion: "groundedness-v1",
