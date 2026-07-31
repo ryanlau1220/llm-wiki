@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "check": "bun run verify-migrations && tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate",
-    "migrate": "bun run src/ensure-extensions.ts && drizzle-kit migrate"
+    "migrate": "bun run verify-migrations && bun run src/ensure-extensions.ts && drizzle-kit migrate",
+    "verify-migrations": "bun run src/verify-migrations.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
