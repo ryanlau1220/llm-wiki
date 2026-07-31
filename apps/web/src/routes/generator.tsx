@@ -11,12 +11,20 @@ import {
   Search,
   Send,
   Tag as TagIcon,
+  ThumbsDown,
+  ThumbsUp,
+  FileQuestion,
 } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import { AiGeneratorEvaluate } from "../components/AiGeneratorEvaluate";
 import { AiAutomations } from "../components/AiAutomations";
 import { AiTraceInspect } from "../components/AiTraceInspect";
+import {
+  acceptedRagRegressionInput,
+  aiTraceFeedbackInput,
+  type AiTraceFeedbackSignal,
+} from "../lib/ai-evaluation-feedback";
 import { orpc } from "../lib/orpc";
 
 export const Route = createFileRoute("/generator")({
@@ -48,6 +56,7 @@ function GeneratorComponent() {
     query: string;
     data: any;
   } | null>(null);
+  const [recordedFeedback, setRecordedFeedback] = useState<AiTraceFeedbackSignal | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<{
     type: "success" | "error";
@@ -80,10 +89,37 @@ function GeneratorComponent() {
           query: queryText,
           data,
         });
+        setRecordedFeedback(null);
         setSaveStatus(null);
       },
     }),
   );
+
+  const regressionCaseMutation = useMutation(
+    orpc.addAiEvaluationRegressionCase.mutationOptions({
+      // A successful save is the explicit approval. Capturing this case must
+      // never turn an otherwise successful save into a user-facing failure.
+      onError: () => undefined,
+    }),
+  );
+
+  const traceFeedbackMutation = useMutation(
+    orpc.recordAiTraceFeedback.mutationOptions({
+      onSuccess: (_data, input) => {
+        setRecordedFeedback(input.signal);
+      },
+    }),
+  );
+
+  const rememberAcceptedRagResponse = () => {
+    const input = acceptedRagRegressionInput(result);
+    if (input) regressionCaseMutation.mutate(input);
+  };
+
+  const recordTraceFeedback = (signal: AiTraceFeedbackSignal) => {
+    const input = aiTraceFeedbackInput(result, signal);
+    if (input) traceFeedbackMutation.mutate(input);
+  };
 
   const askSaveMutation = useMutation(
     orpc.confirmAskSave.mutationOptions({
@@ -94,6 +130,7 @@ function GeneratorComponent() {
             message: `Save rejected: ${data.error?.replace(/_/g, " ")}`,
           });
         } else {
+          rememberAcceptedRagResponse();
           setSaveStatus({ type: "success", message: "Note successfully saved to vault!" });
           setResult(null);
           setQueryText("");
@@ -110,6 +147,7 @@ function GeneratorComponent() {
           query: queryText,
           data,
         });
+        setRecordedFeedback(null);
         setSaveStatus(null);
       },
     }),
@@ -123,6 +161,7 @@ function GeneratorComponent() {
           query: queryText,
           data,
         });
+        setRecordedFeedback(null);
         setSaveStatus(null);
       },
     }),
@@ -648,13 +687,31 @@ function GeneratorComponent() {
                         </div>
                       )}
                       <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                          to="/generator"
-                          search={{ view: "evaluate" }}
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-lagoon-deep hover:underline"
-                        >
-                          Review this response <ChevronRight size={14} />
-                        </Link>
+                        {result.data.traceId && (
+                          <fieldset className="flex items-center gap-1 border-0 p-0" aria-label="Response feedback">
+                            {([
+                              { signal: "helpful", label: "Helpful", icon: ThumbsUp },
+                              { signal: "incorrect", label: "Incorrect", icon: ThumbsDown },
+                              { signal: "missing_source", label: "Missing source", icon: FileQuestion },
+                            ] as const).map(({ signal, label, icon: Icon }) => {
+                              const selected = recordedFeedback === signal;
+                              return (
+                                <button
+                                  key={signal}
+                                  type="button"
+                                  onClick={() => recordTraceFeedback(signal)}
+                                  disabled={traceFeedbackMutation.isPending}
+                                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors disabled:cursor-default ${selected
+                                    ? "border-lagoon bg-lagoon text-lagoon-text"
+                                    : "border-[var(--line)] text-[var(--sea-ink-soft)] hover:border-lagoon hover:text-lagoon-deep"
+                                  }`}
+                                >
+                                  <Icon size={12} /> {label}
+                                </button>
+                              );
+                            })}
+                          </fieldset>
+                        )}
                         {result.data.traceId && (
                           <Link
                             to="/generator"
