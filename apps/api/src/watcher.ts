@@ -1,12 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { createEmbeddingProvider } from "@llm-wiki/ai";
 import { deleteDocumentByPath, ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient, documents } from "@llm-wiki/db";
 import { startVaultWatcher, type WatchEvent } from "@llm-wiki/obsidian";
 
 import type { AppConfig } from "./config";
+import { createConfiguredEmbeddingProvider, createConfiguredLlmProvider } from "./providers";
 import { sseEmitter } from "./events";
 
 export type WatcherHandle = {
@@ -38,7 +38,7 @@ export async function syncVault(
   config: AppConfig,
   db: any,
   embeddingProvider: any,
-  llmProvider: any
+  llmProvider: any,
 ): Promise<void> {
   const logger = createLogger("sync");
   logger.info("Starting startup vault synchronization...");
@@ -62,8 +62,8 @@ export async function syncVault(
     options: {
       embeddingProvider,
       llmProvider,
-      embeddingVersion: config.embeddingVersion
-    }
+      embeddingVersion: config.embeddingVersion,
+    },
   };
 
   // Ingest notes from the vault root
@@ -74,19 +74,20 @@ export async function syncVault(
       activePaths.add(vaultPath);
 
       const rawContent = await fs.readFile(filePath, "utf8");
-      
+
       const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
       const parsed = parseMarkdownDocument(rawContent);
-      const isAiGenerated = parsed.metadata.is_ai_generated === true || 
-                            parsed.metadata.type === "ai_refactored" || 
-                            parsed.metadata.type === "ai_generated";
+      const isAiGenerated =
+        parsed.metadata.is_ai_generated === true ||
+        parsed.metadata.type === "ai_refactored" ||
+        parsed.metadata.type === "ai_generated";
       const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
       await ingestMarkdown(deps, {
         vaultPath,
         rawContent,
         sourceKind,
-        isAiGenerated
+        isAiGenerated,
       });
     } catch (error) {
       logger.error(`Failed to ingest note ${filePath}`, error);
@@ -115,6 +116,23 @@ export async function syncVault(
     logger.error("Failed to resolve links during sync", error);
   }
 
+  // Seed or maintain the app-owned retrieval baseline as part of ingestion.
+  // This does not call an LLM or retain note content, and failure must never
+  // prevent the vault itself from becoming available.
+  if (markdownFiles.length) {
+    try {
+      const { ensureAiEvaluationBaseline } = await import("./ai-evaluation");
+      const suite = await ensureAiEvaluationBaseline(config, { maxCases: 12 });
+      logger.info("Evaluation baseline ready", {
+        name: suite.name,
+        version: suite.version,
+        cases: suite.caseCount,
+      });
+    } catch (error) {
+      logger.error("Failed to prepare automatic evaluation baseline", error);
+    }
+  }
+
   logger.info("Startup vault synchronization completed.");
 }
 
@@ -126,42 +144,9 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
   }
 
   const { db } = createDbClient(config.databaseUrl);
-  const embeddingProvider = createEmbeddingProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpEmbeddingModel
-    },
-    ollama: {
-      baseUrl: config.ollamaBaseUrl,
-      model: config.ollamaEmbeddingModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiEmbeddingModel
-    }
-  });
+  const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
-  const { createLLMProvider } = await import("@llm-wiki/ai");
-  const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider as any,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpLlmModel
-    },
-    ollama: {
-      baseUrl: config.ollamaBaseUrl,
-      model: config.ollamaLlmModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiLlmModel
-    }
-  });
+  const llmProvider = createConfiguredLlmProvider(config);
 
   const rootPath = path.resolve(config.vaultPath);
 
@@ -177,7 +162,10 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
     onEvent: async (event: WatchEvent) => {
       try {
         const relative = path.relative(rootPath, event.path);
-        if (relative.startsWith("..") || relative.split(path.sep).some((part) => part.startsWith("."))) {
+        if (
+          relative.startsWith("..") ||
+          relative.split(path.sep).some((part) => part.startsWith("."))
+        ) {
           // Ignore any file events outside the vault or in hidden folders (.obsidian, .llm-wiki)
           return;
         }
@@ -193,10 +181,10 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
               options: {
                 embeddingProvider,
                 llmProvider,
-                embeddingVersion: config.embeddingVersion
-              }
+                embeddingVersion: config.embeddingVersion,
+              },
             },
-            vaultPath
+            vaultPath,
           );
           logger.info("Document deleted", { path: vaultPath });
           sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
@@ -206,9 +194,10 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
         const rawContent = await fs.readFile(event.path, "utf8");
         const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
         const parsed = parseMarkdownDocument(rawContent);
-        const isAiGenerated = parsed.metadata.is_ai_generated === true || 
-                              parsed.metadata.type === "ai_refactored" || 
-                              parsed.metadata.type === "ai_generated";
+        const isAiGenerated =
+          parsed.metadata.is_ai_generated === true ||
+          parsed.metadata.type === "ai_refactored" ||
+          parsed.metadata.type === "ai_generated";
         const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
         await ingestMarkdown(
@@ -217,22 +206,25 @@ export async function startIngestionWatcher(config: AppConfig): Promise<WatcherH
             options: {
               embeddingProvider,
               llmProvider,
-              embeddingVersion: config.embeddingVersion
-            }
+              embeddingVersion: config.embeddingVersion,
+            },
           },
           {
             vaultPath,
             rawContent,
             sourceKind,
-            isAiGenerated
-          }
+            isAiGenerated,
+          },
         );
         logger.info("Document ingested", { path: vaultPath });
         sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
       } catch (error) {
-        logger.error("Watcher event processing failed", error, { event: event.event, path: event.path });
+        logger.error("Watcher event processing failed", error, {
+          event: event.event,
+          path: event.path,
+        });
       }
-    }
+    },
   });
 
   return { stop };
