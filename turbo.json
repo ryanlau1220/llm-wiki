@@ -34,7 +34,8 @@
         "^build"
       ],
       "outputs": [
-        "dist/**"
+        "dist/**",
+        ".output/**"
       ]
     },
     "test": {
