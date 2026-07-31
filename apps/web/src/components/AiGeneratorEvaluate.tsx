@@ -1,79 +1,38 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Sparkles, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play } from "lucide-react";
 import { orpc } from "../lib/orpc";
 
 type Props = { onBack: () => void };
 
 export function AiGeneratorEvaluate({ onBack }: Props) {
-  const [selectedDataset, setSelectedDataset] = useState<string>("");
-  const [judgeEnabled, setJudgeEnabled] = useState(false);
-  const [targetConfirmed, setTargetConfirmed] = useState(false);
-  const [judgeConfirmed, setJudgeConfirmed] = useState(false);
-  const [baselineRunId, setBaselineRunId] = useState("");
-  const [candidateRunId, setCandidateRunId] = useState("");
-  const datasetsQuery = useQuery(orpc.listAiEvaluationDatasets.queryOptions());
   const capabilitiesQuery = useQuery(orpc.getAiEvaluationCapabilities.queryOptions());
   const runsQuery = useQuery(
     orpc.listAiEvaluationRuns.queryOptions({
-      input: selectedDataset ? { datasetId: selectedDataset } : undefined,
       refetchInterval: (query: any) => query.state.data?.some((run: any) => run.status === "queued" || run.status === "running") ? 1_500 : false,
     } as any),
   );
+  const automaticComparison = selectAutomaticComparisonRuns(runsQuery.data ?? []);
   const comparisonQuery = useQuery(
     orpc.compareAiEvaluationRuns.queryOptions({
-      input: { baselineRunId, candidateRunId },
-      enabled: Boolean(baselineRunId && candidateRunId && baselineRunId !== candidateRunId),
-    } as any),
-  );
-  const casesQuery = useQuery(
-    orpc.listAiEvaluationCases.queryOptions({
-      input: { datasetId: selectedDataset },
-      enabled: Boolean(selectedDataset),
+      input: automaticComparison ?? { baselineRunId: "", candidateRunId: "" },
+      enabled: Boolean(automaticComparison),
     } as any),
   );
   const runMutation = useMutation(
-    orpc.runAiEvaluation.mutationOptions({ onSuccess: () => runsQuery.refetch() }),
-  );
-  const bootstrapMutation = useMutation(
-    orpc.bootstrapAiEvaluationGoldenSuite.mutationOptions({
-      onSuccess: (dataset) => {
-        setSelectedDataset(dataset.id);
-        datasetsQuery.refetch();
-      },
-    }),
-  );
-  const activateSuiteMutation = useMutation(
-    orpc.activateAiEvaluationGoldenSuite.mutationOptions({
-      onSuccess: (dataset) => {
-        setSelectedDataset(dataset.id);
-        datasetsQuery.refetch();
-      },
-    }),
-  );
-  const discardCandidateMutation = useMutation(
-    orpc.discardAiEvaluationSilverCase.mutationOptions({
+    orpc.runAiEvaluation.mutationOptions({
       onSuccess: () => {
-        datasetsQuery.refetch();
-        casesQuery.refetch();
+        runsQuery.refetch();
       },
     }),
   );
-  const selectedSuite = datasetsQuery.data?.find((dataset) => dataset.id === selectedDataset);
-  const hasGoldenSuite = datasetsQuery.data?.some((dataset) => dataset.name === "Golden Suite v1");
-  const hasSilverCases = Boolean(selectedSuite && selectedSuite.silverCaseCount > 0);
-  useEffect(() => {
-    if (selectedDataset || !datasetsQuery.data) return;
-    const golden = datasetsQuery.data.find((dataset) => dataset.name === "Golden Suite v1");
-    if (golden) setSelectedDataset(golden.id);
-  }, [datasetsQuery.data, selectedDataset]);
   const run = () => {
-    if (!selectedDataset) return;
+    const judgeEnabled = Boolean(capabilitiesQuery.data?.semanticJudgeAvailable);
     runMutation.mutate({
-      datasetId: selectedDataset,
       confirmTargetExecution: true,
       judgeEnabled,
-      confirmLlmJudge: judgeEnabled ? judgeConfirmed : false,
+      // Provider configuration is the consent boundary: cloud judging is
+      // available only with ALLOW_CLOUD_VAULT_EVALUATION=true.
+      confirmLlmJudge: judgeEnabled,
       topK: 8,
       maxCases: 25,
       maxJudgeCalls: 25,
@@ -93,132 +52,14 @@ export function AiGeneratorEvaluate({ onBack }: Props) {
       <header>
         <h1 className="display-title text-3xl font-bold text-sea-ink">Evaluate AI Generator</h1>
       </header>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="island-shell space-y-4 rounded-xl p-5">
-          <div className="flex items-center gap-2">
-            <Sparkles size={17} />
-            <h2 className="font-extrabold text-sea-ink">Golden Suite v1</h2>
-          </div>
-          {!hasGoldenSuite && capabilitiesQuery.data?.localJudgeAvailable && (
-            <button
-              type="button"
-              onClick={() => bootstrapMutation.mutate({ maxCases: 6 })}
-              disabled={bootstrapMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-lagoon px-3 py-2 text-sm font-bold text-lagoon-text disabled:opacity-50"
-            >
-              {bootstrapMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-              Build Golden Suite
-            </button>
-          )}
-          {selectedSuite?.name === "Golden Suite v1" && hasSilverCases && (
-            <button
-              type="button"
-              onClick={() => activateSuiteMutation.mutate({ datasetId: selectedSuite.id })}
-              disabled={activateSuiteMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-lagoon px-3 py-2 text-sm font-bold text-lagoon-text disabled:opacity-50"
-            >
-              {activateSuiteMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-              Activate {selectedSuite.silverCaseCount} verified cases
-            </button>
-          )}
-          {selectedSuite?.name === "Golden Suite v1" && (
-            <>
-              <p className="text-sm text-sea-ink-soft">
-                {selectedSuite.goldCaseCount} active · {selectedSuite.silverCaseCount} awaiting activation · v{selectedSuite.version}
-              </p>
-              {casesQuery.data && (
-                <div className="space-y-2 border-t border-line pt-3 text-sm text-sea-ink">
-                  {casesQuery.data.map((evaluationCase) => (
-                    <div key={evaluationCase.id} className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold">{evaluationCase.label}</p>
-                        {evaluationCase.expectedOutcome && <p className="text-sea-ink-soft">{evaluationCase.expectedOutcome}</p>}
-                      </div>
-                      {evaluationCase.lifecycle === "silver" && (
-                        <button
-                          type="button"
-                          aria-label={`Remove ${evaluationCase.label}`}
-                          onClick={() => discardCandidateMutation.mutate({ caseId: evaluationCase.id })}
-                          disabled={discardCandidateMutation.isPending}
-                          className="shrink-0 rounded border border-line p-1 text-sea-ink-soft hover:border-red-500 hover:text-red-500 disabled:opacity-50"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {(bootstrapMutation.isError || activateSuiteMutation.isError) && (
-            <p className="text-sm text-red-700 dark:text-red-300">Golden Suite v1 could not be prepared from the current index.</p>
-          )}
-        </div>
-        <div className="island-shell space-y-4 rounded-xl p-5">
+      <div className="island-shell space-y-4 rounded-xl p-5">
           <div className="flex items-center gap-2">
             <FlaskConical size={17} />
-            <h2 className="font-extrabold text-sea-ink">Run checks</h2>
+            <h2 className="font-extrabold text-sea-ink">Quality checks</h2>
           </div>
-          <label className="block text-sm font-bold text-sea-ink">
-            Evaluation dataset
-            <select
-              value={selectedDataset}
-              onChange={(event) => {
-                setSelectedDataset(event.target.value);
-                setBaselineRunId("");
-                setCandidateRunId("");
-              }}
-              className="mt-1 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-            >
-              <option value="">Select a dataset</option>
-              {datasetsQuery.data?.map((dataset) => (
-                <option key={dataset.id} value={dataset.id}>
-                  {dataset.name} · v{dataset.version} · {dataset.goldCaseCount} gold · {dataset.silverCaseCount} silver
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
-            <input
-              type="checkbox"
-              checked={targetConfirmed}
-              onChange={(event) => setTargetConfirmed(event.target.checked)}
-            />{" "}
-            I confirm this runs the approved cases with the current Ask/RAG workflow.
-          </label>
-          {capabilitiesQuery.data?.semanticJudgeAvailable && (
-            <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
-              <input
-                type="checkbox"
-                checked={judgeEnabled}
-                onChange={(event) => {
-                  setJudgeEnabled(event.target.checked);
-                  setJudgeConfirmed(false);
-                }}
-              />{" "}
-              Use semantic evaluator
-            </label>
-          )}
-          {judgeEnabled && (
-            <label className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-950/25 p-3 text-sm text-amber-100">
-              <input
-                type="checkbox"
-                checked={judgeConfirmed}
-                onChange={(event) => setJudgeConfirmed(event.target.checked)}
-              />{" "}
-              I confirm the {capabilitiesQuery.data?.semanticJudgeKind === "cloud" ? "configured cloud" : "local"} evaluator may inspect generated output and selected evidence.
-            </label>
-          )}
           <button
             type="button"
-            disabled={
-              !selectedDataset ||
-              !selectedSuite?.goldCaseCount ||
-              !targetConfirmed ||
-              runMutation.isPending ||
-              (judgeEnabled && !judgeConfirmed)
-            }
+            disabled={runMutation.isPending}
             onClick={run}
             className="inline-flex items-center gap-2 rounded-lg bg-sea-ink px-3 py-2 text-sm font-bold text-bg-base disabled:opacity-50"
           >
@@ -227,7 +68,7 @@ export function AiGeneratorEvaluate({ onBack }: Props) {
             ) : (
               <Play size={15} />
             )}{" "}
-            Run Ask/RAG evaluation
+            {runMutation.isPending ? "Preparing checks" : "Run quality checks"}
           </button>
           {runMutation.isError && (
             <p className="flex gap-1 text-sm text-red-700 dark:text-red-300">
@@ -237,13 +78,9 @@ export function AiGeneratorEvaluate({ onBack }: Props) {
           )}
           <RunHistory
             runs={runsQuery.data ?? []}
-            baselineRunId={baselineRunId}
-            candidateRunId={candidateRunId}
-            onBaselineChange={setBaselineRunId}
-            onCandidateChange={setCandidateRunId}
+            automaticComparison={automaticComparison}
             comparison={comparisonQuery.data}
           />
-        </div>
       </div>
     </section>
   );
@@ -251,59 +88,25 @@ export function AiGeneratorEvaluate({ onBack }: Props) {
 
 function RunHistory({
   runs,
-  baselineRunId,
-  candidateRunId,
-  onBaselineChange,
-  onCandidateChange,
+  automaticComparison,
   comparison,
 }: {
   runs: any[];
-  baselineRunId: string;
-  candidateRunId: string;
-  onBaselineChange: (id: string) => void;
-  onCandidateChange: (id: string) => void;
+  automaticComparison: { baselineRunId: string; candidateRunId: string } | null;
   comparison: any;
 }) {
   return (
     <div className="border-t border-line pt-4">
-      <h3 className="font-extrabold text-sea-ink">Versioned run comparison</h3>
+      <h3 className="font-extrabold text-sea-ink">Recent checks</h3>
       {runs.length === 0 ? (
         <p className="mt-2 text-sm text-sea-ink-soft">No runs for this dataset yet.</p>
       ) : (
         <>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <label className="text-xs font-bold text-sea-ink">
-              Baseline
-              <select
-                value={baselineRunId}
-                onChange={(event) => onBaselineChange(event.target.value)}
-                className="mt-1 w-full rounded border border-line p-2 font-normal"
-              >
-                <option value="">Select baseline</option>
-                {runs.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {new Date(run.startedAt).toLocaleString()} · {run.status}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-bold text-sea-ink">
-              Candidate
-              <select
-                value={candidateRunId}
-                onChange={(event) => onCandidateChange(event.target.value)}
-                className="mt-1 w-full rounded border border-line p-2 font-normal"
-              >
-                <option value="">Select candidate</option>
-                {runs.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {new Date(run.startedAt).toLocaleString()} · {run.status}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {comparison && <ComparisonCards comparison={comparison} />}
+          {comparison ? (
+            <ComparisonCards comparison={comparison} />
+          ) : !automaticComparison ? (
+            <p className="mt-2 text-sm text-sea-ink-soft">Run again to compare with this result.</p>
+          ) : null}
           <div className="mt-3 space-y-2">
             {runs.map((run) => (
               <div key={run.id} className="rounded-lg bg-foam p-3 text-sm">
@@ -330,18 +133,23 @@ function RunHistory({
                   </p>
                 )}
                 {run.results?.map((result: any) => (
-                  <p key={result.id} className="mt-1 text-xs text-sea-ink-soft">
-                    Case {result.caseId.slice(0, 8)}:{" "}
-                    {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)} · judge{" "}
-                    {result.judgeScore ?? "n/a"}
-                    {result.judgeLabels?.length ? ` · ${result.judgeLabels.join(", ")}` : ""}
-                    {result.errorCode && (
-                      <span className="text-red-300">
-                        {" "}
-                        · {formatEvaluationError(result.errorCode)}
-                      </span>
+                  <div key={result.id} className="mt-2 text-xs text-sea-ink-soft">
+                    <p>
+                      Case {result.caseId.slice(0, 8)}: {formatRetrievalRecall(result.deterministic?.retrieval?.recallAtK)}
+                      {result.judgeScore !== null && result.judgeScore !== undefined ? ` · semantic average ${formatScore(result.judgeScore)}` : ""}
+                      {result.errorCode && (
+                        <span className={isSemanticEvaluatorNotice(result.errorCode) ? "text-sea-ink-soft" : "text-red-300"}>
+                          {" "}
+                          · {formatEvaluationError(result.errorCode)}
+                        </span>
+                      )}
+                    </p>
+                    {result.deterministic?.semantic?.engine === "promptfoo" && (
+                      <p className="mt-1 text-sea-ink-soft">
+                        {formatPromptfooMetrics(result.deterministic.semantic.metrics)}
+                      </p>
                     )}
-                  </p>
+                  </div>
                 ))}
               </div>
             ))}
@@ -351,14 +159,21 @@ function RunHistory({
     </div>
   );
 }
+
+/** The API returns newest runs first; keep comparisons automatic and comparable. */
+export function selectAutomaticComparisonRuns(runs: Array<{ id: string; status: string }>) {
+  const completed = runs.filter((run) => run.status === "succeeded");
+  if (completed.length < 2) return null;
+  return { baselineRunId: completed[1].id, candidateRunId: completed[0].id };
+}
 function ComparisonCards({ comparison }: { comparison: any }) {
   const { baseline, candidate, comparison: delta } = comparison;
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2">
-      <RunCard title="Baseline" run={baseline} />
-      <RunCard title="Candidate" run={candidate} />
+      <RunCard title="Previous run" run={baseline} />
+      <RunCard title="Latest run" run={candidate} />
       <div className="md:col-span-2 rounded-lg border border-lagoon bg-foam p-3 text-xs text-sea-ink">
-        <b>Change:</b> retrieval recall {formatDelta(delta.retrievalRecallDelta)} · judge score{" "}
+        <b>Quality change:</b> retrieval recall {formatDelta(delta.retrievalRecallDelta)} · judge score{" "}
         {formatDelta(delta.judgeScoreDelta)} · failed cases {formatDelta(delta.failedCaseDelta)}
       </div>
     </div>
@@ -404,4 +219,31 @@ export function formatEvaluationError(errorCode: string) {
     return "cloud judge returned invalid structured output";
   if (errorCode === "cloud_judge_unavailable") return "cloud judge unavailable";
   return errorCode.replaceAll("_", " ");
+}
+
+export function isSemanticEvaluatorNotice(errorCode: string) {
+  return errorCode === "judge_budget_exhausted"
+    || errorCode === "local_judge_invalid_response"
+    || errorCode === "local_judge_unavailable"
+    || errorCode === "cloud_judge_invalid_response"
+    || errorCode === "cloud_judge_unavailable";
+}
+
+export function formatPromptfooMetrics(metrics: Record<string, { score?: number }> | undefined) {
+  if (!metrics) return "";
+  const labels: Record<string, string> = {
+    "context-faithfulness": "faithfulness",
+    "context-relevance": "context precision",
+    "context-recall": "context recall",
+    "answer-relevance": "answer relevance",
+    factuality: "answer correctness",
+  };
+  return Object.entries(metrics)
+    .filter(([, metric]) => typeof metric.score === "number")
+    .map(([name, metric]) => `${labels[name] ?? name} ${formatScore(metric.score!)}`)
+    .join(" · ");
+}
+
+function formatScore(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
