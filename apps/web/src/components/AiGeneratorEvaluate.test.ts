@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   formatDatasetRunTitle,
   formatEvaluationError,
+  formatPromptfooMetrics,
   formatRetrievalRecall,
+  isSemanticEvaluatorNotice,
+  selectAutomaticComparisonRuns,
 } from "./AiGeneratorEvaluate";
 
 describe("evaluation metric presentation", () => {
@@ -28,5 +31,23 @@ describe("evaluation metric presentation", () => {
     );
     expect(formatEvaluationError("local_judge_unavailable")).toBe("local judge unavailable");
     expect(formatEvaluationError("cloud_judge_unavailable")).toBe("cloud judge unavailable");
+    expect(isSemanticEvaluatorNotice("cloud_judge_unavailable")).toBe(true);
+    expect(isSemanticEvaluatorNotice("target_execution_failed")).toBe(false);
+  });
+
+  test("labels framework-backed RAG scores without exposing evaluator payloads", () => {
+    expect(formatPromptfooMetrics({
+      "context-faithfulness": { score: 0.8 },
+      "answer-relevance": { score: 0.75 },
+    })).toBe("faithfulness 80% · answer relevance 75%");
+  });
+
+  test("automatically compares the two latest successful runs", () => {
+    expect(selectAutomaticComparisonRuns([
+      { id: "running", status: "running" },
+      { id: "latest", status: "succeeded" },
+      { id: "previous", status: "succeeded" },
+    ])).toEqual({ baselineRunId: "previous", candidateRunId: "latest" });
+    expect(selectAutomaticComparisonRuns([{ id: "only", status: "succeeded" }])).toBeNull();
   });
 });

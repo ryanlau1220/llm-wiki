@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { mapWithConcurrency, scoreFeedItem } from "./research-radar";
+import {
+  isRadarCaptureCandidate,
+  isResearchAutomationRunStale,
+  mapWithConcurrency,
+  RADAR_STALE_RUN_TIMEOUT_MS,
+  scoreFeedItem,
+} from "./research-radar";
 
 describe("Research Radar relevance fallback", () => {
   test("prioritizes a matching item over unrelated material without a model runtime", () => {
@@ -42,6 +48,11 @@ describe("Research Radar relevance fallback", () => {
     expect(score).toBe(0);
   });
 
+  test("keeps weak generic term overlap out of the review inbox", () => {
+    expect(isRadarCaptureCandidate(0.34)).toBe(false);
+    expect(isRadarCaptureCandidate(0.35)).toBe(true);
+  });
+
   test("bounds concurrent source work while preserving source order", async () => {
     let active = 0;
     let peak = 0;
@@ -55,5 +66,11 @@ describe("Research Radar relevance fallback", () => {
 
     expect(peak).toBeLessThanOrEqual(2);
     expect(result).toEqual([10, 20, 30, 40, 50]);
+  });
+
+  test("marks a persisted run stale only after the bounded local deadline", () => {
+    const startedAt = new Date("2026-07-31T00:00:00.000Z");
+    expect(isResearchAutomationRunStale(startedAt, new Date(startedAt.getTime() + RADAR_STALE_RUN_TIMEOUT_MS - 1))).toBe(false);
+    expect(isResearchAutomationRunStale(startedAt, new Date(startedAt.getTime() + RADAR_STALE_RUN_TIMEOUT_MS))).toBe(true);
   });
 });

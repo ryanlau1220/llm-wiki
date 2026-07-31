@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildLocalJudgePrompt, classifyLocalJudgeFailure, parseLocalJudgeResult } from "./ai-evaluation-execution";
+import { buildLocalJudgePrompt, classifyLocalJudgeFailure, parseLocalJudgeResult, parsePromptfooLocalJudgeResult } from "./ai-evaluation-execution";
 
 describe("local evaluation execution boundary", () => {
   test("keeps local judge output compact and rejects free-form results", () => {
@@ -26,5 +26,27 @@ describe("local evaluation execution boundary", () => {
   test("keeps local judge failure codes structural", () => {
     expect(classifyLocalJudgeFailure(new Error("Local evaluator returned invalid JSON"))).toBe("local_judge_invalid_response");
     expect(classifyLocalJudgeFailure(new Error("Ollama generation failed: 404"))).toBe("local_judge_unavailable");
+  });
+
+  test("preserves named Promptfoo metrics while deriving a compact aggregate score", () => {
+    expect(parsePromptfooLocalJudgeResult(JSON.stringify({
+      totalTokens: 42,
+      cases: [{
+        metrics: {
+          "context-faithfulness": { score: 1, passed: true },
+          "answer-relevance": { score: 0.5, passed: true },
+        },
+      }],
+    }))).toEqual({
+      totalTokens: 42,
+      result: {
+        score: 0.75,
+        labels: ["promptfoo_context_faithfulness", "promptfoo_answer_relevance"],
+        metrics: {
+          "context-faithfulness": { score: 1, passed: true },
+          "answer-relevance": { score: 0.5, passed: true },
+        },
+      },
+    });
   });
 });

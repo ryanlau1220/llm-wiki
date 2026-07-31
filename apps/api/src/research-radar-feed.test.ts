@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { contentFingerprint, discoverSyndicationFeedUrls, parseOpmlFeeds, parseSyndicationFeed } from "./research-radar-feed";
+import { contentFingerprint, discoverSyndicationFeedUrls, parseOpmlFeeds, parseSyndicationFeed, withTimeout } from "./research-radar-feed";
 
 describe("Research Radar feed normalization", () => {
+  test("bounds a dependency that does not support AbortSignal", async () => {
+    await expect(withTimeout(new Promise<never>(() => undefined), 5, "resolver timed out")).rejects.toThrow("resolver timed out");
+  });
+
   test("normalizes RSS items with stable source data", () => {
     const feed = parseSyndicationFeed(`<?xml version="1.0"?><rss version="2.0"><channel><title>Example Feed</title><item><guid>entry-1</guid><title>AI release</title><link>https://example.com/posts/ai?utm_source=rss#top</link><description><![CDATA[<p>New <strong>AI</strong> release</p>]]></description><pubDate>Mon, 28 Jul 2026 12:00:00 GMT</pubDate><category>AI</category></item></channel></rss>`);
 

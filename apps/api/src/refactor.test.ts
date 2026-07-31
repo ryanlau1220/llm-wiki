@@ -21,6 +21,7 @@ function createConfig(vaultPath: string): AppConfig {
     embeddingProvider: "fallback",
     llmProvider: "fallback",
     evaluatorMode: "auto",
+    evaluatorTimeoutMs: 30_000,
     allowCloudVaultEvaluation: false,
     jwtSecret: "test-secret",
     vaultPath,

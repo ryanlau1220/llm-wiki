@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ASK_EVALUATION_TARGET, ASK_PROMPT_VERSION, buildAskSystemInstruction, buildAskWorkflowManifest } from "./ask";
+import { ASK_EVALUATION_TARGET, ASK_PROMPT_VERSION, buildAskJsonRepairPrompt, buildAskSystemInstruction, buildAskWorkflowManifest, repairOutputTokenBudget } from "./ask";
 
 describe("Ask Flow", () => {
   test("askPreview should handle valid query", async () => {
@@ -40,5 +40,12 @@ describe("Ask Flow", () => {
       modelProvider: "ollama",
       modelName: "local-judge",
     });
+  });
+
+  test("retries malformed structured output with a bounded, schema-only request", () => {
+    expect(buildAskJsonRepairPrompt("Original request")).toContain("Return only one complete JSON object");
+    expect(buildAskJsonRepairPrompt("Original request")).not.toContain("previous response:");
+    expect(repairOutputTokenBudget(384)).toBe(768);
+    expect(repairOutputTokenBudget(1_024)).toBe(1_024);
   });
 });

@@ -1,31 +1,53 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildLocalSilverPrompt, parseLocalSilverCases } from "./ai-evaluation-synthetic";
+import {
+  buildDeterministicBaselineCases,
+  buildDeterministicBaselineSuite,
+} from "./ai-evaluation-synthetic";
 
-const sources = [
-  { documentPath: "AI/RAG.md", chunkIndex: 0, text: "RAG retrieves relevant note chunks before generating an answer." },
-  { documentPath: "AI/Tracing.md", chunkIndex: 2, text: "Structural traces store evidence references and duration metrics." },
-];
+describe("deterministic evaluation baseline", () => {
+  test("derives repeatable note-title probes bound to exact indexed evidence", () => {
+    const sources = [
+      { documentPath: "AI/RAG.md", chunkIndex: 0 },
+      { documentPath: "important/Tech-Stack.md", chunkIndex: 2 },
+    ];
 
-describe("local silver evaluation candidates", () => {
-  test("binds every generated case to a selected evidence item", () => {
-    expect(parseLocalSilverCases(JSON.stringify({
-      cases: [
-        { question: "How does RAG prepare an answer?", expectedOutcome: "Mention retrieval before generation.", evidenceIndex: 0 },
-        { question: "How does RAG prepare an answer?", expectedOutcome: "Duplicate should be ignored.", evidenceIndex: 0 },
-        { question: "What does a structural trace store?", expectedOutcome: "Mention references and durations.", evidenceIndex: 1 },
-      ],
-    }), sources, 2)).toEqual([
-      expect.objectContaining({ redactedInput: "How does RAG prepare an answer?", expectedEvidence: [{ documentPath: "AI/RAG.md", chunkIndex: 0 }] }),
-      expect.objectContaining({ redactedInput: "What does a structural trace store?", expectedEvidence: [{ documentPath: "AI/Tracing.md", chunkIndex: 2 }] }),
+    expect(buildDeterministicBaselineCases(sources)).toEqual([
+      expect.objectContaining({
+        label: "Indexed note: RAG",
+        redactedInput: "What does RAG cover?",
+        expectedEvidence: [{ documentPath: "AI/RAG.md", chunkIndex: 0 }],
+        generationMetadata: {
+          generator: "deterministic_indexed_evidence",
+          sourceCount: 2,
+          corpusFingerprint: expect.any(String),
+        },
+      }),
+      expect.objectContaining({
+        label: "Indexed note: Tech Stack",
+        redactedInput: "What does Tech Stack cover?",
+        expectedEvidence: [{ documentPath: "important/Tech-Stack.md", chunkIndex: 2 }],
+      }),
     ]);
   });
 
-  test("rejects a generator response that cannot be safely bound to evidence", () => {
-    expect(() => parseLocalSilverCases(JSON.stringify({ cases: [{ question: "Unknown", expectedOutcome: "Unknown", evidenceIndex: 9 }] }), sources, 2)).toThrow("no usable");
+  test("does not require source text or an LLM to construct probes", () => {
+    const cases = buildDeterministicBaselineCases([
+      { documentPath: "Private/Meeting Notes.md", chunkIndex: 1 },
+    ]);
+    expect(cases[0].redactedInput).toBe("What does Meeting Notes cover?");
+    expect(JSON.stringify(cases[0])).not.toContain("local_ollama");
   });
 
-  test("does not ask the local model to produce hidden reasoning", () => {
-    expect(buildLocalSilverPrompt(sources, 2)).not.toContain("chain-of-thought");
+  test("records a corpus fingerprint alongside baseline source identities", () => {
+    const base = buildDeterministicBaselineSuite([
+      { documentPath: "AI/RAG.md", chunkIndex: 0, contentHash: "first" },
+    ]);
+    const changed = buildDeterministicBaselineSuite([
+      { documentPath: "AI/RAG.md", chunkIndex: 0, contentHash: "second" },
+    ]);
+
+    expect(base.corpusFingerprint).not.toBe(changed.corpusFingerprint);
+    expect(base.cases[0]?.generationMetadata.corpusFingerprint).toBe(base.corpusFingerprint);
   });
 });
