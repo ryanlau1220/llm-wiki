@@ -25,7 +25,7 @@ function show_help {
     echo "  db-migrate Apply tracked Drizzle migrations to the database"
     echo "  verify-gcp Verify Google Cloud / GEAP model accessibility"
     echo "  verify-keys Verify providers and offer to install missing local Ollama models"
-    echo "  eval       Run the app-owned Golden Suite v1 smoke check (--full for every gold case)"
+    echo "  eval       Run automatic structural smoke checks (--full for every case)"
     echo "  seed       Setup default users and initial knowledge metrics"
     echo "  help       Show this help message"
     echo ""
@@ -62,7 +62,7 @@ case $CMD in
         echo "✅ All tests passed."
         ;;
     "eval")
-        echo "🧪 Running the app-owned Golden Suite v1 verification..."
+        echo "🧪 Running app-owned automatic structural smoke checks..."
         bun run scripts/run-ai-evaluation.ts "$@"
         ;;
     "docker")
