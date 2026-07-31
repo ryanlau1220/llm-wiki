@@ -5,6 +5,9 @@ import { getAiTrace, type AiTraceEvidence } from "@llm-wiki/core";
 import { chunks, createDbClient } from "@llm-wiki/db";
 
 import { askPreview } from "./ask";
+
+const EVALUATION_TARGET_MAX_OUTPUT_TOKENS = 384;
+const EVALUATION_TARGET_TIMEOUT_MS = 90_000;
 import type { AppConfig } from "./config";
 
 const LOCAL_JUDGE_MAX_ANSWER_CHARACTERS = 6_000;
@@ -61,7 +64,10 @@ export async function executeAskEvaluation(
 ): Promise<AskEvaluationExecution> {
   if (!config.databaseUrl) throw new Error("DATABASE_URL is required for evaluation execution");
 
-  const response = await askPreview(config, input.redactedInput, input.topK, "rag");
+  const response = await askPreview(config, input.redactedInput, input.topK, "rag", {
+    maxOutputTokens: EVALUATION_TARGET_MAX_OUTPUT_TOKENS,
+    timeoutMs: EVALUATION_TARGET_TIMEOUT_MS,
+  });
   if (typeof response.answer !== "string" || !response.retrieval) {
     throw new Error("Ask/RAG evaluation target returned an incomplete response");
   }

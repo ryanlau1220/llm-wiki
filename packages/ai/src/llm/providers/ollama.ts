@@ -24,6 +24,8 @@ export class OllamaLLMProvider implements LLMProvider {
         prompt: request.prompt,
         system: request.systemInstruction,
         format: request.responseMimeType === "application/json" ? "json" : undefined,
+        // Qwen3 otherwise places its structured result in a separate thinking field, leaving response empty.
+        think: this.model.toLowerCase().startsWith("qwen3") ? false : undefined,
         stream: false,
         options: {
           temperature: request.temperature,

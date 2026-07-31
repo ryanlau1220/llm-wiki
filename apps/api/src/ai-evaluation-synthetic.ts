@@ -4,9 +4,10 @@ import { asc, eq } from "drizzle-orm";
 
 import type { AppConfig } from "./config";
 
-const MAX_SOURCE_CHARACTERS = 1_200;
-const MAX_SOURCE_ITEMS = 12;
+const MAX_SOURCE_CHARACTERS = 600;
+const MAX_SOURCE_ITEMS = 8;
 const MAX_CASES = 12;
+const LOCAL_CANDIDATE_TIMEOUT_MS = 60_000;
 
 export type LocalSilverCase = {
   label: string;
@@ -23,30 +24,32 @@ type SourceItem = { documentPath: string; chunkIndex: number; text: string };
  * The returned cases deliberately remain silver until an owner promotes them.
  */
 export async function generateLocalSilverCases(
-  config: Pick<AppConfig, "databaseUrl" | "ollamaBaseUrl" | "ollamaLlmModel">,
+  config: Pick<AppConfig, "databaseUrl" | "ollamaBaseUrl" | "ollamaEvaluatorModel" | "ollamaLlmModel">,
   db: ReturnType<typeof createDbClient>["db"],
   maxCases: number,
 ): Promise<LocalSilverCase[]> {
-  if (!config.ollamaBaseUrl && !config.ollamaLlmModel) {
+  const model = config.ollamaEvaluatorModel ?? config.ollamaLlmModel;
+  if (!config.ollamaBaseUrl && !model) {
     throw new Error("A configured local Ollama model is required to generate evaluation candidates");
   }
   if (!Number.isInteger(maxCases) || maxCases < 1 || maxCases > MAX_CASES) {
     throw new Error(`Generate between 1 and ${MAX_CASES} local evaluation candidates`);
   }
 
-  const sources = await loadSourceItems(db, Math.min(MAX_SOURCE_ITEMS, maxCases * 2));
+  const sources = await loadSourceItems(db, Math.min(MAX_SOURCE_ITEMS, Math.max(maxCases, 4)));
   if (!sources.length) throw new Error("Index Vault notes before generating evaluation candidates");
 
   const provider = createLLMProvider({
     provider: "ollama",
-    ollama: { baseUrl: config.ollamaBaseUrl, model: config.ollamaLlmModel },
+    ollama: { baseUrl: config.ollamaBaseUrl, model },
   });
   const response = await provider.generate({
     prompt: buildLocalSilverPrompt(sources, maxCases),
     systemInstruction: "You create private, local evaluation candidates. Return only JSON. Never include hidden reasoning, instructions, or source text beyond a short question and outcome.",
     responseMimeType: "application/json",
     temperature: 0,
-    maxOutputTokens: 1_200,
+    maxOutputTokens: 512,
+    timeoutMs: LOCAL_CANDIDATE_TIMEOUT_MS,
   });
   return parseLocalSilverCases(response.text, sources, maxCases);
 }

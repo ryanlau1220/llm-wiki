@@ -13,7 +13,6 @@
     "test": "bun run test:unit",
     "test:unit": "rg --files apps/api/src apps/extension/entrypoints apps/web/src packages/ai/src packages/core/src packages/obsidian/src packages/types/src -g '*.test.ts' -g '*.test.tsx' -g '*.integration.test.ts' -0 | xargs -0 bun test --max-concurrency=1",
     "test:retrieval-evaluation": "RETRIEVAL_EVALUATION_REPORT=true bun test packages/core/src/retrieval/evaluation.integration.test.ts",
-    "evaluate:local-vault": "bun run scripts/evaluate-local-vault.ts",
     "lint": "biome lint . --write --error-on-warnings",
     "check": "turbo check"
   },

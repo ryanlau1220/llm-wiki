@@ -4,18 +4,7 @@ import {
   formatDatasetRunTitle,
   formatEvaluationError,
   formatRetrievalRecall,
-  reviewResponseToPrefill,
 } from "./AiGeneratorEvaluate";
-
-describe("response review prefill", () => {
-  test("uses the current query and source paths without carrying the generated response", () => {
-    expect(reviewResponseToPrefill("What is RAG?", [{ path: "AI/RAG.md" }, {}])).toEqual({
-      name: "Review: What is RAG?",
-      input: "What is RAG?",
-      evidencePaths: ["AI/RAG.md"],
-    });
-  });
-});
 
 describe("evaluation metric presentation", () => {
   test("identifies each run by its saved dataset name", () => {

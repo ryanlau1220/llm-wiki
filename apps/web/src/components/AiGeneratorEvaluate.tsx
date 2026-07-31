@@ -1,51 +1,23 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Plus, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronLeft, FlaskConical, Loader2, Play, Sparkles, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { orpc } from "../lib/orpc";
 
-export type EvaluationPrefill = {
-  name: string;
-  input: string;
-  evidencePaths: string[];
-};
-type Props = { onBack: () => void; prefill?: EvaluationPrefill };
+type Props = { onBack: () => void };
 
-export function reviewResponseToPrefill(
-  query: string,
-  sources: Array<{ path?: string }> = [],
-): EvaluationPrefill {
-  const name = query.trim() ? `Review: ${query.trim().slice(0, 72)}` : "Review this response";
-  return {
-    name,
-    input: query,
-    evidencePaths: sources
-      .map((source) => source.path)
-      .filter((path): path is string => Boolean(path)),
-  };
-}
-
-export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
-  const [name, setName] = useState("");
-  const [redactedInput, setRedactedInput] = useState("");
-  const [expectedEvidence, setExpectedEvidence] = useState("");
-  const [expectedOutcome, setExpectedOutcome] = useState("");
+export function AiGeneratorEvaluate({ onBack }: Props) {
   const [selectedDataset, setSelectedDataset] = useState<string>("");
   const [judgeEnabled, setJudgeEnabled] = useState(false);
   const [targetConfirmed, setTargetConfirmed] = useState(false);
   const [judgeConfirmed, setJudgeConfirmed] = useState(false);
   const [baselineRunId, setBaselineRunId] = useState("");
   const [candidateRunId, setCandidateRunId] = useState("");
-  useEffect(() => {
-    if (!prefill) return;
-    setName(prefill.name);
-    setRedactedInput(prefill.input);
-    setExpectedEvidence(prefill.evidencePaths.join("\n"));
-  }, [prefill]);
   const datasetsQuery = useQuery(orpc.listAiEvaluationDatasets.queryOptions());
   const capabilitiesQuery = useQuery(orpc.getAiEvaluationCapabilities.queryOptions());
   const runsQuery = useQuery(
     orpc.listAiEvaluationRuns.queryOptions({
       input: selectedDataset ? { datasetId: selectedDataset } : undefined,
+      refetchInterval: (query: any) => query.state.data?.some((run: any) => run.status === "queued" || run.status === "running") ? 1_500 : false,
     } as any),
   );
   const comparisonQuery = useQuery(
@@ -60,64 +32,41 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
       enabled: Boolean(selectedDataset),
     } as any),
   );
-  const createMutation = useMutation(
-    orpc.createAiEvaluationDataset.mutationOptions({
-      onSuccess: (dataset) => {
-        setSelectedDataset(dataset.id);
-        setName("");
-        setRedactedInput("");
-        setExpectedEvidence("");
-        setExpectedOutcome("");
-        datasetsQuery.refetch();
-      },
-    }),
-  );
   const runMutation = useMutation(
     orpc.runAiEvaluation.mutationOptions({ onSuccess: () => runsQuery.refetch() }),
   );
-  const generateMutation = useMutation(
-    orpc.generateAiEvaluationCandidates.mutationOptions({
+  const bootstrapMutation = useMutation(
+    orpc.bootstrapAiEvaluationGoldenSuite.mutationOptions({
       onSuccess: (dataset) => {
         setSelectedDataset(dataset.id);
         datasetsQuery.refetch();
       },
     }),
   );
-  const promoteMutation = useMutation(
-    orpc.promoteAiEvaluationCase.mutationOptions({
-      onSuccess: () => {
-        casesQuery.refetch();
+  const activateSuiteMutation = useMutation(
+    orpc.activateAiEvaluationGoldenSuite.mutationOptions({
+      onSuccess: (dataset) => {
+        setSelectedDataset(dataset.id);
         datasetsQuery.refetch();
       },
     }),
   );
-  const evidence = useMemo(
-    () =>
-      expectedEvidence
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((documentPath) => ({ documentPath })),
-    [expectedEvidence],
+  const discardCandidateMutation = useMutation(
+    orpc.discardAiEvaluationSilverCase.mutationOptions({
+      onSuccess: () => {
+        datasetsQuery.refetch();
+        casesQuery.refetch();
+      },
+    }),
   );
-  const submitDataset = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!name.trim() || !redactedInput.trim()) return;
-    createMutation.mutate({
-      name,
-      approved: true,
-      cases: [
-        {
-          label: name,
-          redactedInput,
-          expectedEvidence: evidence,
-          expectedOutcome: expectedOutcome || undefined,
-          retrievedEvidence: [],
-          retrievalEvidenceEvaluated: false,
-        },
-      ],
-    });
-  };
+  const selectedSuite = datasetsQuery.data?.find((dataset) => dataset.id === selectedDataset);
+  const hasGoldenSuite = datasetsQuery.data?.some((dataset) => dataset.name === "Golden Suite v1");
+  const hasSilverCases = Boolean(selectedSuite && selectedSuite.silverCaseCount > 0);
+  useEffect(() => {
+    if (selectedDataset || !datasetsQuery.data) return;
+    const golden = datasetsQuery.data.find((dataset) => dataset.name === "Golden Suite v1");
+    if (golden) setSelectedDataset(golden.id);
+  }, [datasetsQuery.data, selectedDataset]);
   const run = () => {
     if (!selectedDataset) return;
     runMutation.mutate({
@@ -145,78 +94,71 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
         <h1 className="display-title text-3xl font-bold text-sea-ink">Evaluate AI Generator</h1>
       </header>
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={submitDataset} className="island-shell space-y-4 rounded-xl p-5">
+        <div className="island-shell space-y-4 rounded-xl p-5">
           <div className="flex items-center gap-2">
-            <Plus size={17} />
-            <h2 className="font-extrabold text-sea-ink">Create a quality check</h2>
+            <Sparkles size={17} />
+            <h2 className="font-extrabold text-sea-ink">Golden Suite v1</h2>
           </div>
-          {capabilitiesQuery.data?.localJudgeAvailable && (
+          {!hasGoldenSuite && capabilitiesQuery.data?.localJudgeAvailable && (
             <button
               type="button"
-              onClick={() => generateMutation.mutate({ maxCases: 6 })}
-              disabled={generateMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg border border-lagoon bg-lagoon/10 px-3 py-2 text-sm font-bold text-lagoon-deep disabled:opacity-50"
+              onClick={() => bootstrapMutation.mutate({ maxCases: 6 })}
+              disabled={bootstrapMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-lagoon px-3 py-2 text-sm font-bold text-lagoon-text disabled:opacity-50"
             >
-              {generateMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
-              Generate local cases
+              {bootstrapMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+              Build Golden Suite
             </button>
           )}
-          <label className="block text-sm font-bold text-sea-ink">
-            Check name
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-              required
-            />
-          </label>
-          <label className="block text-sm font-bold text-sea-ink">
-            Redacted request
-            <textarea
-              value={redactedInput}
-              onChange={(event) => setRedactedInput(event.target.value)}
-              className="mt-1 min-h-24 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-              required
-            />
-          </label>
-          <label className="block text-sm font-bold text-sea-ink">
-            Expected source paths{" "}
-            <span className="font-normal text-sea-ink-soft">(one per line, optional)</span>
-            <textarea
-              value={expectedEvidence}
-              onChange={(event) => setExpectedEvidence(event.target.value)}
-              className="mt-1 min-h-16 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-            />
-          </label>
-          <label className="block text-sm font-bold text-sea-ink">
-            What should a good result do?
-            <textarea
-              value={expectedOutcome}
-              onChange={(event) => setExpectedOutcome(event.target.value)}
-              className="mt-1 min-h-16 w-full rounded-lg border border-line bg-surface p-2 font-normal"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-lagoon px-3 py-2 text-sm font-bold text-lagoon-text disabled:opacity-50"
-          >
-            {createMutation.isPending && <Loader2 className="animate-spin" size={15} />} Save
-            quality check
-          </button>
-          {createMutation.isError && (
-            <p className="text-sm text-red-700 dark:text-red-300">
-              Could not save the quality check.
-            </p>
+          {selectedSuite?.name === "Golden Suite v1" && hasSilverCases && (
+            <button
+              type="button"
+              onClick={() => activateSuiteMutation.mutate({ datasetId: selectedSuite.id })}
+              disabled={activateSuiteMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-lagoon px-3 py-2 text-sm font-bold text-lagoon-text disabled:opacity-50"
+            >
+              {activateSuiteMutation.isPending ? <Loader2 className="animate-spin" size={15} /> : <Sparkles size={15} />}
+              Activate {selectedSuite.silverCaseCount} verified cases
+            </button>
           )}
-          {generateMutation.isError && (
-            <p className="text-sm text-red-700 dark:text-red-300">Could not generate local cases.</p>
+          {selectedSuite?.name === "Golden Suite v1" && (
+            <>
+              <p className="text-sm text-sea-ink-soft">
+                {selectedSuite.goldCaseCount} active · {selectedSuite.silverCaseCount} awaiting activation · v{selectedSuite.version}
+              </p>
+              {casesQuery.data && (
+                <div className="space-y-2 border-t border-line pt-3 text-sm text-sea-ink">
+                  {casesQuery.data.map((evaluationCase) => (
+                    <div key={evaluationCase.id} className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">{evaluationCase.label}</p>
+                        {evaluationCase.expectedOutcome && <p className="text-sea-ink-soft">{evaluationCase.expectedOutcome}</p>}
+                      </div>
+                      {evaluationCase.lifecycle === "silver" && (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${evaluationCase.label}`}
+                          onClick={() => discardCandidateMutation.mutate({ caseId: evaluationCase.id })}
+                          disabled={discardCandidateMutation.isPending}
+                          className="shrink-0 rounded border border-line p-1 text-sea-ink-soft hover:border-red-500 hover:text-red-500 disabled:opacity-50"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
-        </form>
+          {(bootstrapMutation.isError || activateSuiteMutation.isError) && (
+            <p className="text-sm text-red-700 dark:text-red-300">Golden Suite v1 could not be prepared from the current index.</p>
+          )}
+        </div>
         <div className="island-shell space-y-4 rounded-xl p-5">
           <div className="flex items-center gap-2">
             <FlaskConical size={17} />
-            <h2 className="font-extrabold text-sea-ink">Run and compare</h2>
+            <h2 className="font-extrabold text-sea-ink">Run checks</h2>
           </div>
           <label className="block text-sm font-bold text-sea-ink">
             Evaluation dataset
@@ -237,27 +179,6 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
               ))}
             </select>
           </label>
-          {selectedDataset && casesQuery.data && (
-            <div className="space-y-2 rounded-lg border border-line p-3">
-              {casesQuery.data.map((evaluationCase) => (
-                <div key={evaluationCase.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-sea-ink">{evaluationCase.label}</span>
-                  {evaluationCase.lifecycle === "silver" ? (
-                    <button
-                      type="button"
-                      onClick={() => promoteMutation.mutate({ caseId: evaluationCase.id })}
-                      disabled={promoteMutation.isPending}
-                      className="shrink-0 rounded border border-line px-2 py-1 text-xs font-bold text-sea-ink hover:border-lagoon disabled:opacity-50"
-                    >
-                      Promote
-                    </button>
-                  ) : (
-                    <span className="shrink-0 text-xs font-bold text-lagoon-deep">Gold</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
           <label className="flex gap-2 rounded-lg border border-line p-3 text-sm text-sea-ink">
             <input
               type="checkbox"
@@ -293,6 +214,7 @@ export function AiGeneratorEvaluate({ onBack, prefill }: Props) {
             type="button"
             disabled={
               !selectedDataset ||
+              !selectedSuite?.goldCaseCount ||
               !targetConfirmed ||
               runMutation.isPending ||
               (judgeEnabled && !judgeConfirmed)
@@ -389,7 +311,7 @@ function RunHistory({
                   <b className="text-sea-ink">
                     {formatDatasetRunTitle(run.datasetName, run.datasetVersion, run.rubricVersion)}
                   </b>
-                  <span className={run.status === "succeeded" ? "text-green-700" : "text-red-700"}>
+                  <span className={run.status === "succeeded" ? "text-green-700" : run.status === "queued" || run.status === "running" ? "text-lagoon-deep" : "text-red-700"}>
                     {run.status}
                   </span>
                 </div>
@@ -402,6 +324,11 @@ function RunHistory({
                   · {String(run.summary?.caseCount ?? 0)} case(s) ·{" "}
                   {String(run.summary?.totalTokens ?? 0)} tokens
                 </p>
+                {(run.status === "queued" || run.status === "running") && (
+                  <p className="mt-1 text-xs text-lagoon-deep">
+                    {String(run.summary?.completedCases ?? 0)} / {String(run.summary?.caseCount ?? 0)} cases complete
+                  </p>
+                )}
                 {run.results?.map((result: any) => (
                   <p key={result.id} className="mt-1 text-xs text-sea-ink-soft">
                     Case {result.caseId.slice(0, 8)}:{" "}

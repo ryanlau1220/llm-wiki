@@ -39,11 +39,18 @@ const ASK_TRACE_ERROR_CODE = {
 } as const;
 const GROUNDED_ABSTENTION_ANSWER = "I couldn't find relevant information in your vault to answer that confidently.";
 
+export type AskExecutionOptions = {
+  /** Evaluation calls are bounded so a local model cannot monopolize the service indefinitely. */
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+};
+
 export async function askPreview(
   config: AppConfig,
   query: string,
   topK?: number,
-  mode: "rag" | "general" = "rag"
+  mode: "rag" | "general" = "rag",
+  executionOptions: AskExecutionOptions = {},
 ) {
   const logger = createLogger("ask");
   logger.info("New knowledge request", {
@@ -278,7 +285,9 @@ Provide your answer and suggested note in JSON format.
       systemInstruction,
       responseMimeType: "application/json",
       temperature: 0.2,
-      webSearch: webSearchEnabled
+      webSearch: webSearchEnabled,
+      maxOutputTokens: executionOptions.maxOutputTokens,
+      timeoutMs: executionOptions.timeoutMs,
     });
   } catch (error) {
     if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - generationStartedAt, errorCode: ASK_TRACE_ERROR_CODE.GENERATION_FAILED });

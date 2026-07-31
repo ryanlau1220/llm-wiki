@@ -38,4 +38,20 @@ describe("OllamaLLMProvider", () => {
     });
     expect(response.usage).toEqual({ promptTokens: 13, candidatesTokens: 7, totalTokens: 20 });
   });
+
+  test("disables Qwen3 thinking so structured output stays in the response field", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ response: '{"score":1,"labels":["supported"]}' }));
+    }) as typeof fetch;
+
+    await new OllamaLLMProvider({ baseUrl: "http://ollama.test", model: "qwen3:4b" }).generate({
+      prompt: "Evaluate this response",
+      responseMimeType: "application/json",
+      maxOutputTokens: 64,
+    });
+
+    expect(requestBody?.think).toBe(false);
+  });
 });

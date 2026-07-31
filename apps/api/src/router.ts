@@ -17,7 +17,7 @@ import {
   retryResearchCaptureIndex,
 } from "./research-captures";
 import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
-import { compareAiEvaluationRuns, createAiEvaluationDataset, generateAiEvaluationCandidates, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationCases, listAiEvaluationDatasets, listAiEvaluationRuns, promoteAiEvaluationCase, runAiEvaluation } from "./ai-evaluation";
+import { activateAiEvaluationGoldenSuite, bootstrapAiEvaluationGoldenSuite, compareAiEvaluationRuns, discardAiEvaluationSilverCase, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationCases, listAiEvaluationDatasets, listAiEvaluationRuns, runAiEvaluation } from "./ai-evaluation";
 import { listOrganizationSuggestions } from "./organization-suggestions";
 import {
   createResearchAutomation,
@@ -595,14 +595,14 @@ export const router = os.router({
   getAiTrace: os.getAiTrace.use(authMiddleware).handler(async ({ input }) => {
     return getAiTraceDetail(config, input.traceId);
   }),
-  createAiEvaluationDataset: os.createAiEvaluationDataset.use(authMiddleware).handler(async ({ input }) => {
-    return createAiEvaluationDataset(config, input);
+  bootstrapAiEvaluationGoldenSuite: os.bootstrapAiEvaluationGoldenSuite.use(authMiddleware).handler(async ({ input }) => {
+    return bootstrapAiEvaluationGoldenSuite(config, input);
   }),
-  generateAiEvaluationCandidates: os.generateAiEvaluationCandidates.use(authMiddleware).handler(async ({ input }) => {
-    return generateAiEvaluationCandidates(config, input);
+  activateAiEvaluationGoldenSuite: os.activateAiEvaluationGoldenSuite.use(authMiddleware).handler(async ({ input }) => {
+    return activateAiEvaluationGoldenSuite(config, input);
   }),
-  promoteAiEvaluationCase: os.promoteAiEvaluationCase.use(authMiddleware).handler(async ({ input }) => {
-    return promoteAiEvaluationCase(config, input);
+  discardAiEvaluationSilverCase: os.discardAiEvaluationSilverCase.use(authMiddleware).handler(async ({ input }) => {
+    return discardAiEvaluationSilverCase(config, input);
   }),
   listAiEvaluationDatasets: os.listAiEvaluationDatasets.use(authMiddleware).handler(async () => {
     return listAiEvaluationDatasets(config);

@@ -205,6 +205,13 @@ export const runAiEvaluationSchema = z
 export const generateAiEvaluationCandidatesSchema = z.object({
   maxCases: z.number().int().min(1).max(12).default(6),
 });
+/** Creates the single fresh, local Golden Suite v1 candidate set. */
+export const bootstrapAiEvaluationGoldenSuiteSchema = z.object({
+  maxCases: z.number().int().min(3).max(12).default(6),
+});
+/** Owner action that promotes all evidence-validated Golden Suite v1 candidates together. */
+export const activateAiEvaluationGoldenSuiteSchema = z.object({ datasetId: z.string().uuid() });
+export const discardAiEvaluationSilverCaseSchema = z.object({ caseId: z.string().uuid() });
 export const promoteAiEvaluationCaseSchema = z.object({ caseId: z.string().uuid() });
 export const listAiEvaluationCasesSchema = z.object({ datasetId: z.string().uuid() });
 
@@ -259,6 +266,8 @@ export const aiEvaluationCaseSummarySchema = z.object({
   id: z.string().uuid(),
   label: z.string(),
   lifecycle: z.enum(["silver", "gold"]),
+  expectedEvidence: z.array(evaluationEvidenceSchema),
+  expectedOutcome: z.string().nullable(),
 });
 export const aiEvaluationRunSchema = z.object({
   id: z.string().uuid(),
@@ -274,7 +283,7 @@ export const aiEvaluationRunSchema = z.object({
   maxJudgeCalls: z.number().int(),
   maxTotalTokens: z.number().int(),
   workflowManifest: z.record(z.string(), z.unknown()),
-  status: z.enum(["started", "succeeded", "failed"]),
+  status: z.enum(["queued", "running", "started", "succeeded", "failed"]),
   errorCode: z.string().nullable(),
   summary: z.record(z.string(), z.unknown()),
   startedAt: z.string().datetime(),

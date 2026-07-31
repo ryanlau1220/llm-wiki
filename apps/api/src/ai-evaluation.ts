@@ -1,10 +1,9 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   AI_EVALUATOR_CONTRACT_VERSION,
   compareEvaluationRuns,
   evaluateDeterministicCase,
   type DeterministicEvaluation,
-  validateAiEvaluationCase,
   validateEvaluationBudget,
 } from "@llm-wiki/core";
 import {
@@ -14,6 +13,7 @@ import {
   aiEvaluationRuns,
   aiEvaluationSpans,
   createDbClient,
+  documents,
 } from "@llm-wiki/db";
 import type { AppConfig } from "./config";
 import { buildAiEvaluationComparison } from "./ai-evaluation-comparison";
@@ -27,28 +27,35 @@ import {
 import { generateLocalSilverCases } from "./ai-evaluation-synthetic";
 import { buildAskWorkflowManifest } from "./ask";
 
-const STATUS = { STARTED: "started", SUCCEEDED: "succeeded", FAILED: "failed" } as const;
+const STATUS = {
+  QUEUED: "queued",
+  RUNNING: "running",
+  STARTED: "started",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+} as const;
+const GOLDEN_SUITE_NAME = "Golden Suite v1";
+const GOLDEN_SUITE_DESCRIPTION = "Local, evidence-bound candidates generated from the indexed vault. Activate only after reviewing the compact case list.";
 
-type CreateDataset = {
-  name: string; description?: string; approved: true;
-  cases: Array<{ label: string; redactedInput: string; expectedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; expectedOutcome?: string; referenceAnswer?: string; retrievedEvidence: Array<{ documentPath: string; chunkIndex?: number }>; retrievalEvidenceEvaluated: boolean; sourceTraceId?: string }>;
+type EvaluationInput = {
+  datasetId: string;
+  confirmTargetExecution: true;
+  judgeEnabled: boolean;
+  confirmLlmJudge: boolean;
+  topK: number;
+  maxCases: number;
+  maxJudgeCalls: number;
+  maxTotalTokens: number;
+  rubricVersion: string;
 };
 
-export async function createAiEvaluationDataset(config: AppConfig, input: CreateDataset) {
-  if (input.approved !== true) throw new Error("Evaluation datasets require explicit owner approval");
-  for (const [index, item] of input.cases.entries()) validateAiEvaluationCase({ id: `case-${index + 1}`, ...item });
-  const { db } = createDbClient(requiredDatabaseUrl(config));
-  const [dataset] = await db.insert(aiEvaluationDatasets).values({ name: input.name, description: input.description }).returning();
-  await db.insert(aiEvaluationCases).values(input.cases.map((item) => ({
-    dataset_id: dataset.id, label: item.label, redacted_input: item.redactedInput,
-    expected_evidence: item.expectedEvidence, expected_outcome: item.expectedOutcome,
-    reference_answer: item.referenceAnswer,
-    retrieved_evidence: item.retrievedEvidence,
-    retrieval_evidence_evaluated: item.retrievalEvidenceEvaluated,
-    source_trace_id: item.sourceTraceId,
-  })));
-  return formatDataset(dataset, { caseCount: input.cases.length, goldCaseCount: input.cases.length, silverCaseCount: 0 });
-}
+type PreparedEvaluation = {
+  db: ReturnType<typeof createDbClient>["db"];
+  dataset: typeof aiEvaluationDatasets.$inferSelect;
+  cases: Array<typeof aiEvaluationCases.$inferSelect>;
+  judgeCapability: ReturnType<typeof getSemanticJudgeCapability>;
+  run: typeof aiEvaluationRuns.$inferSelect;
+};
 
 export async function listAiEvaluationDatasets(config: AppConfig) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
@@ -63,10 +70,31 @@ export async function listAiEvaluationDatasets(config: AppConfig) {
   }));
 }
 
+export async function getAiEvaluationDataset(config: AppConfig, datasetId: string) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const [dataset] = await db.select().from(aiEvaluationDatasets).where(eq(aiEvaluationDatasets.id, datasetId)).limit(1);
+  if (!dataset) throw new Error("Evaluation dataset not found");
+  const cases = await db
+    .select({ lifecycle: aiEvaluationCases.lifecycle })
+    .from(aiEvaluationCases)
+    .where(eq(aiEvaluationCases.dataset_id, dataset.id));
+  return formatDataset(dataset, {
+    caseCount: cases.length,
+    goldCaseCount: cases.filter((item) => item.lifecycle === "gold").length,
+    silverCaseCount: cases.filter((item) => item.lifecycle === "silver").length,
+  });
+}
+
 export async function listAiEvaluationCases(config: AppConfig, input: { datasetId: string }) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const cases = await db
-    .select({ id: aiEvaluationCases.id, label: aiEvaluationCases.label, lifecycle: aiEvaluationCases.lifecycle })
+    .select({
+      id: aiEvaluationCases.id,
+      label: aiEvaluationCases.label,
+      lifecycle: aiEvaluationCases.lifecycle,
+      expectedEvidence: aiEvaluationCases.expected_evidence,
+      expectedOutcome: aiEvaluationCases.expected_outcome,
+    })
     .from(aiEvaluationCases)
     .where(eq(aiEvaluationCases.dataset_id, input.datasetId))
     .orderBy(asc(aiEvaluationCases.created_at));
@@ -74,16 +102,24 @@ export async function listAiEvaluationCases(config: AppConfig, input: { datasetI
     id: evaluationCase.id,
     label: evaluationCase.label,
     lifecycle: evaluationCase.lifecycle === "silver" ? "silver" as const : "gold" as const,
+    expectedEvidence: evaluationCase.expectedEvidence as Array<{ documentPath: string; chunkIndex?: number }>,
+    expectedOutcome: evaluationCase.expectedOutcome,
   }));
 }
 
-/** Generates local-only candidates. They are never release-gating until explicitly promoted. */
-export async function generateAiEvaluationCandidates(config: AppConfig, input: { maxCases: number }) {
+/** Builds one fresh, local-only candidate suite from the current indexed vault. */
+export async function bootstrapAiEvaluationGoldenSuite(config: AppConfig, input: { maxCases: number }) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
+  const existing = await db
+    .select({ id: aiEvaluationDatasets.id })
+    .from(aiEvaluationDatasets)
+    .where(eq(aiEvaluationDatasets.name, GOLDEN_SUITE_NAME))
+    .limit(1);
+  if (existing.length) throw new Error("Golden Suite v1 already exists");
   const candidates = await generateLocalSilverCases(config, db, input.maxCases);
   const [dataset] = await db.insert(aiEvaluationDatasets).values({
-    name: `Local candidates ${new Date().toISOString().slice(0, 10)}`,
-    description: null,
+    name: GOLDEN_SUITE_NAME,
+    description: GOLDEN_SUITE_DESCRIPTION,
   }).returning();
   await db.insert(aiEvaluationCases).values(candidates.map((candidate) => ({
     dataset_id: dataset.id,
@@ -99,19 +135,68 @@ export async function generateAiEvaluationCandidates(config: AppConfig, input: {
   return formatDataset(dataset, { caseCount: candidates.length, goldCaseCount: 0, silverCaseCount: candidates.length });
 }
 
-export async function promoteAiEvaluationCase(config: AppConfig, input: { caseId: string }) {
+/** One owner action promotes an evidence-validated candidate suite into the active golden baseline. */
+export async function activateAiEvaluationGoldenSuite(config: AppConfig, input: { datasetId: string }) {
   const { db } = createDbClient(requiredDatabaseUrl(config));
-  const [evaluationCase] = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.id, input.caseId)).limit(1);
-  if (!evaluationCase) throw new Error("Evaluation case not found");
-  if (evaluationCase.lifecycle === "gold") return { datasetId: evaluationCase.dataset_id, lifecycle: "gold" as const };
+  const [dataset] = await db.select().from(aiEvaluationDatasets).where(eq(aiEvaluationDatasets.id, input.datasetId)).limit(1);
+  if (!dataset || dataset.name !== GOLDEN_SUITE_NAME) throw new Error("Golden Suite v1 was not found");
+  const candidates = await db
+    .select()
+    .from(aiEvaluationCases)
+    .where(and(eq(aiEvaluationCases.dataset_id, dataset.id), eq(aiEvaluationCases.lifecycle, "silver")));
+  if (!candidates.length) throw new Error("Golden Suite v1 has no candidates to activate");
+  await validateGoldenEvidence(db, candidates);
   await db.transaction(async (transaction) => {
-    await transaction.update(aiEvaluationCases).set({ lifecycle: "gold", updated_at: new Date() }).where(eq(aiEvaluationCases.id, evaluationCase.id));
-    await transaction.update(aiEvaluationDatasets).set({ version: sql`${aiEvaluationDatasets.version} + 1`, updated_at: new Date() }).where(eq(aiEvaluationDatasets.id, evaluationCase.dataset_id));
+    await transaction
+      .update(aiEvaluationCases)
+      .set({ lifecycle: "gold", updated_at: new Date() })
+      .where(and(eq(aiEvaluationCases.dataset_id, dataset.id), eq(aiEvaluationCases.lifecycle, "silver")));
+    await transaction
+      .update(aiEvaluationDatasets)
+      .set({ version: sql`${aiEvaluationDatasets.version} + 1`, updated_at: new Date() })
+      .where(eq(aiEvaluationDatasets.id, dataset.id));
   });
-  return { datasetId: evaluationCase.dataset_id, lifecycle: "gold" as const };
+  return getAiEvaluationDataset(config, dataset.id);
 }
 
-export async function runAiEvaluation(config: AppConfig, input: { datasetId: string; confirmTargetExecution: true; judgeEnabled: boolean; confirmLlmJudge: boolean; topK: number; maxCases: number; maxJudgeCalls: number; maxTotalTokens: number; rubricVersion: string }) {
+/** Removes a weak local candidate before the suite becomes release-gating. */
+export async function discardAiEvaluationSilverCase(config: AppConfig, input: { caseId: string }) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  const [candidate] = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.id, input.caseId)).limit(1);
+  if (!candidate || candidate.lifecycle !== "silver") throw new Error("Only pending Golden Suite candidates can be removed");
+  const [dataset] = await db
+    .select()
+    .from(aiEvaluationDatasets)
+    .where(eq(aiEvaluationDatasets.id, candidate.dataset_id))
+    .limit(1);
+  if (!dataset || dataset.name !== GOLDEN_SUITE_NAME) throw new Error("Golden Suite v1 was not found");
+  await db.delete(aiEvaluationCases).where(eq(aiEvaluationCases.id, candidate.id));
+  return getAiEvaluationDataset(config, dataset.id);
+}
+
+/** Queues an application-owned evaluation run and returns immediately with observable progress. */
+export async function runAiEvaluation(config: AppConfig, input: EvaluationInput) {
+  const prepared = await prepareAiEvaluation(config, input);
+  queueMicrotask(() => {
+    void executeQueuedAiEvaluation(config, input, prepared).catch(async (error) => {
+      const errorCode = "evaluation_worker_failed";
+      await prepared.db
+        .update(aiEvaluationRuns)
+        .set({
+          status: STATUS.FAILED,
+          error_code: errorCode,
+          summary: { caseCount: prepared.cases.length, completedCases: 0, failedCases: prepared.cases.length },
+          completed_at: new Date(),
+          duration_ms: 0,
+        })
+        .where(eq(aiEvaluationRuns.id, prepared.run.id));
+      console.error("[Evaluation] Background worker failed", error);
+    });
+  });
+  return getAiEvaluationRunFromDb(prepared.db, prepared.run.id) as Promise<NonNullable<Awaited<ReturnType<typeof getAiEvaluationRunFromDb>>>>;
+}
+
+async function prepareAiEvaluation(config: AppConfig, input: EvaluationInput): Promise<PreparedEvaluation> {
   if (input.confirmTargetExecution !== true) throw new Error("Ask/RAG evaluation runs require explicit confirmation");
   if (input.judgeEnabled && !input.confirmLlmJudge) throw new Error("LLM judge runs require explicit confirmation");
   const judgeCapability = getSemanticJudgeCapability(config);
@@ -121,7 +206,13 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
   const { db } = createDbClient(requiredDatabaseUrl(config));
   const [dataset] = await db.select().from(aiEvaluationDatasets).where(eq(aiEvaluationDatasets.id, input.datasetId)).limit(1);
   if (!dataset) throw new Error("Evaluation dataset not found");
-  const cases = await db.select().from(aiEvaluationCases).where(eq(aiEvaluationCases.dataset_id, dataset.id)).orderBy(asc(aiEvaluationCases.created_at));
+  const availableCases = await db
+    .select()
+    .from(aiEvaluationCases)
+    .where(and(eq(aiEvaluationCases.dataset_id, dataset.id), eq(aiEvaluationCases.lifecycle, "gold")))
+    .orderBy(asc(aiEvaluationCases.created_at));
+  if (!availableCases.length) throw new Error("Activate at least one Golden v1 case before running evaluation");
+  const cases = availableCases.slice(0, input.maxCases);
   validateEvaluationBudget({ caseCount: cases.length, judgeEnabled: input.judgeEnabled, maxCases: input.maxCases, maxJudgeCalls: input.maxJudgeCalls, maxTotalTokens: input.maxTotalTokens });
 
   const workflowManifest = buildAskWorkflowManifest(config, input.topK);
@@ -131,8 +222,16 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
     model_provider: input.judgeEnabled ? judgeCapability.semanticJudgeProvider : null,
     model_name: input.judgeEnabled ? judgeCapability.semanticJudgeModel : null,
     max_cases: input.maxCases, max_judge_calls: input.maxJudgeCalls, max_total_tokens: input.maxTotalTokens,
-    workflow_manifest: workflowManifest, status: STATUS.STARTED,
+    workflow_manifest: workflowManifest,
+    status: STATUS.QUEUED,
+    summary: { caseCount: cases.length, completedCases: 0, failedCases: 0, judgeCalls: 0, totalTokens: 0 },
   }).returning();
+  return { db, dataset, cases, judgeCapability, run };
+}
+
+async function executeQueuedAiEvaluation(config: AppConfig, input: EvaluationInput, prepared: PreparedEvaluation) {
+  const { db, cases, judgeCapability, run } = prepared;
+  await db.update(aiEvaluationRuns).set({ status: STATUS.RUNNING }).where(eq(aiEvaluationRuns.id, run.id));
   const startedAt = Date.now();
   const rootSpanId = await startSpan(db, run.id, "evaluation", {
     case_count: cases.length,
@@ -285,16 +384,42 @@ export async function runAiEvaluation(config: AppConfig, input: { datasetId: str
     }
     await db.insert(aiEvaluationResults).values({ evaluation_run_id: run.id, evaluation_case_id: evaluationCase.id, status, deterministic, execution_trace_id: executionTraceId, judge_score: judge?.score ?? null, judge_labels: judge?.labels ?? [], judge_rationale: null, prompt_tokens: targetPromptTokens, candidate_tokens: targetCandidateTokens, total_tokens: totalCaseTokens, error_code: errorCode });
     await completeSpan(db, caseSpanId, status, Date.now() - caseStartedAt, { deterministic: true }, errorCode ?? undefined);
+    await db
+      .update(aiEvaluationRuns)
+      .set({
+        summary: {
+          caseCount: cases.length,
+          completedCases: caseIndex + 1,
+          failedCases,
+          judgeCalls,
+          cloudFallbacks,
+          totalTokens,
+        },
+      })
+      .where(eq(aiEvaluationRuns.id, run.id));
   }
   const durationMs = Date.now() - startedAt;
   const runStatus = failedCases > 0 ? STATUS.FAILED : STATUS.SUCCEEDED;
   await completeSpan(db, rootSpanId, runStatus, durationMs, { judge_calls: judgeCalls, cloud_fallbacks: cloudFallbacks, total_tokens: totalTokens, failed_cases: failedCases }, runStatus === STATUS.FAILED ? "case_evaluation_failed" : undefined);
-  const [completed] = await db.update(aiEvaluationRuns).set({ status: runStatus, error_code: runStatus === STATUS.FAILED ? "case_evaluation_failed" : null, summary: { caseCount: cases.length, judgeCalls, cloudFallbacks, totalTokens, failedCases }, completed_at: new Date(), duration_ms: durationMs }).where(eq(aiEvaluationRuns.id, run.id)).returning();
+  const [completed] = await db.update(aiEvaluationRuns).set({ status: runStatus, error_code: runStatus === STATUS.FAILED ? "case_evaluation_failed" : null, summary: { caseCount: cases.length, completedCases: cases.length, judgeCalls, cloudFallbacks, totalTokens, failedCases }, completed_at: new Date(), duration_ms: durationMs }).where(eq(aiEvaluationRuns.id, run.id)).returning();
   return getAiEvaluationRunFromDb(db, completed.id) as Promise<NonNullable<Awaited<ReturnType<typeof getAiEvaluationRunFromDb>>>>;
 }
 
 export function getAiEvaluationCapabilities(config: AppConfig) {
   return getSemanticJudgeCapability(config);
+}
+
+/** A local process cannot safely resume a model call after restart; mark it clearly instead of leaving a ghost run. */
+export async function markInterruptedAiEvaluationRuns(config: AppConfig) {
+  const { db } = createDbClient(requiredDatabaseUrl(config));
+  await db
+    .update(aiEvaluationRuns)
+    .set({
+      status: STATUS.FAILED,
+      error_code: "interrupted_by_restart",
+      completed_at: new Date(),
+    })
+    .where(inArray(aiEvaluationRuns.status, [STATUS.QUEUED, STATUS.RUNNING]));
 }
 
 export async function listAiEvaluationRuns(config: AppConfig, datasetId?: string) {
@@ -328,7 +453,7 @@ async function getAiEvaluationRunFromDb(db: ReturnType<typeof createDbClient>["d
   const results = await db.select().from(aiEvaluationResults).where(eq(aiEvaluationResults.evaluation_run_id, run.id)).orderBy(asc(aiEvaluationResults.created_at));
   const spans = await db.select().from(aiEvaluationSpans).where(eq(aiEvaluationSpans.evaluation_run_id, run.id)).orderBy(asc(aiEvaluationSpans.started_at));
   return {
-    id: run.id, datasetId: run.dataset_id, datasetName: dataset?.name ?? "Deleted dataset", datasetVersion: run.dataset_version, evaluatorContractVersion: run.evaluator_contract_version, rubricVersion: run.rubric_version, judgeEnabled: run.judge_enabled, modelProvider: run.model_provider, modelName: run.model_name, maxCases: run.max_cases, maxJudgeCalls: run.max_judge_calls, maxTotalTokens: run.max_total_tokens, workflowManifest: run.workflow_manifest as Record<string, unknown>, status: run.status as "started" | "succeeded" | "failed", errorCode: run.error_code, summary: run.summary as Record<string, unknown>, startedAt: run.started_at.toISOString(), completedAt: run.completed_at?.toISOString() ?? null, durationMs: run.duration_ms,
+    id: run.id, datasetId: run.dataset_id, datasetName: dataset?.name ?? "Deleted dataset", datasetVersion: run.dataset_version, evaluatorContractVersion: run.evaluator_contract_version, rubricVersion: run.rubric_version, judgeEnabled: run.judge_enabled, modelProvider: run.model_provider, modelName: run.model_name, maxCases: run.max_cases, maxJudgeCalls: run.max_judge_calls, maxTotalTokens: run.max_total_tokens, workflowManifest: run.workflow_manifest as Record<string, unknown>, status: run.status as "queued" | "running" | "started" | "succeeded" | "failed", errorCode: run.error_code, summary: run.summary as Record<string, unknown>, startedAt: run.started_at.toISOString(), completedAt: run.completed_at?.toISOString() ?? null, durationMs: run.duration_ms,
     results: results.map((result) => ({ id: result.id, caseId: result.evaluation_case_id, status: result.status as "succeeded" | "failed", deterministic: result.deterministic as Record<string, unknown>, executionTraceId: result.execution_trace_id, judgeScore: result.judge_score, judgeLabels: result.judge_labels as string[], promptTokens: result.prompt_tokens, candidateTokens: result.candidate_tokens, totalTokens: result.total_tokens, errorCode: result.error_code, createdAt: result.created_at.toISOString() })),
     spans: spans.map((span) => ({ id: span.id, parentSpanId: span.parent_span_id, spanType: span.span_type, status: span.status as "started" | "succeeded" | "failed", attributes: span.attributes as Record<string, string | number | boolean | null>, errorCode: span.error_code, startedAt: span.started_at.toISOString(), completedAt: span.completed_at?.toISOString() ?? null, durationMs: span.duration_ms })),
   };
@@ -365,6 +490,22 @@ function failedExecutionDeterministic(evaluationCase: typeof aiEvaluationCases.$
     }),
     execution: { status: "failed", policy: "vault_hybrid", candidate_count: 0, selected_evidence_count: 0, context_character_count: 0, duration_ms: null, citation_count: 0 },
   };
+}
+async function validateGoldenEvidence(
+  db: ReturnType<typeof createDbClient>["db"],
+  candidates: Array<typeof aiEvaluationCases.$inferSelect>,
+) {
+  const paths = [...new Set(candidates.flatMap((candidate) => (
+    candidate.expected_evidence as Array<{ documentPath?: unknown }>
+  ).map((evidence) => typeof evidence.documentPath === "string" ? evidence.documentPath : "").filter(Boolean)))];
+  if (!paths.length) throw new Error("Golden Suite v1 candidates must reference indexed evidence");
+  const indexedPaths = await db
+    .select({ path: documents.path })
+    .from(documents)
+    .where(inArray(documents.path, paths));
+  const indexed = new Set(indexedPaths.map((document) => document.path));
+  const missing = paths.filter((path) => !indexed.has(path));
+  if (missing.length) throw new Error("Golden Suite v1 includes evidence that is no longer indexed");
 }
 function requiredDatabaseUrl(config: AppConfig) { if (!config.databaseUrl) throw new Error("DATABASE_URL is required for AI evaluation"); return config.databaseUrl; }
 async function startSpan(db: ReturnType<typeof createDbClient>["db"], runId: string, spanType: string, attributes: Record<string, string | number | boolean | null>, parentSpanId?: string) { const [span] = await db.insert(aiEvaluationSpans).values({ evaluation_run_id: runId, parent_span_id: parentSpanId, span_type: spanType, status: STATUS.STARTED, attributes }).returning({ id: aiEvaluationSpans.id }); return span.id; }

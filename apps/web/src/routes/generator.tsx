@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
-import { AiGeneratorEvaluate, reviewResponseToPrefill } from "../components/AiGeneratorEvaluate";
+import { AiGeneratorEvaluate } from "../components/AiGeneratorEvaluate";
 import { AiAutomations } from "../components/AiAutomations";
 import { AiTraceInspect } from "../components/AiTraceInspect";
 import { orpc } from "../lib/orpc";
@@ -214,17 +214,7 @@ function GeneratorComponent() {
   if (view === "evaluate")
     return (
       <div className="p-5 max-w-5xl mx-auto">
-        <AiGeneratorEvaluate
-          onBack={() => navigate({ to: "/generator" })}
-          prefill={
-            result
-              ? reviewResponseToPrefill(
-                  result.query,
-                  result.data.sources ?? result.data.citations ?? [],
-                )
-              : undefined
-          }
-        />
+        <AiGeneratorEvaluate onBack={() => navigate({ to: "/generator" })} />
       </div>
     );
 

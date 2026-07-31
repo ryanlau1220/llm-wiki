@@ -59,6 +59,7 @@ export class OpenAILLMProvider implements LLMProvider {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: request.timeoutMs ? AbortSignal.timeout(request.timeoutMs) : undefined,
     });
 
     if (!response.ok) {
