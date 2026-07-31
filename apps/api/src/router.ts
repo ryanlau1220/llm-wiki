@@ -3,6 +3,7 @@ import { appContract } from "@llm-wiki/types";
 import { askPreview, confirmAskSave } from "./ask";
 import { reindexFile } from "./reindex";
 import { loadConfig } from "./config";
+import { createConfiguredEmbeddingProvider, createConfiguredLlmProvider } from "./providers";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import systemOs from "node:os";
@@ -17,7 +18,18 @@ import {
   retryResearchCaptureIndex,
 } from "./research-captures";
 import { getAiTraceDetail, listAiTracePage } from "./ai-traces";
-import { activateAiEvaluationGoldenSuite, bootstrapAiEvaluationGoldenSuite, compareAiEvaluationRuns, discardAiEvaluationSilverCase, getAiEvaluationCapabilities, getAiEvaluationRun, listAiEvaluationCases, listAiEvaluationDatasets, listAiEvaluationRuns, runAiEvaluation } from "./ai-evaluation";
+import {
+  addAiEvaluationRegressionCase,
+  compareAiEvaluationRuns,
+  ensureAiEvaluationBaseline,
+  getAiEvaluationCapabilities,
+  getAiEvaluationRun,
+  listAiEvaluationCases,
+  listAiEvaluationDatasets,
+  listAiEvaluationRuns,
+  recordAiTraceFeedback,
+  runAiEvaluation,
+} from "./ai-evaluation";
 import { listOrganizationSuggestions } from "./organization-suggestions";
 import {
   createResearchAutomation,
@@ -46,7 +58,7 @@ const authMiddleware = os.middleware(async ({ context, next }: any) => {
     throw new Error("Unauthorized");
   }
   return next({
-    context: { user }
+    context: { user },
   });
 });
 
@@ -65,7 +77,7 @@ export const router = os.router({
     const token = await jwt.sign({
       id: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
     });
 
     console.log("[API] Setting session cookie...");
@@ -75,7 +87,7 @@ export const router = os.router({
       maxAge: 7 * 86400,
       path: "/",
       sameSite: "lax",
-      secure: false
+      secure: false,
     });
 
     return { success: true, token, user: { email: user.email, role: user.role } };
@@ -96,10 +108,12 @@ export const router = os.router({
     const { refactorNotePreview } = await import("./refactor");
     return refactorNotePreview(config, input.path);
   }),
-  confirmRefactorSave: os.confirmRefactorSave.use(authMiddleware).handler(async ({ input }: any) => {
-    const { confirmRefactorSave } = await import("./refactor");
-    return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
-  }),
+  confirmRefactorSave: os.confirmRefactorSave
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      const { confirmRefactorSave } = await import("./refactor");
+      return confirmRefactorSave(config, input.requestId, input.sourcePath, input.note as any);
+    }),
   listBackups: os.listBackups.use(authMiddleware).handler(async ({ input }: any) => {
     const { listBackups } = await import("./refactor");
     return listBackups(config, input.path);
@@ -116,90 +130,73 @@ export const router = os.router({
     const { synthesisPreview } = await import("./synthesis");
     return synthesisPreview(config, input.topic, input.topK, input.noteIds);
   }),
-  confirmSynthesisSave: os.confirmSynthesisSave.use(authMiddleware).handler(async ({ input }: any) => {
-    const { confirmAskSave } = await import("./ask-confirm");
-    return confirmAskSave(
-      config,
-      input.requestId,
-      input.note,
-      { type: "ai_synthesized", source: "synthesis" }
-    );
-  }),
+  confirmSynthesisSave: os.confirmSynthesisSave
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      const { confirmAskSave } = await import("./ask-confirm");
+      return confirmAskSave(config, input.requestId, input.note, {
+        type: "ai_synthesized",
+        source: "synthesis",
+      });
+    }),
   bootstrapPreview: os.bootstrapPreview.use(authMiddleware).handler(async ({ input }: any) => {
     const { generateBootstrapPreview } = await import("./note-creator");
     return generateBootstrapPreview(config, input.title);
   }),
-  confirmBootstrapSave: os.confirmBootstrapSave.use(authMiddleware).handler(async ({ input }: any) => {
-    const { confirmAskSave } = await import("./ask-confirm");
-    return confirmAskSave(
-      config,
-      input.requestId,
-      input.note,
-      { type: "ai_generated", source: "synthesis" }
-    );
-  }),
+  confirmBootstrapSave: os.confirmBootstrapSave
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      const { confirmAskSave } = await import("./ask-confirm");
+      return confirmAskSave(config, input.requestId, input.note, {
+        type: "ai_generated",
+        source: "synthesis",
+      });
+    }),
   getWeakNotes: os.getWeakNotes.use(authMiddleware).handler(async ({ input }: any) => {
     const { createDbClient } = await import("@llm-wiki/db");
     const { getWeakNotes } = await import("@llm-wiki/core");
     const { db } = createDbClient(config.databaseUrl!);
     return getWeakNotes(db, input ?? {});
   }),
-  getImprovementSuggestions: os.getImprovementSuggestions.use(authMiddleware).handler(async ({ input }: any) => {
-    const { createDbClient, documents } = await import("@llm-wiki/db");
-    const { suggestImprovements } = await import("@llm-wiki/core");
-    const { createLLMProvider } = await import("@llm-wiki/ai");
-    const { eq } = await import("drizzle-orm");
+  getImprovementSuggestions: os.getImprovementSuggestions
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      const { createDbClient, documents } = await import("@llm-wiki/db");
+      const { suggestImprovements } = await import("@llm-wiki/core");
+      const { eq } = await import("drizzle-orm");
 
-    const { db } = createDbClient(config.databaseUrl!);
-    const doc = await db.select().from(documents).where(eq(documents.id, input.documentId)).limit(1);
-    
-    if (!doc.length) throw new Error("Document not found");
+      const { db } = createDbClient(config.databaseUrl!);
+      const doc = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, input.documentId))
+        .limit(1);
 
-    const llmProvider = createLLMProvider({
-      provider: config.embeddingProvider,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpLlmModel
-      }
-    });
+      if (!doc.length) throw new Error("Document not found");
 
-    return suggestImprovements(llmProvider, doc[0].content);
-  }),
+      const llmProvider = createConfiguredLlmProvider(config);
+
+      return suggestImprovements(llmProvider, doc[0].content);
+    }),
   reindex: os.reindex.use(authMiddleware).handler(async ({ input }: any) => {
     return reindexFile(config, input.path);
   }),
   reindexAll: os.reindexAll.use(authMiddleware).handler(async () => {
     const { syncVault } = await import("./watcher");
     const { createDbClient } = await import("@llm-wiki/db");
-    const { createEmbeddingProvider, createLLMProvider } = await import("@llm-wiki/ai");
-    
+
     const { db } = createDbClient(config.databaseUrl!);
-    const embeddingProvider = createEmbeddingProvider({
-      provider: config.embeddingProvider,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpEmbeddingModel
-      }
-    });
-    const llmProvider = createLLMProvider({
-      provider: config.embeddingProvider as any,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpLlmModel
-      }
-    });
+    const embeddingProvider = createConfiguredEmbeddingProvider(config);
+    const llmProvider = createConfiguredLlmProvider(config);
 
     const logger = (await import("@llm-wiki/core")).createLogger("sync");
     logger.info("Manual reindexing of entire vault triggered");
-    
+
     await syncVault(config, db, embeddingProvider, llmProvider);
-    
+
     const { sseEmitter } = await import("./events");
     sseEmitter.emit("change", { type: "note_changed", path: "*" });
-    
+
     return { success: true };
   }),
   getLinkHealth: os.getLinkHealth.handler(async () => {
@@ -216,7 +213,7 @@ export const router = os.router({
     const health: any = {
       status: "ok",
       timestamp: new Date().toISOString(),
-      services: { api: "ok" }
+      services: { api: "ok" },
     };
     try {
       const { createDbClient } = await import("@llm-wiki/db");
@@ -240,16 +237,18 @@ export const router = os.router({
   listNotes: os.listNotes.handler(async () => {
     const { createDbClient, documents } = await import("@llm-wiki/db");
     const { db } = createDbClient(config.databaseUrl!);
-    const results = await db.select({ 
-      id: documents.id, 
-      path: documents.path, 
-      title: documents.title,
-      isAiGenerated: documents.is_ai_generated,
-      aiStatus: documents.ai_status,
-      healthScore: documents.health_score,
-      qualityScore: documents.quality_score,
-      qualityMetrics: documents.quality_metrics
-    }).from(documents);
+    const results = await db
+      .select({
+        id: documents.id,
+        path: documents.path,
+        title: documents.title,
+        isAiGenerated: documents.is_ai_generated,
+        aiStatus: documents.ai_status,
+        healthScore: documents.health_score,
+        qualityScore: documents.quality_score,
+        qualityMetrics: documents.quality_metrics,
+      })
+      .from(documents);
     return results;
   }),
   getGraph: os.getGraph.handler(async () => {
@@ -257,27 +256,29 @@ export const router = os.router({
     const { isNotNull } = await import("drizzle-orm");
     const { db } = createDbClient(config.databaseUrl!);
 
-    const docResults = await db.select({ 
-      id: documents.id, 
-      title: documents.title,
-      path: documents.path, 
-      type: documents.type,
-      is_ai_generated: documents.is_ai_generated,
-      qualityScore: documents.quality_score,
-    }).from(documents);
+    const docResults = await db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        path: documents.path,
+        type: documents.type,
+        is_ai_generated: documents.is_ai_generated,
+        qualityScore: documents.quality_score,
+      })
+      .from(documents);
 
-    const linkResults = await db.select({
-      source: links.source_document_id,
-      target: links.target_document_id,
-      label: links.target_label,
-    }).from(links).where(isNotNull(links.target_document_id));
+    const linkResults = await db
+      .select({
+        source: links.source_document_id,
+        target: links.target_document_id,
+        label: links.target_label,
+      })
+      .from(links)
+      .where(isNotNull(links.target_document_id));
 
-    const validDocIds = new Set(docResults.map(d => d.id));
-    const edges = linkResults.filter(l => 
-      l.source && 
-      l.target && 
-      validDocIds.has(l.source) && 
-      validDocIds.has(l.target)
+    const validDocIds = new Set(docResults.map((d) => d.id));
+    const edges = linkResults.filter(
+      (l) => l.source && l.target && validDocIds.has(l.source) && validDocIds.has(l.target),
     ) as Array<{ source: string; target: string; label: string }>;
 
     return {
@@ -302,7 +303,7 @@ export const router = os.router({
       qualityScore: doc.quality_score,
       qualityMetrics: doc.quality_metrics,
       created_at: doc.created_at.toISOString(),
-      updated_at: doc.updated_at.toISOString()
+      updated_at: doc.updated_at.toISOString(),
     };
   }),
   getSettings: os.getSettings.handler(async () => {
@@ -319,7 +320,10 @@ export const router = os.router({
       } else {
         try {
           const version = await fs.readFile("/proc/version", "utf8");
-          if (version.toLowerCase().includes("microsoft") || version.toLowerCase().includes("wsl")) {
+          if (
+            version.toLowerCase().includes("microsoft") ||
+            version.toLowerCase().includes("wsl")
+          ) {
             isWSL = true;
           }
         } catch {}
@@ -337,9 +341,7 @@ export const router = os.router({
       }
     }
 
-    const resolvedPath = path.isAbsolute(targetPath) 
-      ? targetPath 
-      : path.resolve(targetPath);
+    const resolvedPath = path.isAbsolute(targetPath) ? targetPath : path.resolve(targetPath);
 
     try {
       await fs.access(resolvedPath);
@@ -347,7 +349,10 @@ export const router = os.router({
       try {
         await fs.mkdir(resolvedPath, { recursive: true });
       } catch (err: any) {
-        return { success: false, error: `Directory does not exist and could not be created: ${err.message}` };
+        return {
+          success: false,
+          error: `Directory does not exist and could not be created: ${err.message}`,
+        };
       }
     }
 
@@ -383,43 +388,10 @@ export const router = os.router({
     }
 
     const { syncVault, startIngestionWatcher } = await import("./watcher");
-    const { createEmbeddingProvider, createLLMProvider } = await import("@llm-wiki/ai");
 
     try {
-      const embeddingProvider = createEmbeddingProvider({
-        provider: config.embeddingProvider,
-        geminiGeap: {
-          projectId: config.gcpProjectId,
-          location: config.gcpLocation,
-          model: config.gcpEmbeddingModel
-        },
-        ollama: {
-          baseUrl: config.ollamaBaseUrl,
-          model: config.ollamaEmbeddingModel
-        },
-        openai: {
-          apiKey: config.openaiApiKey,
-          baseUrl: config.openaiBaseUrl,
-          model: config.openaiEmbeddingModel
-        }
-      });
-      const llmProvider = createLLMProvider({
-        provider: config.embeddingProvider as any,
-        geminiGeap: {
-          projectId: config.gcpProjectId,
-          location: config.gcpLocation,
-          model: config.gcpLlmModel
-        },
-        ollama: {
-          baseUrl: config.ollamaBaseUrl,
-          model: config.ollamaLlmModel
-        },
-        openai: {
-          apiKey: config.openaiApiKey,
-          baseUrl: config.openaiBaseUrl,
-          model: config.openaiLlmModel
-        }
-      });
+      const embeddingProvider = createConfiguredEmbeddingProvider(config);
+      const llmProvider = createConfiguredLlmProvider(config);
 
       console.log("[Sync] Triggering synchronization for the new vault path...");
       await syncVault(config, db, embeddingProvider, llmProvider);
@@ -434,7 +406,10 @@ export const router = os.router({
       return { success: true };
     } catch (err: any) {
       console.error("[Settings] Error restarting watcher / syncing:", err);
-      return { success: false, error: `Settings updated, but sync or watcher failed: ${err.message}` };
+      return {
+        success: false,
+        error: `Settings updated, but sync or watcher failed: ${err.message}`,
+      };
     }
   }),
   browseDirectories: os.browseDirectories.handler(async ({ input }: any) => {
@@ -468,12 +443,12 @@ export const router = os.router({
             if (name.length === 1 || name === "c" || name === "d" || name === "e" || name === "f") {
               shortcuts.push({
                 name: `Windows (${name.toUpperCase()}:)`,
-                path: `/mnt/${name}`
+                path: `/mnt/${name}`,
               });
             } else {
               shortcuts.push({
                 name: `Mount (${name})`,
-                path: `/mnt/${name}`
+                path: `/mnt/${name}`,
               });
             }
           }
@@ -487,7 +462,7 @@ export const router = os.router({
           await fs.access(drivePath);
           shortcuts.push({
             name: `Drive (${letter}:)`,
-            path: drivePath.replace(/\\/g, "/")
+            path: drivePath.replace(/\\/g, "/"),
           });
         } catch {}
       }
@@ -516,15 +491,14 @@ export const router = os.router({
         .map((entry) => entry.name)
         .sort((a, b) => a.localeCompare(b));
 
-      const parentPath = absolutePath === path.parse(absolutePath).root 
-        ? null 
-        : path.dirname(absolutePath);
+      const parentPath =
+        absolutePath === path.parse(absolutePath).root ? null : path.dirname(absolutePath);
 
       return {
         currentPath: absolutePath.replace(/\\/g, "/"),
         parentPath: parentPath ? parentPath.replace(/\\/g, "/") : null,
         directories,
-        shortcuts
+        shortcuts,
       };
     } catch (err: any) {
       logger.error(`Failed to browse path ${absolutePath}`, err);
@@ -540,7 +514,7 @@ export const router = os.router({
           parentPath: null,
           directories,
           shortcuts,
-          error: err.message
+          error: err.message,
         };
       } catch {
         return {
@@ -548,62 +522,112 @@ export const router = os.router({
           parentPath: null,
           directories: [],
           shortcuts,
-          error: err.message
+          error: err.message,
         };
       }
     }
   }),
-  createExtensionPairingCode: os.createExtensionPairingCode.use(authMiddleware).handler(async () => {
-    return createExtensionPairingCodeForDashboard(config);
-  }),
-  listResearchCaptures: os.listResearchCaptures.use(authMiddleware).handler(async ({ input }: any) => {
-    return listResearchCaptureInbox(config, input?.status);
-  }),
-  approveResearchCapture: os.approveResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
-    return approveResearchCapture(config, input);
-  }),
-  mergeResearchCapture: os.mergeResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
-    return mergeResearchCapture(config, input);
-  }),
-  discardResearchCapture: os.discardResearchCapture.use(authMiddleware).handler(async ({ input }: any) => {
-    return discardResearchCapture(config, input.id);
-  }),
-  retryResearchCaptureIndex: os.retryResearchCaptureIndex.use(authMiddleware).handler(async ({ input }: any) => {
-    return retryResearchCaptureIndex(config, input);
-  }),
-  listResearchCaptureActivities: os.listResearchCaptureActivities.use(authMiddleware).handler(async ({ input }: any) => {
-    return listResearchCaptureActivities(config, input.id);
-  }),
-  listResearchSources: os.listResearchSources.use(authMiddleware).handler(async () => listResearchSources(config)),
-  createResearchSource: os.createResearchSource.use(authMiddleware).handler(async ({ input }) => createResearchSource(config, input)),
-  importResearchSources: os.importResearchSources.use(authMiddleware).handler(async ({ input }) => importResearchSources(config, input.opml)),
-  updateResearchSource: os.updateResearchSource.use(authMiddleware).handler(async ({ input }) => updateResearchSource(config, input)),
-  deleteResearchSource: os.deleteResearchSource.use(authMiddleware).handler(async ({ input }) => deleteResearchSource(config, input.id)),
-  listResearchRadarStarterSources: os.listResearchRadarStarterSources.use(authMiddleware).handler(async () => listResearchRadarStarterSources()),
-  installResearchRadarStarterPack: os.installResearchRadarStarterPack.use(authMiddleware).handler(async () => installResearchRadarStarterPack(config)),
-  listResearchAutomations: os.listResearchAutomations.use(authMiddleware).handler(async () => listResearchAutomations(config)),
-  createResearchAutomation: os.createResearchAutomation.use(authMiddleware).handler(async ({ input }) => createResearchAutomation(config, input)),
-  createResearchAutomationFromSources: os.createResearchAutomationFromSources.use(authMiddleware).handler(async ({ input }) => createResearchAutomationFromSources(config, input)),
-  discoverResearchRadarSources: os.discoverResearchRadarSources.use(authMiddleware).handler(async ({ input }) => discoverResearchRadarSources(config, input.topic)),
-  updateResearchAutomation: os.updateResearchAutomation.use(authMiddleware).handler(async ({ input }) => updateResearchAutomation(config, input)),
-  deleteResearchAutomation: os.deleteResearchAutomation.use(authMiddleware).handler(async ({ input }) => deleteResearchAutomation(config, input.id)),
-  runResearchAutomation: os.runResearchAutomation.use(authMiddleware).handler(async ({ input }) => runResearchAutomation(config, input.id)),
-  listResearchAutomationRuns: os.listResearchAutomationRuns.use(authMiddleware).handler(async ({ input }) => listResearchAutomationRuns(config, input.automationId, input.limit)),
+  createExtensionPairingCode: os.createExtensionPairingCode
+    .use(authMiddleware)
+    .handler(async () => {
+      return createExtensionPairingCodeForDashboard(config);
+    }),
+  listResearchCaptures: os.listResearchCaptures
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return listResearchCaptureInbox(config, input?.status);
+    }),
+  approveResearchCapture: os.approveResearchCapture
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return approveResearchCapture(config, input);
+    }),
+  mergeResearchCapture: os.mergeResearchCapture
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return mergeResearchCapture(config, input);
+    }),
+  discardResearchCapture: os.discardResearchCapture
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return discardResearchCapture(config, input.id);
+    }),
+  retryResearchCaptureIndex: os.retryResearchCaptureIndex
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return retryResearchCaptureIndex(config, input);
+    }),
+  listResearchCaptureActivities: os.listResearchCaptureActivities
+    .use(authMiddleware)
+    .handler(async ({ input }: any) => {
+      return listResearchCaptureActivities(config, input.id);
+    }),
+  listResearchSources: os.listResearchSources
+    .use(authMiddleware)
+    .handler(async () => listResearchSources(config)),
+  createResearchSource: os.createResearchSource
+    .use(authMiddleware)
+    .handler(async ({ input }) => createResearchSource(config, input)),
+  importResearchSources: os.importResearchSources
+    .use(authMiddleware)
+    .handler(async ({ input }) => importResearchSources(config, input.opml)),
+  updateResearchSource: os.updateResearchSource
+    .use(authMiddleware)
+    .handler(async ({ input }) => updateResearchSource(config, input)),
+  deleteResearchSource: os.deleteResearchSource
+    .use(authMiddleware)
+    .handler(async ({ input }) => deleteResearchSource(config, input.id)),
+  listResearchRadarStarterSources: os.listResearchRadarStarterSources
+    .use(authMiddleware)
+    .handler(async () => listResearchRadarStarterSources()),
+  installResearchRadarStarterPack: os.installResearchRadarStarterPack
+    .use(authMiddleware)
+    .handler(async () => installResearchRadarStarterPack(config)),
+  listResearchAutomations: os.listResearchAutomations
+    .use(authMiddleware)
+    .handler(async () => listResearchAutomations(config)),
+  createResearchAutomation: os.createResearchAutomation
+    .use(authMiddleware)
+    .handler(async ({ input }) => createResearchAutomation(config, input)),
+  createResearchAutomationFromSources: os.createResearchAutomationFromSources
+    .use(authMiddleware)
+    .handler(async ({ input }) => createResearchAutomationFromSources(config, input)),
+  discoverResearchRadarSources: os.discoverResearchRadarSources
+    .use(authMiddleware)
+    .handler(async ({ input }) => discoverResearchRadarSources(config, input.topic)),
+  updateResearchAutomation: os.updateResearchAutomation
+    .use(authMiddleware)
+    .handler(async ({ input }) => updateResearchAutomation(config, input)),
+  deleteResearchAutomation: os.deleteResearchAutomation
+    .use(authMiddleware)
+    .handler(async ({ input }) => deleteResearchAutomation(config, input.id)),
+  runResearchAutomation: os.runResearchAutomation
+    .use(authMiddleware)
+    .handler(async ({ input }) => runResearchAutomation(config, input.id)),
+  listResearchAutomationRuns: os.listResearchAutomationRuns
+    .use(authMiddleware)
+    .handler(async ({ input }) =>
+      listResearchAutomationRuns(config, input.automationId, input.limit),
+    ),
   listAiTraces: os.listAiTraces.use(authMiddleware).handler(async ({ input }) => {
     return listAiTracePage(config, input);
   }),
   getAiTrace: os.getAiTrace.use(authMiddleware).handler(async ({ input }) => {
     return getAiTraceDetail(config, input.traceId);
   }),
-  bootstrapAiEvaluationGoldenSuite: os.bootstrapAiEvaluationGoldenSuite.use(authMiddleware).handler(async ({ input }) => {
-    return bootstrapAiEvaluationGoldenSuite(config, input);
+  recordAiTraceFeedback: os.recordAiTraceFeedback.use(authMiddleware).handler(async ({ input }) => {
+    return recordAiTraceFeedback(config, input);
   }),
-  activateAiEvaluationGoldenSuite: os.activateAiEvaluationGoldenSuite.use(authMiddleware).handler(async ({ input }) => {
-    return activateAiEvaluationGoldenSuite(config, input);
-  }),
-  discardAiEvaluationSilverCase: os.discardAiEvaluationSilverCase.use(authMiddleware).handler(async ({ input }) => {
-    return discardAiEvaluationSilverCase(config, input);
-  }),
+  ensureAiEvaluationBaseline: os.ensureAiEvaluationBaseline
+    .use(authMiddleware)
+    .handler(async ({ input }) => {
+      return ensureAiEvaluationBaseline(config, input);
+    }),
+  addAiEvaluationRegressionCase: os.addAiEvaluationRegressionCase
+    .use(authMiddleware)
+    .handler(async ({ input }) => {
+      return addAiEvaluationRegressionCase(config, input);
+    }),
   listAiEvaluationDatasets: os.listAiEvaluationDatasets.use(authMiddleware).handler(async () => {
     return listAiEvaluationDatasets(config);
   }),
@@ -613,16 +637,20 @@ export const router = os.router({
   runAiEvaluation: os.runAiEvaluation.use(authMiddleware).handler(async ({ input }) => {
     return runAiEvaluation(config, input);
   }),
-  getAiEvaluationCapabilities: os.getAiEvaluationCapabilities.use(authMiddleware).handler(async () => {
-    return getAiEvaluationCapabilities(config);
-  }),
+  getAiEvaluationCapabilities: os.getAiEvaluationCapabilities
+    .use(authMiddleware)
+    .handler(async () => {
+      return await getAiEvaluationCapabilities(config);
+    }),
   listAiEvaluationRuns: os.listAiEvaluationRuns.use(authMiddleware).handler(async ({ input }) => {
     return listAiEvaluationRuns(config, input?.datasetId);
   }),
   getAiEvaluationRun: os.getAiEvaluationRun.use(authMiddleware).handler(async ({ input }) => {
     return getAiEvaluationRun(config, input.runId);
   }),
-  compareAiEvaluationRuns: os.compareAiEvaluationRuns.use(authMiddleware).handler(async ({ input }) => {
-    return compareAiEvaluationRuns(config, input);
-  }),
+  compareAiEvaluationRuns: os.compareAiEvaluationRuns
+    .use(authMiddleware)
+    .handler(async ({ input }) => {
+      return compareAiEvaluationRuns(config, input);
+    }),
 });

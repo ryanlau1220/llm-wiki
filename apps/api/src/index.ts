@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import path from "node:path";
 import { setWatcher, getWatcher } from "./watcher-manager";
 import { researchCaptureExtensionRoutes } from "./extension-routes";
-import { startResearchRadarScheduler } from "./research-radar";
+import { markInterruptedResearchAutomationRuns, startResearchRadarScheduler } from "./research-radar";
 import { markInterruptedAiEvaluationRuns } from "./ai-evaluation";
 
 const config = loadConfig();
@@ -45,7 +45,10 @@ if (config.databaseUrl) {
 }
 
 await seedDefaultUser(config);
-if (config.databaseUrl) await markInterruptedAiEvaluationRuns(config);
+if (config.databaseUrl) {
+  await markInterruptedAiEvaluationRuns(config);
+  await markInterruptedResearchAutomationRuns(config);
+}
 
 const rpcHandler = new RPCHandler(router);
 
