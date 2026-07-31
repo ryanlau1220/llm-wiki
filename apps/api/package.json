@@ -15,6 +15,7 @@
     "@llm-wiki/ai": "*",
     "@llm-wiki/core": "*",
     "@llm-wiki/db": "*",
+    "@llm-wiki/evaluation": "*",
     "@llm-wiki/obsidian": "*",
     "@llm-wiki/types": "*",
     "@orpc/openapi": "^1.14.0",
