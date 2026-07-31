@@ -390,6 +390,25 @@ export const retrievalRuns = pgTable(
 );
 
 /**
+ * Owner feedback on a trace. This records only the decision and structural
+ * provenance; query text, context, and generated output are never retained.
+ */
+export const aiTraceFeedback = pgTable(
+  "ai_trace_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    trace_id: uuid("trace_id")
+      .notNull()
+      .references(() => retrievalRuns.id, { onDelete: "cascade" }),
+    signal: varchar("signal", { length: 32 }).notNull(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    traceCreatedAtIdx: index("ai_trace_feedback_trace_created_at_idx").on(table.trace_id, table.created_at),
+  }),
+);
+
+/**
  * Versioned, structural execution spans for an AI generator run. Spans contain
  * decisions and bounded counters only: never prompts, query text, assembled
  * context, model output, or hidden reasoning.
@@ -481,12 +500,11 @@ export const aiEvaluationCases = pgTable(
     expected_evidence: jsonb("expected_evidence").notNull().default([]),
     expected_outcome: text("expected_outcome"),
     reference_answer: text("reference_answer"),
-    candidate_output: text("candidate_output"),
     retrieved_evidence: jsonb("retrieved_evidence").notNull().default([]),
     retrieval_evidence_evaluated: boolean("retrieval_evidence_evaluated").notNull().default(false),
-    /** Silver cases are local synthetic candidates; only gold cases are release-gating regressions. */
-    lifecycle: varchar("lifecycle", { length: 16 }).notNull().default("gold"),
-    /** Structural provenance for local generation; it never contains source text or model output. */
+    /** Generated, owner-candidate, or narrowly owner-validated retrieval evidence. */
+    lifecycle: varchar("lifecycle", { length: 16 }).notNull().default("baseline"),
+    /** Structural provenance for generated cases; it never contains source text or model output. */
     generation_metadata: jsonb("generation_metadata").notNull().default({}),
     source_trace_id: uuid("source_trace_id").references(() => retrievalRuns.id, { onDelete: "set null" }),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -542,7 +560,6 @@ export const aiEvaluationResults = pgTable(
     judge_score: doublePrecision("judge_score"),
     /** Compact local-judge categories only; no free-form rationale or source content. */
     judge_labels: jsonb("judge_labels").notNull().default([]),
-    judge_rationale: varchar("judge_rationale", { length: 1_000 }),
     prompt_tokens: integer("prompt_tokens"),
     candidate_tokens: integer("candidate_tokens"),
     total_tokens: integer("total_tokens"),
