@@ -37,8 +37,10 @@ const AUTOMATION_TICK_MS = 60_000;
 export const RADAR_SOURCE_FETCH_CONCURRENCY = 4;
 export const RADAR_SOURCE_TIMEOUT_MS = 8_000;
 export const RADAR_ITEMS_PER_SOURCE = 12;
-export const RADAR_RANK_CANDIDATE_LIMIT = 48;
-export const RADAR_RANK_TIMEOUT_MS = 20_000;
+export const RADAR_RANK_CANDIDATE_LIMIT = 24;
+export const RADAR_RANK_TIMEOUT_MS = 8_000;
+export const RADAR_STALE_RUN_TIMEOUT_MS = 120_000;
+export const RADAR_CAPTURE_MIN_RELEVANCE = 0.35;
 const runningAutomationIds = new Set<string>();
 
 type Db = ReturnType<typeof createDbClient>["db"];
@@ -128,6 +130,10 @@ export function scoreFeedItem(topic: string, item: FeedItem): number {
   const matches = [...expected].filter((term) => haystack.has(term)).length;
   const titleMatches = [...expected].filter((term) => words(item.title).has(term)).length;
   return Math.min(1, (matches / expected.size) * 0.75 + (titleMatches / expected.size) * 0.25);
+}
+
+export function isRadarCaptureCandidate(score: number) {
+  return score >= RADAR_CAPTURE_MIN_RELEVANCE;
 }
 
 type RankedFeedItem<T = FeedItem> = { item: T; score: number };
@@ -306,6 +312,20 @@ export async function deleteResearchSource(config: AppConfig, id: string) {
 
 export function listResearchRadarStarterSources() {
   return RESEARCH_RADAR_STARTER_SOURCES.map((source) => ({ ...source }));
+}
+
+/** A stopped local process cannot resume an RSS request. Clear these records
+ * on boot so the scheduler and UI never retain a ghost `running` state. */
+export async function markInterruptedResearchAutomationRuns(config: AppConfig) {
+  const { db } = createDbClient(requireDatabase(config));
+  await db
+    .update(researchAutomationRuns)
+    .set({
+      status: RESEARCH_AUTOMATION_RUN_STATUS.FAILED,
+      error_message: "Interrupted because the local service restarted",
+      completed_at: new Date(),
+    })
+    .where(eq(researchAutomationRuns.status, RESEARCH_AUTOMATION_RUN_STATUS.RUNNING));
 }
 
 /** Adds the small starter pack idempotently, validating every feed before it
@@ -517,7 +537,7 @@ async function persistRadarCandidates(
       continue;
     }
     fresh += 1;
-    if (captures >= maxCaptures || score < 0.2) {
+    if (captures >= maxCaptures || !isRadarCaptureCandidate(score)) {
       skipped += 1;
       continue;
     }
@@ -544,6 +564,39 @@ async function persistRadarCandidates(
   return { fresh, captures, skipped };
 }
 
+export function isResearchAutomationRunStale(startedAt: Date, now = new Date()) {
+  return now.getTime() - startedAt.getTime() >= RADAR_STALE_RUN_TIMEOUT_MS;
+}
+
+/** Protects manual launches after a crash or accidental second local process.
+ * The in-memory set handles concurrent requests in this process; this DB check
+ * makes the persisted status safe across a restart. */
+async function recoverOrRejectPersistedRunningRun(db: Db, automationId: string, now: Date) {
+  const [running] = await db
+    .select()
+    .from(researchAutomationRuns)
+    .where(
+      and(
+        eq(researchAutomationRuns.automation_id, automationId),
+        eq(researchAutomationRuns.status, RESEARCH_AUTOMATION_RUN_STATUS.RUNNING),
+      ),
+    )
+    .orderBy(desc(researchAutomationRuns.started_at))
+    .limit(1);
+  if (!running) return;
+  if (!isResearchAutomationRunStale(running.started_at, now)) {
+    throw new Error("This automation is already running");
+  }
+  await db
+    .update(researchAutomationRuns)
+    .set({
+      status: RESEARCH_AUTOMATION_RUN_STATUS.FAILED,
+      error_message: "Run exceeded the local automation deadline and was recovered",
+      completed_at: now,
+    })
+    .where(eq(researchAutomationRuns.id, running.id));
+}
+
 export async function runResearchAutomation(
   config: AppConfig,
   automationId: string,
@@ -555,6 +608,7 @@ export async function runResearchAutomation(
   const startedAt = new Date();
   let runId: string | null = null;
   try {
+    await recoverOrRejectPersistedRunningRun(db, automationId, startedAt);
     const [automation] = await db.select().from(researchAutomations).where(eq(researchAutomations.id, automationId)).limit(1);
     if (!automation) throw new Error("Automation not found");
     const [run] = await db.insert(researchAutomationRuns).values({

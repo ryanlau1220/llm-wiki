@@ -3,12 +3,13 @@ import path from "node:path";
 import crypto from "node:crypto";
 import matter from "gray-matter";
 
-import { createLLMProvider, createEmbeddingProvider, type LLMProvider } from "@llm-wiki/ai";
+import type { LLMProvider } from "@llm-wiki/ai";
 import { createLogger, ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
 import { sseEmitter } from "./events";
+import { createConfiguredEmbeddingProvider, createConfiguredLlmProvider } from "./providers";
 
 type RefactorPreviewDependencies = {
   llmProvider?: LLMProvider;
@@ -24,7 +25,7 @@ export async function refactorNotePreview(
 
   const vaultRoot = path.resolve(config.vaultPath);
   const fullPath = path.resolve(vaultRoot, filePath);
-  
+
   // Safety check: ensure file is within vault root directory
   if (!fullPath.startsWith(vaultRoot)) {
     throw new Error("Invalid file path: must be within vault directory");
@@ -32,14 +33,7 @@ export async function refactorNotePreview(
 
   const content = await fs.readFile(fullPath, "utf8");
 
-  const llmProvider = dependencies.llmProvider ?? createLLMProvider({
-    provider: config.embeddingProvider, // Defaulting to the same provider
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpLlmModel
-    }
-  });
+  const llmProvider = dependencies.llmProvider ?? createConfiguredLlmProvider(config);
 
   const systemInstruction = `
 You are a expert knowledge engineer. Your task is to refactor a messy note into a highly structured, wiki-style markdown page.
@@ -83,7 +77,7 @@ Provide the refactored version in JSON format.
     prompt,
     systemInstruction,
     responseMimeType: "application/json",
-    temperature: 0.1
+    temperature: 0.1,
   });
   const duration = Date.now() - startTime;
 
@@ -109,7 +103,7 @@ Provide the refactored version in JSON format.
     logger.info("Note refactored successfully", {
       requestId,
       durationMs: duration,
-      title: noteData.title
+      title: noteData.title,
     });
 
     let improvements: any[] = [];
@@ -130,14 +124,14 @@ Provide the refactored version in JSON format.
       sourcePath: filePath,
       originalContent: trimNewlines(matter(content).content),
       improvements,
-      note: noteData
+      note: noteData,
     };
   }
 
   console.error("Failed to parse LLM refactor response:", rawText);
   return {
     error: "Failed to generate structured refactor",
-    rawResponse: rawText
+    rawResponse: rawText,
   };
 }
 
@@ -145,7 +139,7 @@ export async function confirmRefactorSave(
   config: AppConfig,
   _requestId: string,
   sourcePath: string,
-  note: { title: string; content: string; links?: string[]; tags?: string[] }
+  note: { title: string; content: string; links?: string[]; tags?: string[] },
 ) {
   const logger = createLogger("refactor");
   logger.info("Confirm refactor save (in-place)", { sourcePath });
@@ -176,10 +170,7 @@ export async function confirmRefactorSave(
     await fs.mkdir(backupDir, { recursive: true });
     const baseName = path.basename(absoluteSourcePath, ".md");
     // Format timestamp: YYYYMMDD_HHMMSS
-    const timestamp = new Date().toISOString()
-      .replace(/[-:]/g, "")
-      .replace("T", "_")
-      .split(".")[0];
+    const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").split(".")[0];
     const backupFilePath = path.join(backupDir, `${baseName}.${timestamp}.md`);
     await fs.writeFile(backupFilePath, originalContent, "utf8");
     logger.info(`Pre-refactor backup created at: ${backupFilePath}`);
@@ -198,7 +189,7 @@ export async function confirmRefactorSave(
       health_score: 0.95,
       type: "ai_refactored",
       source: "refactor",
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
   } catch {
     mergedMetadata = {
@@ -206,7 +197,7 @@ export async function confirmRefactorSave(
       health_score: 0.95,
       type: "ai_refactored",
       source: "refactor",
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
   }
 
@@ -216,7 +207,7 @@ export async function confirmRefactorSave(
       tag
         .replace(/\s+/g, "-")
         .replace(/[^a-zA-Z0-9_-]/g, "")
-        .slice(0, 50)
+        .slice(0, 50),
     )
     .filter((tag) => tag.length > 0);
   if (sanitizedTags.length) {
@@ -235,41 +226,9 @@ export async function confirmRefactorSave(
 
   // 5. Ingest updated document immediately
   try {
-    const embeddingProvider = createEmbeddingProvider({
-      provider: config.embeddingProvider,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpEmbeddingModel
-      },
-      ollama: {
-        baseUrl: config.ollamaBaseUrl,
-        model: config.ollamaEmbeddingModel
-      },
-      openai: {
-        apiKey: config.openaiApiKey,
-        baseUrl: config.openaiBaseUrl,
-        model: config.openaiEmbeddingModel
-      }
-    });
+    const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
-    const llmProvider = createLLMProvider({
-      provider: config.embeddingProvider as any,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpLlmModel
-      },
-      ollama: {
-        baseUrl: config.ollamaBaseUrl,
-        model: config.ollamaLlmModel
-      },
-      openai: {
-        apiKey: config.openaiApiKey,
-        baseUrl: config.openaiBaseUrl,
-        model: config.openaiLlmModel
-      }
-    });
+    const llmProvider = createConfiguredLlmProvider(config);
 
     await ingestMarkdown(
       {
@@ -277,15 +236,15 @@ export async function confirmRefactorSave(
         options: {
           embeddingProvider,
           llmProvider,
-          embeddingVersion: config.embeddingVersion
-        }
+          embeddingVersion: config.embeddingVersion,
+        },
       },
       {
         vaultPath: sourcePath,
         rawContent: newFileContent,
         sourceKind: "ai",
-        isAiGenerated: true
-      }
+        isAiGenerated: true,
+      },
     );
     sseEmitter.emit("change", { type: "note_changed", path: sourcePath });
   } catch (ingestError: any) {
@@ -294,7 +253,7 @@ export async function confirmRefactorSave(
 
   return {
     status: "saved" as const,
-    path: absoluteSourcePath
+    path: absoluteSourcePath,
   };
 }
 
@@ -319,7 +278,7 @@ export async function listBackups(config: AppConfig, sourcePath: string) {
         if (match) {
           const timestamp = match[1];
           const stats = await fs.stat(path.join(backupDir, file.name));
-          
+
           // timestamp format YYYYMMDD_HHMMSS (UTC)
           const year = timestamp.slice(0, 4);
           const month = timestamp.slice(4, 6);
@@ -333,7 +292,7 @@ export async function listBackups(config: AppConfig, sourcePath: string) {
             filename: file.name,
             timestamp,
             formattedDate,
-            sizeBytes: stats.size
+            sizeBytes: stats.size,
           });
         }
       }
@@ -358,7 +317,7 @@ export async function getBackupContent(config: AppConfig, sourcePath: string, ti
     ".llm-wiki",
     "backups",
     relativeDir,
-    `${baseName}.${timestamp}.md`
+    `${baseName}.${timestamp}.md`,
   );
 
   const vaultRoot = path.resolve(config.vaultPath);
@@ -380,7 +339,7 @@ export async function restoreBackup(config: AppConfig, sourcePath: string, times
     ".llm-wiki",
     "backups",
     relativeDir,
-    `${baseName}.${timestamp}.md`
+    `${baseName}.${timestamp}.md`,
   );
 
   const absoluteSourcePath = path.resolve(config.vaultPath, sourcePath);
@@ -402,7 +361,8 @@ export async function restoreBackup(config: AppConfig, sourcePath: string, times
   // 3. Create a safety backup of the current content before overwriting
   if (currentContent) {
     try {
-      const currentTimestamp = new Date().toISOString()
+      const currentTimestamp = new Date()
+        .toISOString()
         .replace(/[-:]/g, "")
         .replace("T", "_")
         .split(".")[0];
@@ -423,41 +383,9 @@ export async function restoreBackup(config: AppConfig, sourcePath: string, times
   if (config.databaseUrl) {
     const { db } = createDbClient(config.databaseUrl);
     try {
-      const embeddingProvider = createEmbeddingProvider({
-        provider: config.embeddingProvider,
-        geminiGeap: {
-          projectId: config.gcpProjectId,
-          location: config.gcpLocation,
-          model: config.gcpEmbeddingModel
-        },
-        ollama: {
-          baseUrl: config.ollamaBaseUrl,
-          model: config.ollamaEmbeddingModel
-        },
-        openai: {
-          apiKey: config.openaiApiKey,
-          baseUrl: config.openaiBaseUrl,
-          model: config.openaiEmbeddingModel
-        }
-      });
+      const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
-      const llmProvider = createLLMProvider({
-        provider: config.embeddingProvider as any,
-        geminiGeap: {
-          projectId: config.gcpProjectId,
-          location: config.gcpLocation,
-          model: config.gcpLlmModel
-        },
-        ollama: {
-          baseUrl: config.ollamaBaseUrl,
-          model: config.ollamaLlmModel
-        },
-        openai: {
-          apiKey: config.openaiApiKey,
-          baseUrl: config.openaiBaseUrl,
-          model: config.openaiLlmModel
-        }
-      });
+      const llmProvider = createConfiguredLlmProvider(config);
 
       await ingestMarkdown(
         {
@@ -465,15 +393,15 @@ export async function restoreBackup(config: AppConfig, sourcePath: string, times
           options: {
             embeddingProvider,
             llmProvider,
-            embeddingVersion: config.embeddingVersion
-          }
+            embeddingVersion: config.embeddingVersion,
+          },
         },
         {
           vaultPath: sourcePath,
           rawContent: backupContent,
           sourceKind: "ai",
-          isAiGenerated: true
-        }
+          isAiGenerated: true,
+        },
       );
       sseEmitter.emit("change", { type: "note_changed", path: sourcePath });
     } catch (ingestError: any) {

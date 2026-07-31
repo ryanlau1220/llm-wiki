@@ -4,13 +4,13 @@ import crypto from "node:crypto";
 
 import { desc, eq } from "drizzle-orm";
 
-import { createEmbeddingProvider, createLLMProvider } from "@llm-wiki/ai";
 import { actionAuditEvents, chunks, createDbClient, documents } from "@llm-wiki/db";
 import { aiActionEnvelopeSchema } from "@llm-wiki/types";
 import { ingestMarkdown } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
 import { sseEmitter } from "./events";
+import { createConfiguredEmbeddingProvider, createConfiguredLlmProvider } from "./providers";
 
 export type AskNoteInput = {
   title?: string;
@@ -39,18 +39,19 @@ export async function confirmAskSave(
   config: AppConfig,
   requestId: string,
   note: AskNoteInput,
-  frontmatter: NoteFrontmatter = { type: "ai_generated", source: "ask" }
+  frontmatter: NoteFrontmatter = { type: "ai_generated", source: "ask" },
 ): Promise<AskConfirmResult> {
   if (!config.databaseUrl) {
     return { status: "rejected", error: "DATABASE_URL is required" };
   }
 
   const sanitizedTags = (note.tags || [])
-    .map((tag) =>
-      tag
-        .replace(/\s+/g, "-")          // Replace spaces with hyphens
-        .replace(/[^a-zA-Z0-9_-]/g, "") // Remove other invalid characters
-        .slice(0, 50)                  // Limit to 50 characters max
+    .map(
+      (tag) =>
+        tag
+          .replace(/\s+/g, "-") // Replace spaces with hyphens
+          .replace(/[^a-zA-Z0-9_-]/g, "") // Remove other invalid characters
+          .slice(0, 50), // Limit to 50 characters max
     )
     .filter((tag) => tag.length > 0);
 
@@ -63,9 +64,9 @@ export async function confirmAskSave(
       content: note.content ?? "",
       links: note.links,
       tags: sanitizedTags,
-      source: frontmatter.source
+      source: frontmatter.source,
     },
-    reason: "user_confirmed"
+    reason: "user_confirmed",
   };
 
   const { db } = createDbClient(config.databaseUrl);
@@ -106,43 +107,13 @@ export async function confirmAskSave(
 
   // Ingest the note immediately into the database
   try {
-    const embeddingProvider = createEmbeddingProvider({
-      provider: config.embeddingProvider,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpEmbeddingModel
-      },
-      ollama: {
-        baseUrl: config.ollamaBaseUrl,
-        model: config.ollamaEmbeddingModel
-      },
-      openai: {
-        apiKey: config.openaiApiKey,
-        baseUrl: config.openaiBaseUrl,
-        model: config.openaiEmbeddingModel
-      }
-    });
+    const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
-    const llmProvider = createLLMProvider({
-      provider: config.embeddingProvider as any,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpLlmModel
-      },
-      ollama: {
-        baseUrl: config.ollamaBaseUrl,
-        model: config.ollamaLlmModel
-      },
-      openai: {
-        apiKey: config.openaiApiKey,
-        baseUrl: config.openaiBaseUrl,
-        model: config.openaiLlmModel
-      }
-    });
+    const llmProvider = createConfiguredLlmProvider(config);
 
-    const relativePath = path.relative(path.resolve(config.vaultPath), filePath).replace(/\\/g, "/");
+    const relativePath = path
+      .relative(path.resolve(config.vaultPath), filePath)
+      .replace(/\\/g, "/");
 
     await ingestMarkdown(
       {
@@ -150,15 +121,15 @@ export async function confirmAskSave(
         options: {
           embeddingProvider,
           llmProvider,
-          embeddingVersion: config.embeddingVersion
-        }
+          embeddingVersion: config.embeddingVersion,
+        },
       },
       {
         vaultPath: relativePath,
         rawContent: noteContent,
         sourceKind: "ai",
-        isAiGenerated: true
-      }
+        isAiGenerated: true,
+      },
     );
     sseEmitter.emit("change", { type: "note_changed", path: relativePath });
   } catch (ingestError: any) {
@@ -166,21 +137,23 @@ export async function confirmAskSave(
   }
 
   await recordAudit(db, requestId, "create_note", "accepted", undefined, {
-    path: filePath
+    path: filePath,
   });
 
   return {
     status: "saved",
-    path: filePath
+    path: filePath,
   };
 }
 
 function slugify(value: string): string {
   // Retain casing and spaces, just remove characters invalid in filesystem filenames
-  return value
-    .replace(/[/\\?%*:|"<>]/g, "")
-    .trim()
-    .slice(0, 80) || "note";
+  return (
+    value
+      .replace(/[/\\?%*:|"<>]/g, "")
+      .trim()
+      .slice(0, 80) || "note"
+  );
 }
 
 function buildNoteFile(note: AskNoteInput, frontmatter: NoteFrontmatter): string {
@@ -249,7 +222,7 @@ async function recordAudit(
   action: string,
   result: "accepted" | "rejected",
   rejectionReason?: string,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
 ) {
   await db.insert(actionAuditEvents).values({
     request_id: requestId,
@@ -258,32 +231,20 @@ async function recordAudit(
     rejection_reason: rejectionReason,
     actor: "user",
     metadata,
-    created_at: new Date()
+    created_at: new Date(),
   });
 }
 
 async function hasSemanticDuplicate(
   config: AppConfig,
   db: ReturnType<typeof createDbClient>["db"],
-  content: string
+  content: string,
 ): Promise<boolean> {
   if (!content.trim()) {
     return false;
   }
 
-  const embeddingProvider = createEmbeddingProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpEmbeddingModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiEmbeddingModel
-    }
-  });
+  const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
   const embeddingResult = await embeddingProvider.embed({ texts: [content] });
   const queryVector = embeddingResult.vectors[0];

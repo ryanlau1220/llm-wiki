@@ -25,6 +25,7 @@ import type { AppConfig } from "./config";
 import { canonicalizeCaptureSources, canonicalizeCaptureUrl } from "./capture-url-normalization";
 import { sseEmitter } from "./events";
 import { reindexFile } from "./reindex";
+import { normalizeSyndicationText } from "./research-radar-feed";
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_RESEARCH_CAPTURE_FOLDER = "research";
@@ -101,9 +102,9 @@ function formatCapture(
   return {
     id: capture.id,
     sourceUrl: capture.source_url,
-    sourceTitle: capture.source_title,
-    query: capture.query,
-    content: capture.content,
+    sourceTitle: normalizeCaptureText(capture.source_title),
+    query: capture.query ? normalizeCaptureText(capture.query) : null,
+    content: normalizeCaptureText(capture.content),
     sources: sources.flatMap((source) => {
       if (
         source &&
@@ -113,7 +114,7 @@ function formatCapture(
         typeof source.title === "string" &&
         typeof source.url === "string"
       ) {
-        return [{ title: source.title, url: source.url }];
+        return [{ title: normalizeCaptureText(source.title), url: source.url }];
       }
       return [];
     }),
@@ -126,6 +127,12 @@ function formatCapture(
     reviewedAt: capture.reviewed_at?.toISOString() ?? null,
     createdAt: capture.created_at.toISOString(),
   };
+}
+
+/** Feed data may have been stored before a parser upgrade. Decode ordinary
+ * character entities only; this never interprets markup or scripts. */
+function normalizeCaptureText(value: string) {
+  return normalizeSyndicationText(value).trim();
 }
 
 export async function createExtensionPairingCodeForDashboard(config: AppConfig) {
@@ -192,15 +199,18 @@ export async function createResearchCapture(
 
   const capturedAt = new Date(input.capturedAt);
   const sourceUrl = canonicalizeCaptureUrl(input.sourceUrl);
-  const sources = canonicalizeCaptureSources(input.sources);
+  const sources = canonicalizeCaptureSources(input.sources).map((source) => ({
+    ...source,
+    title: normalizeCaptureText(source.title),
+  }));
   const [capture] = await db
     .insert(researchCaptures)
     .values({
       extension_device_id: device.id,
       source_url: sourceUrl,
-      source_title: input.sourceTitle,
-      query: input.query || null,
-      content: input.content,
+      source_title: normalizeCaptureText(input.sourceTitle),
+      query: input.query ? normalizeCaptureText(input.query) : null,
+      content: normalizeCaptureText(input.content),
       sources,
       captured_at: capturedAt,
     })
@@ -240,10 +250,10 @@ export async function createAutomationResearchCapture(
     .values({
       automation_run_id: input.automationRunId,
       source_url: sourceUrl,
-      source_title: input.sourceTitle.slice(0, 500),
-      query: input.topic,
-      content: input.content.slice(0, 100_000),
-      sources: [{ title: input.sourceTitle.slice(0, 500), url: sourceUrl }],
+      source_title: normalizeCaptureText(input.sourceTitle).slice(0, 500),
+      query: normalizeCaptureText(input.topic),
+      content: normalizeCaptureText(input.content).slice(0, 100_000),
+      sources: [{ title: normalizeCaptureText(input.sourceTitle).slice(0, 500), url: sourceUrl }],
       captured_at: input.capturedAt,
     })
     .returning({ id: researchCaptures.id, status: researchCaptures.status });
@@ -344,6 +354,14 @@ export function buildResearchMarkdown(input: {
   capturedAt: Date;
   tags?: string[];
 }): string {
+  const title = normalizeCaptureText(input.title);
+  const sourceTitle = normalizeCaptureText(input.sourceTitle);
+  const query = input.query ? normalizeCaptureText(input.query) : null;
+  const content = normalizeCaptureText(input.content);
+  const sources = input.sources.map((source) => ({
+    ...source,
+    title: normalizeCaptureText(source.title),
+  }));
   const tags = (input.tags ?? [])
     .map((tag) => tag.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 50))
     .filter(Boolean);
@@ -354,14 +372,14 @@ export function buildResearchMarkdown(input: {
     `capture_id: ${yamlQuote(input.captureId)}`,
     `captured_at: ${yamlQuote(input.capturedAt.toISOString())}`,
     `source_url: ${yamlQuote(input.sourceUrl)}`,
-    `source_title: ${yamlQuote(input.sourceTitle)}`,
+    `source_title: ${yamlQuote(sourceTitle)}`,
   ];
   if (tags.length) lines.push(`tags: [${tags.map(yamlQuote).join(", ")}]`);
-  lines.push("---", "", `# ${markdownLabel(input.title)}`, "");
-  if (input.query) lines.push("## Research question", "", input.query, "");
-  lines.push("## Captured response", "", input.content.trim(), "", "## Provenance", "");
-  lines.push(`- Captured from [${markdownLabel(input.sourceTitle)}](${input.sourceUrl}) on ${input.capturedAt.toISOString()}.`);
-  for (const source of input.sources) {
+  lines.push("---", "", `# ${markdownLabel(title)}`, "");
+  if (query) lines.push("## Research question", "", query, "");
+  lines.push("## Captured response", "", content, "", "## Provenance", "");
+  lines.push(`- Captured from [${markdownLabel(sourceTitle)}](${input.sourceUrl}) on ${input.capturedAt.toISOString()}.`);
+  for (const source of sources) {
     lines.push(`- [${markdownLabel(source.title)}](${source.url})`);
   }
   return lines.join("\n");

@@ -6,6 +6,7 @@ import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 const MAX_FEED_BYTES = 1_500_000;
 export const FEED_REQUEST_TIMEOUT_MS = 12_000;
+export const DNS_RESOLUTION_TIMEOUT_MS = 4_000;
 const MAX_DISCOVERY_PAGE_BYTES = 250_000;
 const DISCOVERY_PAGE_TIMEOUT_MS = 8_000;
 const MAX_REDIRECTS = 3;
@@ -282,10 +283,31 @@ async function assertPublicResolution(url: URL): Promise<void> {
     if (isPrivateAddress(hostname)) throw new Error("Feed URLs must use a public host");
     return;
   }
-  const addresses = await lookup(hostname, { all: true, verbatim: true });
+  const addresses = await withTimeout(
+    lookup(hostname, { all: true, verbatim: true }),
+    DNS_RESOLUTION_TIMEOUT_MS,
+    "Feed host resolution timed out",
+  );
   if (!addresses.length || addresses.some((entry) => isPrivateAddress(entry.address))) {
     throw new Error("Feed URL resolved to a private address");
   }
+}
+
+/** DNS is outside fetch's AbortSignal; cap it so a stalled resolver cannot stall a radar run. */
+export function withTimeout<T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    void work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 async function readLimitedBody(response: Response, maxBytes = MAX_FEED_BYTES): Promise<string> {

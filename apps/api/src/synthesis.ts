@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { createEmbeddingProvider, createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
+import type { LLMResponse } from "@llm-wiki/ai";
 import {
   DEFAULT_CONTEXT_CHARACTER_BUDGET,
   AI_TRACE_OPERATION,
@@ -24,9 +24,11 @@ import { synthesisModelResponseSchema } from "@llm-wiki/types";
 
 import type { AppConfig } from "./config";
 import {
-  createInvalidModelResponse,
-  parseStructuredModelResponse,
-} from "./model-response";
+  createConfiguredEmbeddingProvider,
+  createConfiguredLlmProvider,
+  resolveConfiguredLlmModelName,
+} from "./providers";
+import { createInvalidModelResponse, parseStructuredModelResponse } from "./model-response";
 import { modelUsageAttributes } from "./trace-usage";
 
 const DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT = 2_000;
@@ -52,7 +54,12 @@ export type SelectedNoteContextOptions = ContextPackOptions & {
   segmentCharacterLimit?: number;
 };
 
-export async function synthesisPreview(config: AppConfig, topic: string, topK?: number, noteIds?: string[]) {
+export async function synthesisPreview(
+  config: AppConfig,
+  topic: string,
+  topK?: number,
+  noteIds?: string[],
+) {
   const logger = createLogger("synthesis");
   logger.info("New synthesis request", { topic, topK, noteIdsCount: noteIds?.length });
 
@@ -71,12 +78,17 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
       query: topic,
       policy: selectedNoteMode ? AI_TRACE_POLICY.SELECTED_NOTES : AI_TRACE_POLICY.VAULT_HYBRID,
       policyReason: selectedNoteMode ? "explicit_note_selection" : "topic_hybrid_retrieval",
-      modelProvider: config.embeddingProvider,
-      modelName: config.embeddingProvider === "openai" ? config.openaiLlmModel : config.gcpLlmModel,
+      modelProvider: config.llmProvider,
+      modelName: resolveConfiguredLlmModelName(config),
       promptVersion: "synthesis-v1",
     });
-    requestSpanId = await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.REQUEST, attributes: { input_length: topic.length, selected_notes: selectedNoteMode } });
-  } catch (error) { logger.error("Failed to start synthesis trace", error); }
+    requestSpanId = await startAiTraceSpan(db, traceId, {
+      spanType: AI_TRACE_SPAN_TYPE.REQUEST,
+      attributes: { input_length: topic.length, selected_notes: selectedNoteMode },
+    });
+  } catch (error) {
+    logger.error("Failed to start synthesis trace", error);
+  }
   const { inArray } = await import("drizzle-orm");
   const { documents } = await import("@llm-wiki/db");
 
@@ -86,10 +98,21 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
 
   if (noteIds && noteIds.length > 0) {
     const retrievalStartedAt = Date.now();
-    const retrievalSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.RETRIEVAL, parentSpanId: requestSpanId ?? undefined, attributes: { retrieval_mode: "selected_notes", requested_count: noteIds.length } }) : null;
+    const retrievalSpanId = traceId
+      ? await startAiTraceSpan(db, traceId, {
+          spanType: AI_TRACE_SPAN_TYPE.RETRIEVAL,
+          parentSpanId: requestSpanId ?? undefined,
+          attributes: { retrieval_mode: "selected_notes", requested_count: noteIds.length },
+        })
+      : null;
     const requestedNoteIds = [...new Set(noteIds)];
     const selectedNotes = await db
-      .select({ id: documents.id, title: documents.title, path: documents.path, content: documents.content })
+      .select({
+        id: documents.id,
+        title: documents.title,
+        path: documents.path,
+        content: documents.content,
+      })
       .from(documents)
       .where(inArray(documents.id, requestedNoteIds));
 
@@ -107,36 +130,43 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
     sources = selectedSources.map(({ content: _content, ...source }) => source);
     contextText = contextPack.text;
     retrievalInfo = { chunkCount: selectedNotes.length, linkCount: 0 };
-    if (retrievalSpanId) await completeAiTraceSpan(db, retrievalSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - retrievalStartedAt, attributes: { selected_count: selectedNotes.length } });
+    if (retrievalSpanId)
+      await completeAiTraceSpan(db, retrievalSpanId, {
+        status: AI_TRACE_STATUS.SUCCEEDED,
+        durationMs: Date.now() - retrievalStartedAt,
+        attributes: { selected_count: selectedNotes.length },
+      });
   } else {
     const retrievalStartedAt = Date.now();
-    const retrievalSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.RETRIEVAL, parentSpanId: requestSpanId ?? undefined, attributes: { retrieval_mode: "hybrid", top_k: topK ?? 10 } }) : null;
-    const embeddingProvider = createEmbeddingProvider({
-      provider: config.embeddingProvider,
-      geminiGeap: {
-        projectId: config.gcpProjectId,
-        location: config.gcpLocation,
-        model: config.gcpEmbeddingModel
-      },
-      openai: {
-        apiKey: config.openaiApiKey,
-        baseUrl: config.openaiBaseUrl,
-        model: config.openaiEmbeddingModel
-      }
-    });
+    const retrievalSpanId = traceId
+      ? await startAiTraceSpan(db, traceId, {
+          spanType: AI_TRACE_SPAN_TYPE.RETRIEVAL,
+          parentSpanId: requestSpanId ?? undefined,
+          attributes: { retrieval_mode: "hybrid", top_k: topK ?? 10 },
+        })
+      : null;
+    const embeddingProvider = createConfiguredEmbeddingProvider(config);
 
     const retrievalResults = await hybridRetrieve(
       { db, embeddingProvider },
-      { query: topic, topK }
+      { query: topic, topK },
     );
 
     const contextPack = packRetrievedSynthesisContext(retrievalResults.chunks);
     contextText = contextPack.text;
     retrievalInfo = {
       chunkCount: retrievalResults.chunks.length,
-      linkCount: retrievalResults.links.length
+      linkCount: retrievalResults.links.length,
     };
-    if (retrievalSpanId) await completeAiTraceSpan(db, retrievalSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - retrievalStartedAt, attributes: { candidate_count: retrievalResults.chunks.length, link_count: retrievalResults.links.length } });
+    if (retrievalSpanId)
+      await completeAiTraceSpan(db, retrievalSpanId, {
+        status: AI_TRACE_STATUS.SUCCEEDED,
+        durationMs: Date.now() - retrievalStartedAt,
+        attributes: {
+          candidate_count: retrievalResults.chunks.length,
+          link_count: retrievalResults.links.length,
+        },
+      });
 
     const documentIds = [...new Set(contextPack.chunks.map((chunk) => chunk.documentId))];
     if (documentIds.length > 0) {
@@ -144,23 +174,11 @@ export async function synthesisPreview(config: AppConfig, topic: string, topK?: 
         .select({ id: documents.id, title: documents.title, path: documents.path })
         .from(documents)
         .where(inArray(documents.id, documentIds))
-        .then(rows => rows.map(r => ({ id: r.id, title: r.title ?? "", path: r.path })));
+        .then((rows) => rows.map((r) => ({ id: r.id, title: r.title ?? "", path: r.path })));
     }
   }
 
-  const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpLlmModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiLlmModel
-    }
-  });
+  const llmProvider = createConfiguredLlmProvider(config);
 
   const systemInstruction = `
 You are an expert knowledge synthesizer for "LLM Wiki".
@@ -196,22 +214,61 @@ Synthesize a concise wiki note.
 
   logger.debug("Generating synthesis...");
   const modelStartedAt = Date.now();
-  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json" } }) : null;
+  const modelSpanId = traceId
+    ? await startAiTraceSpan(db, traceId, {
+        spanType: AI_TRACE_SPAN_TYPE.MODEL,
+        parentSpanId: requestSpanId ?? undefined,
+        attributes: { provider: config.llmProvider, response_format: "json" },
+      })
+    : null;
   let llmResponse: LLMResponse;
-  try { llmResponse = await llmProvider.generate({ prompt, systemInstruction, responseMimeType: "application/json", temperature: 0.2 }); }
-  catch (error) { if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - modelStartedAt, errorCode: "generation_failed" }); await completeSynthesisTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: retrievalInfo.chunkCount, selectedEvidenceCount: retrievalInfo.chunkCount, contextCharacterCount: contextText.length, durationMs: Date.now() - traceStartedAt, errorCode: "generation_failed" }); throw error; }
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: Date.now() - modelStartedAt, attributes: { provider: config.embeddingProvider, ...modelUsageAttributes(llmResponse.usage) } });
+  try {
+    llmResponse = await llmProvider.generate({
+      prompt,
+      systemInstruction,
+      responseMimeType: "application/json",
+      temperature: 0.2,
+    });
+  } catch (error) {
+    if (modelSpanId)
+      await completeAiTraceSpan(db, modelSpanId, {
+        status: AI_TRACE_STATUS.FAILED,
+        durationMs: Date.now() - modelStartedAt,
+        errorCode: "generation_failed",
+      });
+    await completeSynthesisTrace(db, traceId, requestSpanId, {
+      status: AI_TRACE_STATUS.FAILED,
+      candidateCount: retrievalInfo.chunkCount,
+      selectedEvidenceCount: retrievalInfo.chunkCount,
+      contextCharacterCount: contextText.length,
+      durationMs: Date.now() - traceStartedAt,
+      errorCode: "generation_failed",
+    });
+    throw error;
+  }
+  if (modelSpanId)
+    await completeAiTraceSpan(db, modelSpanId, {
+      status: AI_TRACE_STATUS.SUCCEEDED,
+      durationMs: Date.now() - modelStartedAt,
+      attributes: { provider: config.llmProvider, ...modelUsageAttributes(llmResponse.usage) },
+    });
 
   const parsed = parseStructuredModelResponse(llmResponse.text, synthesisModelResponseSchema);
   if (parsed.success) {
     const requestId = traceId ?? crypto.randomUUID();
-    await completeSynthesisTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, candidateCount: retrievalInfo.chunkCount, selectedEvidenceCount: retrievalInfo.chunkCount, contextCharacterCount: contextText.length, durationMs: Date.now() - traceStartedAt });
+    await completeSynthesisTrace(db, traceId, requestSpanId, {
+      status: AI_TRACE_STATUS.SUCCEEDED,
+      candidateCount: retrievalInfo.chunkCount,
+      selectedEvidenceCount: retrievalInfo.chunkCount,
+      contextCharacterCount: contextText.length,
+      durationMs: Date.now() - traceStartedAt,
+    });
     return {
       requestId,
       traceId,
       note: parsed.data.note,
       sources,
-      retrieval: retrievalInfo
+      retrieval: retrievalInfo,
     };
   }
 
@@ -220,14 +277,32 @@ Synthesize a concise wiki note.
     reason: parsed.reason,
   });
 
-  await completeSynthesisTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: retrievalInfo.chunkCount, selectedEvidenceCount: retrievalInfo.chunkCount, contextCharacterCount: contextText.length, durationMs: Date.now() - traceStartedAt, errorCode: "invalid_model_response" });
+  await completeSynthesisTrace(db, traceId, requestSpanId, {
+    status: AI_TRACE_STATUS.FAILED,
+    candidateCount: retrievalInfo.chunkCount,
+    selectedEvidenceCount: retrievalInfo.chunkCount,
+    contextCharacterCount: contextText.length,
+    durationMs: Date.now() - traceStartedAt,
+    errorCode: "invalid_model_response",
+  });
   return { ...createInvalidModelResponse(), traceId };
 }
 
-async function completeSynthesisTrace(db: ReturnType<typeof createDbClient>["db"], traceId: string | null, requestSpanId: string | null, input: Parameters<typeof completeAiTrace>[2]) {
+async function completeSynthesisTrace(
+  db: ReturnType<typeof createDbClient>["db"],
+  traceId: string | null,
+  requestSpanId: string | null,
+  input: Parameters<typeof completeAiTrace>[2],
+) {
   if (!traceId) return;
   await completeAiTrace(db, traceId, input);
-  if (requestSpanId) await completeAiTraceSpan(db, requestSpanId, { status: input.status, durationMs: input.durationMs, errorCode: input.errorCode, attributes: { source_count: input.selectedEvidenceCount } });
+  if (requestSpanId)
+    await completeAiTraceSpan(db, requestSpanId, {
+      status: input.status,
+      durationMs: input.durationMs,
+      errorCode: input.errorCode,
+      attributes: { source_count: input.selectedEvidenceCount },
+    });
 }
 
 export function packRetrievedSynthesisContext(
@@ -254,14 +329,17 @@ export function packSelectedNoteSynthesisContext(
 ): SelectedNoteContextPack {
   const characterBudget = options.characterBudget ?? DEFAULT_CONTEXT_CHARACTER_BUDGET;
   const chunksPerDocument = options.chunksPerDocument ?? SELECTED_NOTE_CHUNKS_PER_DOCUMENT;
-  const segmentCharacterLimit = options.segmentCharacterLimit ?? DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT;
+  const segmentCharacterLimit =
+    options.segmentCharacterLimit ?? DEFAULT_SELECTED_NOTE_SEGMENT_CHARACTER_LIMIT;
   validateSelectedNoteContextOptions(characterBudget, segmentCharacterLimit);
 
   if (sources.length === 0) {
     return { chunks: [], text: "", characterCount: 0, sourceManifest: "" };
   }
 
-  const chunks = sources.flatMap((source) => createSelectedNoteContextChunks(source, segmentCharacterLimit));
+  const chunks = sources.flatMap((source) =>
+    createSelectedNoteContextChunks(source, segmentCharacterLimit),
+  );
   const sourceManifest = formatSelectedSourceManifest(sources, chunks);
   if (sourceManifest.length > characterBudget) {
     throw new Error("Synthesis context budget is too small to label every selected source");
@@ -269,12 +347,13 @@ export function packSelectedNoteSynthesisContext(
 
   const contentBudget = characterBudget - sourceManifest.length - CONTEXT_BLOCK_SEPARATOR.length;
 
-  const contextPack = contentBudget <= 0
-    ? { chunks: [], text: "", characterCount: 0 }
-    : packRetrievalContext(chunks, {
-      characterBudget: contentBudget,
-      chunksPerDocument,
-    });
+  const contextPack =
+    contentBudget <= 0
+      ? { chunks: [], text: "", characterCount: 0 }
+      : packRetrievalContext(chunks, {
+          characterBudget: contentBudget,
+          chunksPerDocument,
+        });
   const text = contextPack.text
     ? `${contextPack.text}${CONTEXT_BLOCK_SEPARATOR}${sourceManifest}`
     : sourceManifest;

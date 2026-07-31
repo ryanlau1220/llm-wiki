@@ -1,12 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-import { createEmbeddingProvider } from "@llm-wiki/ai";
 import { ingestMarkdown } from "@llm-wiki/core";
 import { createDbClient } from "@llm-wiki/db";
 
 import type { AppConfig } from "./config";
 import { sseEmitter } from "./events";
+import { createConfiguredEmbeddingProvider, createConfiguredLlmProvider } from "./providers";
 
 export type ReindexResult = {
   vaultPath: string;
@@ -35,40 +35,16 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
 
   const { parseMarkdownDocument } = await import("@llm-wiki/obsidian");
   const parsed = parseMarkdownDocument(rawContent);
-  const isAiGenerated = parsed.metadata.is_ai_generated === true || 
-                        parsed.metadata.type === "ai_refactored" || 
-                        parsed.metadata.type === "ai_generated";
+  const isAiGenerated =
+    parsed.metadata.is_ai_generated === true ||
+    parsed.metadata.type === "ai_refactored" ||
+    parsed.metadata.type === "ai_generated";
   const sourceKind = (parsed.metadata.source_kind as any) || (isAiGenerated ? "ai" : "human");
 
   const { db } = createDbClient(config.databaseUrl);
-  const embeddingProvider = createEmbeddingProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpEmbeddingModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiEmbeddingModel
-    }
-  });
-  
-  const { createLLMProvider } = await import("@llm-wiki/ai");
-  const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpLlmModel
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiLlmModel
-    }
-  });
+  const embeddingProvider = createConfiguredEmbeddingProvider(config);
+
+  const llmProvider = createConfiguredLlmProvider(config);
 
   const result = await ingestMarkdown(
     {
@@ -76,21 +52,21 @@ export async function reindexFile(config: AppConfig, relativePath: string): Prom
       options: {
         embeddingProvider,
         llmProvider,
-        embeddingVersion: config.embeddingVersion
-      }
+        embeddingVersion: config.embeddingVersion,
+      },
     },
     {
       vaultPath,
       rawContent,
       sourceKind,
-      isAiGenerated
-    }
+      isAiGenerated,
+    },
   );
 
   sseEmitter.emit("change", { type: "note_changed", path: vaultPath });
 
   return {
     vaultPath,
-    ...result
+    ...result,
   };
 }

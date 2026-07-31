@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
 import { sql, inArray } from "drizzle-orm";
 
-import { createLLMProvider, type LLMResponse } from "@llm-wiki/ai";
+import type { LLMResponse } from "@llm-wiki/ai";
 import { createDbClient, documents, links } from "@llm-wiki/db";
 import { AI_TRACE_OPERATION, AI_TRACE_POLICY, AI_TRACE_SPAN_TYPE, AI_TRACE_STATUS, completeAiTrace, completeAiTraceSpan, createLogger, startAiTrace, startAiTraceSpan } from "@llm-wiki/core";
 
 import type { AppConfig } from "./config";
+import { createConfiguredLlmProvider, resolveConfiguredLlmModelName } from "./providers";
 import { modelUsageAttributes } from "./trace-usage";
 
 function escapeRegExp(str: string): string {
@@ -50,7 +51,7 @@ export async function generateBootstrapPreview(
   let traceId: string | null = null;
   let requestSpanId: string | null = null;
   try {
-    traceId = await startAiTrace(db, { operation: AI_TRACE_OPERATION.BOOTSTRAP, query: title, policy: AI_TRACE_POLICY.NO_RETRIEVAL, policyReason: "unresolved_link_bootstrap", modelProvider: config.embeddingProvider, modelName: config.embeddingProvider === "openai" ? config.openaiLlmModel : config.gcpLlmModel, promptVersion: "bootstrap-v1" });
+    traceId = await startAiTrace(db, { operation: AI_TRACE_OPERATION.BOOTSTRAP, query: title, policy: AI_TRACE_POLICY.NO_RETRIEVAL, policyReason: "unresolved_link_bootstrap", modelProvider: config.llmProvider, modelName: resolveConfiguredLlmModelName(config), promptVersion: "bootstrap-v1" });
     requestSpanId = await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.REQUEST, attributes: { input_length: title.length } });
   } catch (error) { logger.error("Failed to start bootstrap trace", error); }
 
@@ -89,23 +90,7 @@ export async function generateBootstrapPreview(
   const existingTitles = allDocs.map((d) => d.title);
 
   // 3. Initialize LLM provider
-  const llmProvider = createLLMProvider({
-    provider: config.embeddingProvider as any,
-    geminiGeap: {
-      projectId: config.gcpProjectId,
-      location: config.gcpLocation,
-      model: config.gcpLlmModel,
-    },
-    ollama: {
-      baseUrl: config.ollamaBaseUrl,
-      model: config.ollamaLlmModel,
-    },
-    openai: {
-      apiKey: config.openaiApiKey,
-      baseUrl: config.openaiBaseUrl,
-      model: config.openaiLlmModel,
-    },
-  });
+  const llmProvider = createConfiguredLlmProvider(config);
 
   // 4. Construct prompts
   const systemInstruction = `
@@ -145,12 +130,12 @@ Generate the definition note in the requested JSON format.
 
   logger.debug("Calling LLM to generate bootstrap definition...");
   const startTime = Date.now();
-  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.embeddingProvider, response_format: "json" } }) : null;
+  const modelSpanId = traceId ? await startAiTraceSpan(db, traceId, { spanType: AI_TRACE_SPAN_TYPE.MODEL, parentSpanId: requestSpanId ?? undefined, attributes: { provider: config.llmProvider, response_format: "json" } }) : null;
   let llmResponse: LLMResponse;
   try { llmResponse = await llmProvider.generate({ prompt, systemInstruction, responseMimeType: "application/json", temperature: 0.2 } as any); }
   catch (error) { if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.FAILED, durationMs: Date.now() - startTime, errorCode: "generation_failed" }); await completeBootstrapTrace(db, traceId, requestSpanId, { status: AI_TRACE_STATUS.FAILED, candidateCount: referencingLinks.length, selectedEvidenceCount: snippets.length, contextCharacterCount: 0, durationMs: Date.now() - traceStartedAt, errorCode: "generation_failed" }); throw error; }
   const duration = Date.now() - startTime;
-  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.embeddingProvider, ...modelUsageAttributes(llmResponse.usage) } });
+  if (modelSpanId) await completeAiTraceSpan(db, modelSpanId, { status: AI_TRACE_STATUS.SUCCEEDED, durationMs: duration, attributes: { provider: config.llmProvider, ...modelUsageAttributes(llmResponse.usage) } });
 
   try {
     const parsed = JSON.parse(llmResponse.text);
