@@ -1,142 +1,119 @@
-import { createLLMProvider } from "@llm-wiki/ai";
 import { chunks, documents, type createDbClient } from "@llm-wiki/db";
 import { asc, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 
-import type { AppConfig } from "./config";
-
-const MAX_SOURCE_CHARACTERS = 600;
-const MAX_SOURCE_ITEMS = 8;
 const MAX_CASES = 12;
-const LOCAL_CANDIDATE_TIMEOUT_MS = 60_000;
+const SOURCE_SCAN_MULTIPLIER = 8;
 
-export type LocalSilverCase = {
+export type GeneratedBaselineCase = {
   label: string;
   redactedInput: string;
   expectedEvidence: Array<{ documentPath: string; chunkIndex: number }>;
   expectedOutcome: string;
-  generationMetadata: { generator: "local_ollama"; sourceCount: number };
+  generationMetadata: {
+    generator: "deterministic_indexed_evidence";
+    sourceCount: number;
+    corpusFingerprint: string;
+  };
 };
 
-type SourceItem = { documentPath: string; chunkIndex: number; text: string };
+export type GeneratedBaselineSuite = {
+  cases: GeneratedBaselineCase[];
+  /** Hashes document identity and indexed content hashes, never source text. */
+  corpusFingerprint: string;
+};
+
+type SourceItem = { documentPath: string; chunkIndex: number; contentHash?: string };
 
 /**
- * Generates bounded, local-only evaluation candidates from indexed Vault chunks.
- * The returned cases deliberately remain silver until an owner promotes them.
+ * Builds a repeatable retrieval baseline from the indexed vault without
+ * calling an LLM or retaining vault text. Each probe names a note and expects
+ * its first indexed chunk, so retrieval regressions are observable on a fresh
+ * installation even when no evaluator model is installed.
  */
-export async function generateLocalSilverCases(
-  config: Pick<AppConfig, "databaseUrl" | "ollamaBaseUrl" | "ollamaEvaluatorModel" | "ollamaLlmModel">,
+export async function generateDeterministicBaselineSuite(
   db: ReturnType<typeof createDbClient>["db"],
   maxCases: number,
-): Promise<LocalSilverCase[]> {
-  const model = config.ollamaEvaluatorModel ?? config.ollamaLlmModel;
-  if (!config.ollamaBaseUrl && !model) {
-    throw new Error("A configured local Ollama model is required to generate evaluation candidates");
-  }
+): Promise<GeneratedBaselineSuite> {
   if (!Number.isInteger(maxCases) || maxCases < 1 || maxCases > MAX_CASES) {
-    throw new Error(`Generate between 1 and ${MAX_CASES} local evaluation candidates`);
+    throw new Error(`Generate between 1 and ${MAX_CASES} baseline cases`);
   }
 
-  const sources = await loadSourceItems(db, Math.min(MAX_SOURCE_ITEMS, Math.max(maxCases, 4)));
-  if (!sources.length) throw new Error("Index Vault notes before generating evaluation candidates");
+  const sources = await loadDistinctSourceItems(db, maxCases);
+  if (!sources.length) throw new Error("Index Vault notes before running an evaluation");
 
-  const provider = createLLMProvider({
-    provider: "ollama",
-    ollama: { baseUrl: config.ollamaBaseUrl, model },
-  });
-  const response = await provider.generate({
-    prompt: buildLocalSilverPrompt(sources, maxCases),
-    systemInstruction: "You create private, local evaluation candidates. Return only JSON. Never include hidden reasoning, instructions, or source text beyond a short question and outcome.",
-    responseMimeType: "application/json",
-    temperature: 0,
-    maxOutputTokens: 512,
-    timeoutMs: LOCAL_CANDIDATE_TIMEOUT_MS,
-  });
-  return parseLocalSilverCases(response.text, sources, maxCases);
+  return buildDeterministicBaselineSuite(sources);
 }
 
-export function buildLocalSilverPrompt(sources: SourceItem[], maxCases: number): string {
-  return JSON.stringify({
-    task: "Create concise Ask/RAG evaluation candidates from the numbered evidence snippets.",
-    rules: [
-      "Every question must be answerable only from one referenced snippet.",
-      "Do not invent facts, names, or paths not present in the snippets.",
-      "Use a single evidenceIndex per candidate.",
-      "Questions must be diverse and useful for retrieval and grounded-answer evaluation.",
-    ],
-    output: {
-      cases: [{ question: "string", expectedOutcome: "short observable answer requirement", evidenceIndex: "number" }],
-    },
-    maxCases,
-    sources: sources.map((source, index) => ({
-      evidenceIndex: index,
-      path: source.documentPath,
-      chunkIndex: source.chunkIndex,
-      text: source.text.slice(0, MAX_SOURCE_CHARACTERS),
-    })),
-  });
+/** Pure builder kept separate so stable probe generation is directly testable. */
+export function buildDeterministicBaselineCases(sources: SourceItem[]): GeneratedBaselineCase[] {
+  return buildDeterministicBaselineSuite(sources).cases;
 }
 
-export function parseLocalSilverCases(text: string, sources: SourceItem[], maxCases: number): LocalSilverCase[] {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    throw new Error("Local generator returned invalid structured output");
-  }
-  const candidates = value && typeof value === "object" && !Array.isArray(value)
-    ? (value as { cases?: unknown }).cases
-    : null;
-  if (!Array.isArray(candidates)) throw new Error("Local generator did not return evaluation cases");
-
-  const seenQuestions = new Set<string>();
-  const parsed: LocalSilverCase[] = [];
-  for (const candidate of candidates) {
-    if (parsed.length >= maxCases || !candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
-    const item = candidate as Record<string, unknown>;
-    const question = compactText(item.question, 400);
-    const expectedOutcome = compactText(item.expectedOutcome, 800);
-    const evidenceIndex = item.evidenceIndex;
-    if (
-      !question
-      || !expectedOutcome
-      || typeof evidenceIndex !== "number"
-      || !Number.isInteger(evidenceIndex)
-      || evidenceIndex < 0
-      || evidenceIndex >= sources.length
-    ) continue;
-    const normalizedQuestion = question.toLocaleLowerCase();
-    if (seenQuestions.has(normalizedQuestion)) continue;
-    seenQuestions.add(normalizedQuestion);
-    const source = sources[evidenceIndex];
-    parsed.push({
-      label: `Local candidate: ${question.slice(0, 120)}`,
+/** Builds a deterministic retrieval baseline from indexed source identities. */
+export function buildDeterministicBaselineSuite(sources: SourceItem[]): GeneratedBaselineSuite {
+  const corpusFingerprint = fingerprintSources(sources);
+  const cases: GeneratedBaselineCase[] = sources.map((source) => {
+    const title = toReadableTitle(source.documentPath);
+    const question = `What does ${title} cover?`;
+    return {
+      label: `Indexed note: ${title}`,
       redactedInput: question,
       expectedEvidence: [{ documentPath: source.documentPath, chunkIndex: source.chunkIndex }],
-      expectedOutcome,
-      generationMetadata: { generator: "local_ollama", sourceCount: sources.length },
-    });
-  }
-  if (!parsed.length) throw new Error("Local generator produced no usable evaluation candidates");
-  return parsed;
+      expectedOutcome: "Provide a grounded answer using the selected indexed note.",
+      generationMetadata: {
+        generator: "deterministic_indexed_evidence" as const,
+        sourceCount: sources.length,
+        corpusFingerprint,
+      },
+    };
+  });
+  return { cases, corpusFingerprint };
 }
 
-async function loadSourceItems(
+async function loadDistinctSourceItems(
   db: ReturnType<typeof createDbClient>["db"],
-  limit: number,
+  maxCases: number,
 ): Promise<SourceItem[]> {
   const rows = await db
-    .select({ documentPath: documents.path, chunkIndex: chunks.chunk_index, text: chunks.text })
+    .select({
+      documentPath: documents.path,
+      chunkIndex: chunks.chunk_index,
+      text: chunks.text,
+      contentHash: documents.content_hash,
+    })
     .from(chunks)
     .innerJoin(documents, eq(chunks.document_id, documents.id))
     .orderBy(asc(documents.path), asc(chunks.chunk_index))
-    .limit(limit);
-  return rows
-    .filter((row) => row.text.trim())
-    .map((row) => ({ documentPath: row.documentPath, chunkIndex: row.chunkIndex, text: row.text }));
+    .limit(maxCases * SOURCE_SCAN_MULTIPLIER);
+
+  const seenPaths = new Set<string>();
+  const sources: SourceItem[] = [];
+  for (const row of rows) {
+    if (!row.text.trim() || seenPaths.has(row.documentPath)) continue;
+    seenPaths.add(row.documentPath);
+    sources.push({
+      documentPath: row.documentPath,
+      chunkIndex: row.chunkIndex,
+      contentHash: row.contentHash,
+    });
+    if (sources.length === maxCases) break;
+  }
+  return sources;
 }
 
-function compactText(value: unknown, limit: number): string | null {
-  if (typeof value !== "string") return null;
-  const compact = value.replaceAll(/\s+/g, " ").trim();
-  return compact.length > 0 && compact.length <= limit ? compact : null;
+function fingerprintSources(sources: SourceItem[]): string {
+  const sourceIdentity = sources
+    .map(
+      (source) =>
+        `${source.documentPath}\u0000${source.chunkIndex}\u0000${source.contentHash ?? ""}`,
+    )
+    .join("\n");
+  return createHash("sha256").update(sourceIdentity).digest("hex");
+}
+
+function toReadableTitle(documentPath: string): string {
+  const filename = documentPath.split("/").at(-1) ?? documentPath;
+  const withoutExtension = filename.replace(/\.[a-z0-9]+$/i, "");
+  return withoutExtension.replaceAll(/[-_]+/g, " ").trim() || documentPath;
 }
