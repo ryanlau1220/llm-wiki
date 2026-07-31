@@ -15,6 +15,8 @@ export type AppConfig = {
   ollamaLlmModel?: string;
   /** Kept separate from the target model so a local model does not grade itself by default. */
   ollamaEvaluatorModel?: string;
+  /** Bounded time for one semantic evaluator call; target execution has its own timeout. */
+  evaluatorTimeoutMs: number;
   evaluatorMode: "auto" | "local" | "cloud";
   cloudEvaluatorProvider?: "gemini" | "gemini-geap" | "openai";
   cloudEvaluatorModel?: string;
@@ -42,6 +44,7 @@ const DEFAULT_WATCHER_DEBOUNCE_MS = 5_000;
 const DEFAULT_EMBEDDING_VERSION = "v1";
 const DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD = 0.92;
 const DEFAULT_SEMANTIC_DUPLICATE_CANDIDATES = 200;
+const DEFAULT_EVALUATOR_TIMEOUT_MS = 30_000;
 const MIN_TCP_PORT = 1;
 const MAX_TCP_PORT = 65_535;
 
@@ -72,6 +75,15 @@ function readBoolean(value: string | undefined, name: string): boolean {
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error(`${name} must be true or false`);
+}
+
+function readBoundedMilliseconds(value: string | undefined, name: string, fallback: number): number {
+  if (!value) return fallback;
+  const milliseconds = Number(value);
+  if (!Number.isInteger(milliseconds) || milliseconds < 1_000 || milliseconds > 120_000) {
+    throw new Error(`${name} must be an integer between 1000 and 120000`);
+  }
+  return milliseconds;
 }
 
 function optionalValue(value: string | undefined): string | undefined {
@@ -112,6 +124,7 @@ export function loadConfig(): AppConfig {
     ollamaEmbeddingModel: process.env.OLLAMA_EMBEDDING_MODEL,
     ollamaLlmModel: process.env.OLLAMA_LLM_MODEL,
     ollamaEvaluatorModel: optionalValue(process.env.OLLAMA_EVALUATOR_MODEL),
+    evaluatorTimeoutMs: readBoundedMilliseconds(process.env.EVALUATOR_TIMEOUT_MS, "EVALUATOR_TIMEOUT_MS", DEFAULT_EVALUATOR_TIMEOUT_MS),
     evaluatorMode: readEvaluatorMode(process.env.EVALUATOR_MODE),
     cloudEvaluatorProvider: readCloudEvaluatorProvider(process.env.CLOUD_EVALUATOR_PROVIDER),
     cloudEvaluatorModel: optionalValue(process.env.CLOUD_EVALUATOR_MODEL),
