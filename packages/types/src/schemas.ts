@@ -141,6 +141,32 @@ export const listAiTracesSchema = z
   })
   .optional();
 export const getAiTraceSchema = z.object({ traceId: z.string().uuid() });
+export const AI_TRACE_FEEDBACK_SIGNAL = {
+  HELPFUL: "helpful",
+  INCORRECT: "incorrect",
+  MISSING_SOURCE: "missing_source",
+} as const;
+export const recordAiTraceFeedbackSchema = z.object({
+  traceId: z.string().uuid(),
+  signal: z.enum([
+    AI_TRACE_FEEDBACK_SIGNAL.HELPFUL,
+    AI_TRACE_FEEDBACK_SIGNAL.INCORRECT,
+    AI_TRACE_FEEDBACK_SIGNAL.MISSING_SOURCE,
+  ]),
+  /** Used only to create a local regression probe for negative RAG feedback. */
+  redactedInput: z.string().trim().min(1).max(1_000),
+});
+export const aiTraceFeedbackSchema = z.object({
+  traceId: z.string().uuid(),
+  signal: z.enum([
+    AI_TRACE_FEEDBACK_SIGNAL.HELPFUL,
+    AI_TRACE_FEEDBACK_SIGNAL.INCORRECT,
+    AI_TRACE_FEEDBACK_SIGNAL.MISSING_SOURCE,
+  ]),
+  recorded: z.boolean(),
+  regressionCaseAdded: z.boolean(),
+  goldCasePromoted: z.boolean(),
+});
 export const aiTracePageSchema = z.object({
   items: z.array(aiTraceRunSchema),
   nextCursor: z.string().nullable(),
@@ -180,7 +206,8 @@ export const createAiEvaluationDatasetSchema = z.object({
 
 export const runAiEvaluationSchema = z
   .object({
-    datasetId: z.string().uuid(),
+    /** When omitted, the API creates or reuses automatic structural smoke checks. */
+    datasetId: z.string().uuid().optional(),
     /** Owner acknowledgement that approved cases will execute the configured Ask/RAG target. */
     confirmTargetExecution: z.literal(true),
     judgeEnabled: z.boolean().default(false),
@@ -201,18 +228,15 @@ export const runAiEvaluationSchema = z
       });
   });
 
-/** Local-only generation creates reviewable silver candidates; it never calls an external model. */
-export const generateAiEvaluationCandidatesSchema = z.object({
-  maxCases: z.number().int().min(1).max(12).default(6),
-});
-/** Creates the single fresh, local Golden Suite v1 candidate set. */
-export const bootstrapAiEvaluationGoldenSuiteSchema = z.object({
+/** Creates or reuses automatic deterministic structural smoke checks. */
+export const ensureAiEvaluationBaselineSchema = z.object({
   maxCases: z.number().int().min(3).max(12).default(6),
 });
-/** Owner action that promotes all evidence-validated Golden Suite v1 candidates together. */
-export const activateAiEvaluationGoldenSuiteSchema = z.object({ datasetId: z.string().uuid() });
-export const discardAiEvaluationSilverCaseSchema = z.object({ caseId: z.string().uuid() });
-export const promoteAiEvaluationCaseSchema = z.object({ caseId: z.string().uuid() });
+/** Explicit local approval to add a displayed Ask/RAG request to the baseline. */
+export const addAiEvaluationRegressionCaseSchema = z.object({
+  traceId: z.string().uuid(),
+  redactedInput: z.string().trim().min(1).max(1_000),
+});
 export const listAiEvaluationCasesSchema = z.object({ datasetId: z.string().uuid() });
 
 export const listAiEvaluationRunsSchema = z
@@ -259,13 +283,14 @@ export const aiEvaluationDatasetSchema = z.object({
   approvedAt: z.string().datetime(),
   createdAt: z.string().datetime(),
   caseCount: z.number().int(),
+  baselineCaseCount: z.number().int(),
+  candidateCaseCount: z.number().int(),
   goldCaseCount: z.number().int(),
-  silverCaseCount: z.number().int(),
 });
 export const aiEvaluationCaseSummarySchema = z.object({
   id: z.string().uuid(),
   label: z.string(),
-  lifecycle: z.enum(["silver", "gold"]),
+  lifecycle: z.enum(["baseline", "candidate", "gold"]),
   expectedEvidence: z.array(evaluationEvidenceSchema),
   expectedOutcome: z.string().nullable(),
 });
